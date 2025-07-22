@@ -1,0 +1,478 @@
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Calendar } from '@/components/ui/calendar';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
+import { CalendarIcon, Building, Info, CheckCircle2, AlertCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+interface Property {
+  id: number;
+  name: string;
+  userId: string;
+  address?: string;
+  type: string;
+  status: string;
+  rentalType?: string;
+  purchasePrice?: number;
+  purchaseDate?: string;
+}
+
+const simpleTaxFormSchema = z.object({
+  taxType: z.enum(['PIS', 'COFINS', 'CSLL', 'IRPJ'], {
+    required_error: 'Selecione o tipo de imposto',
+  }),
+  competencyMonth: z.string().min(1, 'Selecione o mês de competência'),
+  amount: z.string().min(1, 'Valor é obrigatório'),
+  paymentDate: z.date({
+    required_error: 'Data de pagamento é obrigatória',
+  }),
+  selectedPropertyIds: z.array(z.number()).min(1, 'Selecione pelo menos uma propriedade'),
+  enableInstallment: z.boolean().default(false),
+});
+
+type SimpleTaxFormValues = z.infer<typeof simpleTaxFormSchema>;
+
+interface SimpleTaxFormProps {
+  onSuccess?: () => void;
+}
+
+export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [paymentDateOpen, setPaymentDateOpen] = useState(false);
+
+  // Fetch properties
+  const { data: properties = [] } = useQuery<Property[]>({
+    queryKey: ['/api/properties'],
+  });
+
+  const form = useForm<SimpleTaxFormValues>({
+    resolver: zodResolver(simpleTaxFormSchema),
+    defaultValues: {
+      taxType: 'PIS',
+      competencyMonth: '',
+      amount: '',
+      selectedPropertyIds: [],
+      enableInstallment: false,
+    },
+  });
+
+  // Preview mutation
+  const previewMutation = useMutation({
+    mutationFn: async (data: SimpleTaxFormValues) => {
+      // Convert the formatted amount string to a number in centavos
+      const amountInReais = parseFloat(data.amount.replace(/\./g, '').replace(',', '.'));
+      const amountInCentavos = Math.round(amountInReais * 100);
+      
+      const response = await fetch('/api/taxes/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...data,
+          amount: amountInCentavos.toString(),
+          paymentDate: data.paymentDate.toISOString(),
+        }),
+      });
+      if (!response.ok) throw new Error('Falha ao gerar preview');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setPreviewData(data);
+      setShowPreview(true);
+    },
+    onError: () => {
+      toast({
+        title: 'Erro ao gerar preview',
+        description: 'Não foi possível calcular o rateio',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Submit mutation
+  const submitMutation = useMutation({
+    mutationFn: async (data: SimpleTaxFormValues) => {
+      // Convert the formatted amount string to a number in centavos
+      const amountInReais = parseFloat(data.amount.replace(/\./g, '').replace(',', '.'));
+      const amountInCentavos = Math.round(amountInReais * 100);
+      
+      const response = await fetch('/api/taxes/simple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...data,
+          amount: amountInCentavos.toString(),
+          paymentDate: data.paymentDate.toISOString(),
+        }),
+      });
+      if (!response.ok) throw new Error('Falha ao cadastrar impostos');
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Impostos cadastrados com sucesso!',
+        description: 'O rateio foi realizado e as transações foram criadas.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/expenses/dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
+      form.reset();
+      setShowPreview(false);
+      onSuccess?.();
+    },
+    onError: () => {
+      toast({
+        title: 'Erro ao cadastrar impostos',
+        description: 'Não foi possível salvar os dados',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Generate last 12 months options
+  const getMonthOptions = () => {
+    const options = [];
+    const today = new Date();
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const value = format(date, 'MM/yyyy');
+      const label = format(date, 'MMMM yyyy', { locale: ptBR });
+      options.push({ value, label });
+    }
+    return options;
+  };
+
+  function onSubmit(values: SimpleTaxFormValues) {
+    if (showPreview) {
+      submitMutation.mutate(values);
+    } else {
+      previewMutation.mutate(values);
+    }
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Tax Type Selection */}
+        <FormField
+          control={form.control}
+          name="taxType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Tipo de Imposto</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo de imposto" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="PIS">PIS</SelectItem>
+                  <SelectItem value="COFINS">COFINS</SelectItem>
+                  <SelectItem value="CSLL">CSLL</SelectItem>
+                  <SelectItem value="IRPJ">IRPJ</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Competency Month */}
+        <FormField
+          control={form.control}
+          name="competencyMonth"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Mês de Competência</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o mês de competência" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {getMonthOptions().map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                Mês ao qual o imposto se refere
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Amount */}
+        <FormField
+          control={form.control}
+          name="amount"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Valor Total (R$)</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="1.234,56"
+                  {...field}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    const formattedValue = (Number(value) / 100).toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    });
+                    field.onChange(formattedValue);
+                  }}
+                />
+              </FormControl>
+              <FormDescription>
+                Valor total do imposto a ser pago
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Payment Date */}
+        <FormField
+          control={form.control}
+          name="paymentDate"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Data de Pagamento</FormLabel>
+              <Popover open={paymentDateOpen} onOpenChange={setPaymentDateOpen}>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, "PPP", { locale: ptBR })
+                      ) : (
+                        <span>Selecione a data</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={(date) => {
+                      field.onChange(date);
+                      setPaymentDateOpen(false);
+                    }}
+                    disabled={(date) =>
+                      date > new Date() || date < new Date("1900-01-01")
+                    }
+                    locale={ptBR}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormDescription>
+                Data em que o imposto será pago
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Installment Option (only for CSLL and IRPJ) */}
+        {(form.watch('taxType') === 'CSLL' || form.watch('taxType') === 'IRPJ') && (
+          <FormField
+            control={form.control}
+            name="enableInstallment"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel>
+                    Parcelamento em 3x
+                  </FormLabel>
+                  <FormDescription>
+                    Dividir em 3 parcelas: 1/3 (sem juros) + 1/3 (1% juros) + 1/3 (1% juros)
+                  </FormDescription>
+                </div>
+              </FormItem>
+            )}
+          />
+        )}
+
+        {/* Property Selection */}
+        <FormField
+          control={form.control}
+          name="selectedPropertyIds"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="flex items-center gap-2">
+                <Building className="h-4 w-4" />
+                Propriedades para Rateio
+              </FormLabel>
+              <FormDescription>
+                Selecione as propriedades que participarão do rateio proporcional baseado na receita
+              </FormDescription>
+              <FormControl>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-48 overflow-y-auto p-4 border rounded-md">
+                  {properties.map((property) => (
+                    <div key={property.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`property-${property.id}`}
+                        checked={field.value.includes(property.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            field.onChange([...field.value, property.id]);
+                          } else {
+                            field.onChange(field.value.filter(id => id !== property.id));
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor={`property-${property.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {property.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Info Cards */}
+        <div className="space-y-4">
+          <Card className="bg-blue-50 border-blue-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Info className="h-4 w-4 text-blue-600" />
+                Como funciona o rateio
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-700">
+                O sistema distribuirá o valor do imposto proporcionalmente entre as propriedades selecionadas, 
+                baseado na receita bruta de cada uma no mês de competência.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Preview Results */}
+          {showPreview && previewData && (
+            <Card className="bg-green-50 border-green-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  Preview do Rateio
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {previewData.breakdown?.map((item: any) => (
+                    <div key={item.propertyName} className="flex justify-between items-center">
+                      <span className="font-medium">{item.propertyName}</span>
+                      <div className="flex gap-2">
+                        {item.taxes.map((tax: any) => (
+                          <Badge key={tax.taxType} variant="secondary">
+                            {tax.taxType}: R$ {tax.amount.toFixed(2)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="pt-2 mt-2 border-t">
+                    <div className="flex justify-between font-semibold">
+                      <span>Total</span>
+                      <span>R$ {previewData.total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Form Actions */}
+        <div className="flex justify-end gap-2">
+          {showPreview && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowPreview(false);
+                setPreviewData(null);
+              }}
+            >
+              Voltar
+            </Button>
+          )}
+          <Button
+            type="submit"
+            className={showPreview ? 'bg-green-600 hover:bg-green-700' : ''}
+            disabled={previewMutation.isPending || submitMutation.isPending}
+          >
+            {previewMutation.isPending || submitMutation.isPending ? (
+              'Processando...'
+            ) : showPreview ? (
+              'Confirmar e Cadastrar'
+            ) : (
+              'Gerar Preview'
+            )}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}

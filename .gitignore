@@ -1,0 +1,117 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Backup files
+*.backup
+*.bak
+*~
+
+# Project specific
+attached_assets/
+backups/
+cursor_export/
+property-manager-free/
+property-manager-independent/
+*.sql
+*.csv
+*.pdf
+*.xlsx
+*.jpg
+*.png
+*.jpeg
+analyze_csv_formats.py
+calculate_total.py
+migrate_tax_payments.ts
+migrate_tax_payments_fixed.sql
+final_calendar_test.txt
+junho_payouts.csv
+test_*.py
+test_*.js
+test_*.csv
+test_*.txt
+
+# Documentation files (keeping main ones)
+BACKUP_*.md
+COMANDOS_*.txt
+COMO_*.md
+CURSOR_*.md
+EMAIL_*.md
+GITHUB_*.md
+GUIA_*.md
+INSTALACAO_*.md
+MIGRACAO_*.md
+RELATORIO_*.md
+SUBIR_*.md
+PUSH_TO_GITHUB.sh
+GITHUB_SETUP_COMMANDS.md
+
+# Property manager variants
+property-manager-*.tar.gz
+*.tar.gz

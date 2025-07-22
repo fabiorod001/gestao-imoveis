@@ -1,0 +1,473 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { insertTransactionSchema, type Property } from "@shared/schema";
+import { isUnauthorizedError } from "@/lib/authUtils";
+import { z } from "zod";
+
+const formSchema = insertTransactionSchema.extend({
+  amount: z.string().min(1, "Valor é obrigatório"),
+  propertyId: z.string().optional(),
+  supplier: z.string().optional(),
+  cpfCnpj: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().email("Email inválido").optional().or(z.literal("")),
+  pixKey: z.string().optional(),
+});
+
+type FormData = z.infer<typeof formSchema>;
+
+interface TransactionFormProps {
+  type: 'revenue' | 'expense';
+  onSuccess?: () => void;
+}
+
+const revenueCategories = [
+  { value: 'rent', label: 'Aluguel' },
+  { value: 'deposit', label: 'Depósito' },
+  { value: 'late_fee', label: 'Taxa de Atraso' },
+  { value: 'other', label: 'Outros' },
+];
+
+const expenseCategories = [
+  { value: 'maintenance', label: 'Manutenção' },
+  { value: 'cleaning', label: 'Limpeza' },
+  { value: 'utilities', label: 'Utilidades' },
+  { value: 'taxes', label: 'IPTU' },
+  { value: 'insurance', label: 'Seguro' },
+  { value: 'management', label: 'Gestão' },
+  { value: 'financing', label: 'Financiamento' },
+  { value: 'decoration', label: 'Decoração' },
+  { value: 'other', label: 'Outros' },
+];
+
+const paymentMethods = [
+  { value: 'bank_transfer', label: 'Transferência Bancária' },
+  { value: 'pix', label: 'PIX' },
+  { value: 'cash', label: 'Dinheiro' },
+  { value: 'credit_card', label: 'Cartão de Crédito' },
+];
+
+const recurringPeriods = [
+  { value: 'monthly', label: 'Mensal' },
+  { value: 'quarterly', label: 'Trimestral' },
+  { value: 'yearly', label: 'Anual' },
+];
+
+export default function TransactionForm({ type, onSuccess }: TransactionFormProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: properties = [] } = useQuery<Property[]>({
+    queryKey: ['/api/properties'],
+  });
+
+  const form = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      type,
+      category: '',
+      description: '',
+      amount: '',
+      currency: 'BRL',
+      date: new Date().toISOString().split('T')[0],
+      isRecurring: false,
+      recurringPeriod: '',
+      recurringEndDate: '',
+      payerName: '',
+      paymentMethod: '',
+      propertyId: '',
+      notes: '',
+      supplier: '',
+      cpfCnpj: '',
+      phone: '',
+      email: '',
+      pixKey: '',
+    },
+  });
+
+  const isRecurring = form.watch('isRecurring');
+  const categories = type === 'revenue' ? revenueCategories : expenseCategories;
+
+  const createMutation = useMutation({
+    mutationFn: async (data: FormData) => {
+      const payload = {
+        ...data,
+        amount: data.amount,
+        propertyId: data.propertyId ? parseInt(data.propertyId) : null,
+        recurringPeriod: data.isRecurring ? data.recurringPeriod : null,
+        recurringEndDate: data.isRecurring && data.recurringEndDate ? data.recurringEndDate : null,
+        payerName: data.payerName || null,
+        paymentMethod: data.paymentMethod || null,
+        notes: data.notes || null,
+      };
+      
+      await apiRequest('POST', '/api/transactions', payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/analytics/summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/analytics/monthly'] });
+      toast({
+        title: "Sucesso",
+        description: `${type === 'revenue' ? 'Receita' : 'Despesa'} registrada com sucesso`,
+      });
+      form.reset();
+      onSuccess?.();
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Erro",
+        description: `Erro ao registrar ${type === 'revenue' ? 'receita' : 'despesa'}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (data: FormData) => {
+    createMutation.mutate(data);
+  };
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="category"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Categoria</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a categoria" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {categories.map(category => (
+                      <SelectItem key={category.value} value={category.value}>
+                        {category.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="propertyId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Imóvel (Opcional)</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o imóvel" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {properties.map(property => (
+                      <SelectItem key={property.id} value={property.id.toString()}>
+                        {property.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Descrição</FormLabel>
+              <FormControl>
+                <Input 
+                  placeholder={`Descreva a ${type === 'revenue' ? 'receita' : 'despesa'}...`}
+                  {...field} 
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <FormField
+            control={form.control}
+            name="amount"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Valor (R$)</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    step="0.01" 
+                    placeholder="0.00" 
+                    {...field} 
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="date"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Data</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Campos de Fornecedor */}
+          {type === 'expense' && (
+            <>
+              <FormField
+                control={form.control}
+                name="supplier"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fornecedor</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Nome do fornecedor" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="cpfCnpj"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>CPF/CNPJ</FormLabel>
+                      <FormControl>
+                        <Input placeholder="000.000.000-00" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Telefone</FormLabel>
+                      <FormControl>
+                        <Input placeholder="(11) 99999-9999" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="fornecedor@exemplo.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </>
+          )}
+
+          <FormField
+            control={form.control}
+            name="paymentMethod"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Método de Pagamento</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {paymentMethods.map(method => (
+                      <SelectItem key={method.value} value={method.value}>
+                        {method.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Campo condicional da Chave PIX */}
+          {form.watch('paymentMethod') === 'pix' && (
+            <FormField
+              control={form.control}
+              name="pixKey"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Chave PIX</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Digite a chave PIX do fornecedor" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+        </div>
+
+        {type === 'revenue' && (
+          <FormField
+            control={form.control}
+            name="payerName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nome do Pagador</FormLabel>
+                <FormControl>
+                  <Input placeholder="Nome da pessoa ou empresa" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        <div className="space-y-4">
+          <FormField
+            control={form.control}
+            name="isRecurring"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Transação Recorrente</FormLabel>
+                  <div className="text-sm text-gray-500">
+                    Esta {type === 'revenue' ? 'receita' : 'despesa'} se repete periodicamente
+                  </div>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          {isRecurring && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="recurringPeriod"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Período de Recorrência</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o período" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {recurringPeriods.map(period => (
+                          <SelectItem key={period.value} value={period.value}>
+                            {period.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="recurringEndDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Data Final (Opcional)</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          )}
+        </div>
+
+        <FormField
+          control={form.control}
+          name="notes"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Observações</FormLabel>
+              <FormControl>
+                <Textarea 
+                  placeholder="Informações adicionais..."
+                  className="min-h-[80px]"
+                  {...field} 
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="flex justify-end space-x-4">
+          <Button type="button" variant="outline" onClick={() => form.reset()}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={createMutation.isPending}>
+            {createMutation.isPending ? 'Salvando...' : `Salvar ${type === 'revenue' ? 'Receita' : 'Despesa'}`}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}
