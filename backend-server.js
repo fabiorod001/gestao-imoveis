@@ -99,8 +99,8 @@ const mockProperties = [
     },
     {
         id: 9,
-        name: 'Sesimbra ap 505- Portugal',
-        nickname: 'Sesimbra ap 505- Portugal',
+        name: 'Sesimbra ap 505 Portugal',
+        nickname: 'Sesimbra ap 505 Portugal',
         address: 'Apartamento 505, Sesimbra - Portugal',
         type: 'Apartamento',
         value: 180000,
@@ -111,8 +111,8 @@ const mockProperties = [
     },
     {
         id: 10,
-        name: 'Living Full Faria Lima setor 1 res 1808',
-        nickname: 'Living Full Faria Lima setor 1 res 1808',
+        name: 'Living Full Faria Lima',
+        nickname: 'Living Full Faria Lima',
         address: 'Living Full Faria Lima, Setor 1, Res 1808 - Itaim Bibi, São Paulo, SP',
         type: 'Apartamento',
         value: 264804,
@@ -211,7 +211,7 @@ const mockTransactions = [
         category: 'Aluguel',
         amount: 1200,
         propertyId: 9,
-        propertyName: 'Sesimbra ap 505- Portugal',
+        propertyName: 'Sesimbra ap 505 Portugal',
         description: 'Aluguel mensal - Janeiro 2025',
         currency: 'EUR'
     },
@@ -222,7 +222,7 @@ const mockTransactions = [
         category: 'Aluguel',
         amount: 2900,
         propertyId: 10,
-        propertyName: 'Living Full Faria Lima setor 1 res 1808',
+        propertyName: 'Living Full Faria Lima',
         description: 'Aluguel mensal - Janeiro 2025'
     },
     // Despesas - Janeiro 2025

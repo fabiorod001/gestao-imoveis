@@ -364,30 +364,7 @@ async function loadImoveis() {
         const imoveisData = processImoveisData(properties, transactions);
         renderImoveisList(imoveisData);
 
-        // Add event listener for the Sevilha 307 button
-        const sevilhaBtn = document.getElementById('sevilha-btn');
-        if (sevilhaBtn) {
-            // Remove any existing listeners to avoid duplicates
-            const newSevilhaBtn = sevilhaBtn.cloneNode(true);
-            sevilhaBtn.parentNode.replaceChild(newSevilhaBtn, sevilhaBtn);
-
-            newSevilhaBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Stop event from bubbling up
-                console.log('Sevilha 307 button clicked, redirecting...');
-                window.location.href = 'sevilha-307.html';
-            });
-        }
-
-        const malagaBtn = document.getElementById('malaga-btn');
-        if (malagaBtn) {
-            const newMalagaBtn = malagaBtn.cloneNode(true);
-            malagaBtn.parentNode.replaceChild(newMalagaBtn, malagaBtn);
-            newMalagaBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                console.log('Málaga M07 button clicked, redirecting...');
-                window.location.href = 'malaga-m07.html';
-            });
-        }
+        // Event listeners for removed buttons have been cleaned up
         
         hideLoading();
     } catch (error) {
@@ -600,16 +577,31 @@ function openImovelDetails(imovelId) {
             url = 'sevilha-307.html';
             break;
         case 2:
-            url = 'malaga-m07.html';
+            url = 'sevilha-g07.html';
             break;
         case 3:
-            url = 'valencia-v15.html';
+            url = 'malaga-m07.html';
             break;
         case 4:
-            url = 'barcelona-b22.html';
+            url = 'maxhaus-43r.html';
             break;
         case 5:
-            url = 'madrid-m33.html';
+            url = 'next-haddock-lobo-ap-33.html';
+            break;
+        case 6:
+            url = 'thera-by-you.html';
+            break;
+        case 7:
+            url = 'salas-brasal.html';
+            break;
+        case 8:
+            url = 'casa-ibirapuera-torre-3-ap-1411.html';
+            break;
+        case 9:
+            url = 'sesimbra-ap-505-portugal.html';
+            break;
+        case 10:
+            url = 'living-full-faria-lima.html';
             break;
         default:
             // Para outros imóveis, usar a página genérica
