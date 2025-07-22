@@ -151,162 +151,373 @@ function updatePropertyChart(data) {
     });
 }
 
-// Properties functions
-async function loadProperties() {
+// Legacy functions - kept for compatibility but not used in new interface
+// These can be removed in future versions
+
+// Load Receitas
+async function loadReceitas() {
     try {
-        const response = await apiCall('/properties');
-        properties = response.data || [];
-        renderProperties();
+        showLoading();
+        
+        // Set current month as default
+        const currentDate = new Date();
+        const currentMonth = currentDate.toISOString().slice(0, 7);
+        document.getElementById('filter-mes-inicial').value = currentMonth;
+        document.getElementById('filter-mes-final').value = currentMonth;
+        
+        // Load properties for filter
+        const properties = await apiCall('/api/properties');
+        const filterSelect = document.getElementById('filter-imoveis');
+        filterSelect.innerHTML = '<option value="all">Todos os Imóveis</option>';
+        properties.forEach(property => {
+            filterSelect.innerHTML += `<option value="${property.id}">${property.nickname || property.address}</option>`;
+        });
+        
+        // Load initial data
+        await aplicarFiltrosReceitas();
+        
+        hideLoading();
     } catch (error) {
-        console.error('Erro ao carregar propriedades:', error);
+        console.error('Error loading receitas:', error);
+        showError('Erro ao carregar receitas');
     }
 }
 
-function renderProperties() {
-    const container = document.getElementById('properties-list');
+// Apply filters for Receitas
+async function aplicarFiltrosReceitas() {
+    try {
+        showLoading();
+        
+        const mesInicial = document.getElementById('filter-mes-inicial').value;
+        const mesFinal = document.getElementById('filter-mes-final').value;
+        const imoveisSelecionados = Array.from(document.getElementById('filter-imoveis').selectedOptions)
+            .map(option => option.value)
+            .filter(value => value !== 'all');
+        
+        // Get transactions data
+        const transactions = await apiCall('/api/transactions');
+        const properties = await apiCall('/api/properties');
+        
+        // Process revenue data
+        const receitasData = processReceitasData(transactions, properties, mesInicial, mesFinal, imoveisSelecionados);
+        
+        // Render table
+        renderReceitasTable(receitasData);
+        
+        hideLoading();
+    } catch (error) {
+        console.error('Error applying receitas filters:', error);
+        showError('Erro ao aplicar filtros');
+    }
+}
+
+// Process receitas data
+function processReceitasData(transactions, properties, mesInicial, mesFinal, imoveisSelecionados) {
+    const receitasMap = new Map();
     
-    if (properties.length === 0) {
-        container.innerHTML = '<li class="p-4 text-center text-gray-500">Nenhuma propriedade encontrada</li>';
+    properties.forEach(property => {
+        if (imoveisSelecionados.length === 0 || imoveisSelecionados.includes(property.id.toString())) {
+            receitasMap.set(property.id, {
+                imovel: property.nickname || property.address,
+                actual: 0,
+                pending: 0,
+                total: 0
+            });
+        }
+    });
+    
+    // Filter and process transactions
+    transactions
+        .filter(t => t.type === 'income')
+        .filter(t => {
+            const transactionDate = new Date(t.date);
+            const transactionMonth = transactionDate.toISOString().slice(0, 7);
+            return transactionMonth >= mesInicial && transactionMonth <= mesFinal;
+        })
+        .forEach(transaction => {
+            if (receitasMap.has(transaction.property_id)) {
+                const receita = receitasMap.get(transaction.property_id);
+                if (transaction.status === 'completed') {
+                    receita.actual += transaction.amount;
+                } else {
+                    receita.pending += transaction.amount;
+                }
+                receita.total = receita.actual + receita.pending;
+            }
+        });
+    
+    return Array.from(receitasMap.values());
+}
+
+// Render receitas table
+function renderReceitasTable(receitasData) {
+    const tableBody = document.getElementById('receitas-table');
+    
+    if (receitasData.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-gray-500">Nenhuma receita encontrada</td></tr>';
         return;
     }
     
-    container.innerHTML = properties.map(property => `
-        <li class="p-4 hover:bg-gray-50">
-            <div class="flex items-center justify-between">
-                <div class="flex-1">
-                    <h3 class="text-lg font-medium text-gray-900">${property.name}</h3>
-                    <p class="text-sm text-gray-500">${property.address}</p>
-                    <div class="mt-2 flex items-center space-x-4">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            ${property.type}
-                        </span>
-                        <span class="text-sm text-gray-600">Valor: ${formatCurrency(property.value)}</span>
-                        <span class="text-sm text-gray-600">Aluguel: ${formatCurrency(property.monthlyRent)}</span>
-                    </div>
-                </div>
-                <div class="flex items-center space-x-2">
-                    <button onclick="editProperty(${property.id})" class="text-blue-600 hover:text-blue-800">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button onclick="deleteProperty(${property.id})" class="text-red-600 hover:text-red-800">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        </li>
-    `).join('');
-}
-
-// Transactions functions
-async function loadTransactions() {
-    try {
-        const response = await apiCall('/transactions');
-        transactions = response.data || [];
-        renderTransactions();
-    } catch (error) {
-        console.error('Erro ao carregar transações:', error);
-    }
-}
-
-function renderTransactions() {
-    const container = document.getElementById('transactions-list');
-    
-    if (transactions.length === 0) {
-        container.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">Nenhuma transação encontrada</td></tr>';
-        return;
-    }
-    
-    container.innerHTML = transactions.map(transaction => `
-        <tr class="hover:bg-gray-50">
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                ${formatDate(transaction.date)}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    transaction.type === 'income' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }">
-                    ${transaction.type === 'income' ? 'Receita' : 'Despesa'}
-                </span>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                ${transaction.category}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium ${
-                transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
-            }">
-                ${formatCurrency(transaction.amount)}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                ${transaction.propertyName || '-'}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                <button onclick="editTransaction(${transaction.id})" class="text-blue-600 hover:text-blue-800 mr-3">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button onclick="deleteTransaction(${transaction.id})" class="text-red-600 hover:text-red-800">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
+    tableBody.innerHTML = receitasData.map(receita => `
+        <tr>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${receita.imovel}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">${formatCurrency(receita.actual)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-yellow-600">${formatCurrency(receita.pending)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${formatCurrency(receita.total)}</td>
         </tr>
     `).join('');
 }
 
-// Suppliers functions
-async function loadSuppliers() {
+// Load Despesas
+async function loadDespesas() {
     try {
-        const response = await apiCall('/suppliers');
-        suppliers = response.data || [];
-        renderSuppliers();
+        showLoading();
+        
+        const transactions = await apiCall('/api/transactions');
+        const despesasData = processDespesasData(transactions);
+        
+        renderDespesasTable(despesasData);
+        
+        hideLoading();
     } catch (error) {
-        console.error('Erro ao carregar fornecedores:', error);
+        console.error('Error loading despesas:', error);
+        showError('Erro ao carregar despesas');
     }
 }
 
-function renderSuppliers() {
-    const container = document.getElementById('suppliers-list');
+// Process despesas data
+function processDespesasData(transactions) {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const despesasMap = new Map();
     
-    if (suppliers.length === 0) {
-        container.innerHTML = '<li class="p-4 text-center text-gray-500">Nenhum fornecedor encontrado</li>';
+    transactions
+        .filter(t => t.type === 'expense')
+        .filter(t => {
+            const transactionDate = new Date(t.date);
+            const transactionMonth = transactionDate.toISOString().slice(0, 7);
+            return transactionMonth === currentMonth;
+        })
+        .forEach(transaction => {
+            const categoria = transaction.category || 'Outros';
+            if (!despesasMap.has(categoria)) {
+                despesasMap.set(categoria, 0);
+            }
+            despesasMap.set(categoria, despesasMap.get(categoria) + transaction.amount);
+        });
+    
+    return Array.from(despesasMap.entries()).map(([categoria, valor]) => ({
+        categoria,
+        valor,
+        total: valor
+    }));
+}
+
+// Render despesas table
+function renderDespesasTable(despesasData) {
+    const tableBody = document.getElementById('despesas-table');
+    
+    if (despesasData.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Nenhuma despesa encontrada</td></tr>';
         return;
     }
     
-    container.innerHTML = suppliers.map(supplier => `
-        <li class="p-4 hover:bg-gray-50">
-            <div class="flex items-center justify-between">
+    // Mapear categorias para identificadores
+    const categoriaMap = {
+        'Condomínio': 'condominio',
+        'Impostos': 'impostos',
+        'Limpeza': 'limpezas',
+        'Gestão': 'gestao-mauricio',
+        'Manutenção': 'manutencoes',
+        'Outros': 'outras'
+    };
+    
+    tableBody.innerHTML = despesasData.map(despesa => {
+        const categoriaId = categoriaMap[despesa.categoria] || 'outras';
+        return `
+            <tr class="cursor-pointer hover:bg-gray-50 transition-colors" data-categoria="${categoriaId}" onclick="abrirPaginaDespesa('${categoriaId}')">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${despesa.categoria}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">${formatCurrency(despesa.valor)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${formatCurrency(despesa.total)}</td>
+            </tr>
+        `;
+    }).join('');
+    
+    // Tornar as linhas clicáveis
+    tornarDespesasClicaveis();
+}
+
+// Load Imóveis
+async function loadImoveis() {
+    try {
+        showLoading();
+        
+        const properties = await apiCall('/api/properties');
+        const transactions = await apiCall('/api/transactions');
+        
+        const imoveisData = processImoveisData(properties, transactions);
+        renderImoveisList(imoveisData);
+        
+        hideLoading();
+    } catch (error) {
+        console.error('Error loading imoveis:', error);
+        showError('Erro ao carregar imóveis');
+    }
+}
+
+// Process imoveis data with financial results
+function processImoveisData(properties, transactions) {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    
+    return properties.map(property => {
+        // Calculate current month revenues
+        const receitas = transactions
+            .filter(t => t.property_id === property.id && t.type === 'income')
+            .filter(t => {
+                const transactionDate = new Date(t.date);
+                const transactionMonth = transactionDate.toISOString().slice(0, 7);
+                return transactionMonth === currentMonth;
+            })
+            .reduce((sum, t) => sum + (t.status === 'completed' || t.status === 'pending' ? t.amount : 0), 0);
+        
+        // Calculate current month expenses
+        const despesas = transactions
+            .filter(t => t.property_id === property.id && t.type === 'expense')
+            .filter(t => {
+                const transactionDate = new Date(t.date);
+                const transactionMonth = transactionDate.toISOString().slice(0, 7);
+                return transactionMonth === currentMonth;
+            })
+            .reduce((sum, t) => sum + t.amount, 0);
+        
+        const resultadoMes = receitas - despesas;
+        const valorImovel = property.current_value || property.purchase_price || 1;
+        const resultadoPercentual = (resultadoMes / valorImovel) * 100;
+        
+        return {
+            ...property,
+            receitas,
+            despesas,
+            resultadoMes,
+            resultadoPercentual
+        };
+    });
+}
+
+// Render imoveis list
+function renderImoveisList(imoveisData) {
+    const container = document.getElementById('imoveis-list');
+    
+    if (imoveisData.length === 0) {
+        container.innerHTML = '<div class="text-center text-gray-500 py-8">Nenhum imóvel cadastrado</div>';
+        return;
+    }
+    
+    container.innerHTML = imoveisData.map(imovel => `
+        <div class="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer" onclick="openImovelDetails(${imovel.id})">
+            <div class="flex justify-between items-start">
                 <div class="flex-1">
-                    <h3 class="text-lg font-medium text-gray-900">${supplier.name}</h3>
-                    <p class="text-sm text-gray-500">${supplier.email || ''}</p>
-                    <div class="mt-2 flex items-center space-x-4">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                            ${supplier.type}
-                        </span>
-                        <span class="text-sm text-gray-600">Tel: ${supplier.phone || '-'}</span>
+                    <h4 class="text-lg font-medium text-gray-900 mb-2">${imovel.nickname || 'Imóvel sem nome'}</h4>
+                    <p class="text-sm text-gray-600 mb-4">${imovel.address}</p>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <span class="text-sm text-gray-500">Resultado do Mês:</span>
+                            <p class="text-lg font-medium ${imovel.resultadoMes >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                ${formatCurrency(imovel.resultadoMes)}
+                            </p>
+                        </div>
+                        <div>
+                            <span class="text-sm text-gray-500">Resultado %:</span>
+                            <p class="text-lg font-medium ${imovel.resultadoPercentual >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                ${imovel.resultadoPercentual.toFixed(2)}%
+                            </p>
+                        </div>
                     </div>
                 </div>
-                <div class="flex items-center space-x-2">
-                    <button onclick="editSupplier(${supplier.id})" class="text-blue-600 hover:text-blue-800">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button onclick="deleteSupplier(${supplier.id})" class="text-red-600 hover:text-red-800">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                
+                <div class="ml-4">
+                    <i class="fas fa-chevron-right text-gray-400"></i>
                 </div>
             </div>
-        </li>
+        </div>
     `).join('');
 }
 
-// Modal functions (placeholders)
-function openPropertyModal() {
-    alert('Modal de propriedade será implementado');
+// Load Configurações
+function loadConfiguracoes() {
+    // Configurações tab is mostly static, no dynamic loading needed
+    console.log('Configurações loaded');
 }
 
-function openTransactionModal() {
-    alert('Modal de transação será implementado');
+// Modal functions
+function openDespesaModal() {
+    console.log('Open despesa modal');
 }
 
-function openSupplierModal() {
-    alert('Modal de fornecedor será implementado');
+function openDespesaCompostaModal() {
+    console.log('Open despesa composta modal');
+}
+
+// Função para abrir página dedicada de despesa
+function abrirPaginaDespesa(categoria) {
+    // Por enquanto, vamos mostrar um alert com a categoria
+    // Futuramente, isso pode ser substituído por navegação real
+    alert(`Abrindo página dedicada para: ${categoria.replace('-', ' ').toUpperCase()}`);
+    
+    // Aqui você pode implementar a navegação real:
+    // window.location.href = `despesa-${categoria}.html`;
+    // ou usar um sistema de roteamento SPA
+    console.log(`Navegando para página de despesa: ${categoria}`);
+}
+
+// Função para tornar linhas da tabela de despesas clicáveis
+function tornarDespesasClicaveis() {
+    const despesasTable = document.getElementById('despesas-table');
+    if (despesasTable) {
+        // Adicionar event listener para cliques nas linhas
+        despesasTable.addEventListener('click', function(event) {
+            const row = event.target.closest('tr');
+            if (row && row.dataset.categoria) {
+                const categoria = row.dataset.categoria;
+                abrirPaginaDespesa(categoria);
+            }
+        });
+    }
+}
+
+function openNovaPropriedadeModal() {
+    console.log('Open nova propriedade modal');
+}
+
+function openUsuariosModal() {
+    console.log('Open usuarios modal');
+}
+
+function openContaCorrenteModal() {
+    console.log('Open conta corrente modal');
+}
+
+function openConfigGeralModal() {
+    console.log('Open config geral modal');
+}
+
+function openImovelDetails(imovelId) {
+    console.log('Open imovel details for ID:', imovelId);
+}
+
+// Search function for imoveis
+function searchImoveis() {
+    const searchTerm = document.getElementById('search-imoveis').value.toLowerCase();
+    const imovelCards = document.querySelectorAll('#imoveis-list > div');
+    
+    imovelCards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+            card.style.display = 'block';
+        } else {
+            card.style.display = 'none';
+        }
+    });
 }
 
 function editProperty(id) {
@@ -341,41 +552,47 @@ function deleteSupplier(id) {
 
 // Tab navigation
 function initTabs() {
-    const navButtons = document.querySelectorAll('.nav-btn');
+    const tabButtons = document.querySelectorAll('[data-tab]');
     const tabContents = document.querySelectorAll('.tab-content');
     
-    navButtons.forEach(button => {
+    tabButtons.forEach(button => {
         button.addEventListener('click', () => {
-            const tabId = button.getAttribute('data-tab');
+            const targetTab = button.getAttribute('data-tab');
             
-            // Update nav buttons
-            navButtons.forEach(btn => {
-                btn.classList.remove('border-blue-500', 'text-blue-600');
-                btn.classList.add('border-transparent', 'text-gray-500');
-            });
+            // Remove active class from all buttons
+            tabButtons.forEach(btn => btn.classList.remove('border-blue-500', 'text-blue-600'));
+            tabButtons.forEach(btn => btn.classList.add('border-transparent', 'text-gray-500'));
+            
+            // Add active class to clicked button
             button.classList.remove('border-transparent', 'text-gray-500');
             button.classList.add('border-blue-500', 'text-blue-600');
             
-            // Update tab contents
-            tabContents.forEach(content => {
-                content.classList.add('hidden');
-            });
-            document.getElementById(tabId).classList.remove('hidden');
+            // Hide all tab contents
+            tabContents.forEach(content => content.classList.add('hidden'));
             
-            // Load data for the active tab
-            switch(tabId) {
-                case 'dashboard':
-                    loadDashboard();
-                    break;
-                case 'properties':
-                    loadProperties();
-                    break;
-                case 'transactions':
-                    loadTransactions();
-                    break;
-                case 'suppliers':
-                    loadSuppliers();
-                    break;
+            // Show target tab content
+            const targetContent = document.getElementById(targetTab);
+            if (targetContent) {
+                targetContent.classList.remove('hidden');
+                
+                // Load data based on active tab
+                switch(targetTab) {
+                    case 'dashboard':
+                        loadDashboard();
+                        break;
+                    case 'receitas':
+                        loadReceitas();
+                        break;
+                    case 'despesas':
+                        loadDespesas();
+                        break;
+                    case 'imoveis':
+                        loadImoveis();
+                        break;
+                    case 'configuracoes':
+                        loadConfiguracoes();
+                        break;
+                }
             }
         });
     });
@@ -385,4 +602,10 @@ function initTabs() {
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     loadDashboard(); // Load dashboard by default
+    
+    // Add search event listener
+    const searchInput = document.getElementById('search-imoveis');
+    if (searchInput) {
+        searchInput.addEventListener('input', searchImoveis);
+    }
 });

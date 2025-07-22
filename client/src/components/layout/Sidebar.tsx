@@ -8,23 +8,29 @@ import {
   FileText, 
   RefreshCw,
   Upload,
+  Database,
   Users,
   Settings,
   Calculator,
-  X
+  X,
+  PackagePlus,
+  DollarSign
 } from "lucide-react";
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: BarChart3 },
-  { name: 'Imóveis', href: '/properties', icon: Building },
-  { name: 'Receitas', href: '/revenues', icon: TrendingUp },
   { name: 'Despesas', href: '/expenses', icon: TrendingDown },
-  { name: 'Relatórios', href: '/reports', icon: FileText },
-  { name: 'Conversão', href: '/conversion', icon: RefreshCw },
-  { name: 'Importar Dados', href: '/import', icon: Upload },
 ];
 
 const settings = [
+  { name: 'Imóveis', href: '/properties', icon: Building },
+  { name: 'Receitas', href: '/revenues', icon: TrendingUp },
+  { name: 'Relatórios', href: '/reports', icon: FileText },
+  { name: 'Conversão', href: '/conversion', icon: RefreshCw },
+  { name: 'Importar Dados', href: '/import', icon: Upload },
+  { name: 'Importação Avançada', href: '/import-data', icon: Database },
+  { name: 'Cadastro em Massa', href: '/bulk-data-entry', icon: PackagePlus },
+  { name: 'Transações em Massa', href: '/bulk-transaction-entry', icon: DollarSign },
   { name: 'Usuários', href: '/users', icon: Users },
   { name: 'Configurações', href: '/settings', icon: Settings },
 ];
@@ -100,17 +106,30 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           
           <div className="mt-8 px-4">
             <h3 className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              Configurações
+              Outras Opções
             </h3>
             <div className="mt-2 space-y-1">
-              {settings.map((item) => (
-                <Link key={item.name} href={item.href}>
-                  <div className="text-gray-600 hover:bg-gray-50 hover:text-gray-900 group flex items-center px-4 py-2 text-sm font-medium rounded-lg cursor-pointer">
-                    <item.icon className="mr-3 h-5 w-5 text-gray-400" />
-                    {item.name}
-                  </div>
-                </Link>
-              ))}
+              {settings.map((item) => {
+                const isActive = location === item.href || 
+                  (item.href !== '/' && location.startsWith(item.href));
+                
+                return (
+                  <Link key={item.name} href={item.href}>
+                    <div className={cn(
+                      "group flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer",
+                      isActive
+                        ? "bg-primary-50 border-r-4 border-primary-600 text-primary-700"
+                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    )}>
+                      <item.icon className={cn(
+                        "mr-3 h-5 w-5",
+                        isActive ? "text-primary-500" : "text-gray-400"
+                      )} />
+                      {item.name}
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </nav>
