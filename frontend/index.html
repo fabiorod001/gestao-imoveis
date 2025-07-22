@@ -6,7 +6,27 @@
     <title>Sistema de Gestão de Imóveis</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .sortable-ghost {
+            opacity: 0.4;
+            background: #f3f4f6;
+        }
+        .sortable-chosen {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .sortable-drag {
+            transform: rotate(5deg);
+        }
+        .cursor-grab {
+            cursor: grab;
+        }
+        .cursor-grab:active {
+            cursor: grabbing;
+        }
+    </style>
 </head>
 <body class="bg-gray-50">
     <!-- Header -->
@@ -318,14 +338,28 @@
                 <!-- Lista de Imóveis -->
                 <div class="bg-white shadow rounded-lg p-6 mb-6">
                     <h3 class="text-lg font-medium text-gray-900 mb-4">Lista de Imóveis</h3>
-                    <p class="text-sm text-gray-600 mb-4">Arraste para reorganizar a ordem dos imóveis</p>
-                    <div id="imoveis-list" class="space-y-4">
+                    <div id="imoveis-list" class="space-y-1">
                         <!-- Imóveis will be loaded here -->
                     </div>
                 </div>
 
-                <!-- Botão Nova Propriedade -->
-                <div class="text-center">
+                <!-- Botões de Ação -->
+                <div class="text-center space-y-4">
+                    <!-- Acesso Direto Sevilha 307 -->
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                        <h4 class="text-lg font-medium text-yellow-800 mb-2">
+                            <i class="fas fa-star mr-2"></i>Acesso Rápido
+                        </h4>
+                        <button id="sevilha-btn" class="bg-yellow-600 text-white px-6 py-3 rounded-md text-lg hover:bg-yellow-700">
+                            <i class="fas fa-home mr-2"></i>Sevilha 307
+                        </button>
+                        <button id="malaga-btn" class="bg-teal-600 text-white px-6 py-3 rounded-md text-lg hover:bg-teal-700 mt-2">
+                            <i class="fas fa-building mr-2"></i>Málaga M07
+                        </button>
+                        <p class="text-sm text-yellow-700 mt-2">Acesso direto ao imóvel principal</p>
+                    </div>
+                    
+                    <!-- Botão Nova Propriedade -->
                     <button class="bg-blue-600 text-white px-6 py-3 rounded-md text-lg hover:bg-blue-700" onclick="openNovaPropriedadeModal()">
                         <i class="fas fa-plus mr-2"></i>Nova Propriedade
                     </button>

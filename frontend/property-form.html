@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Imóvel - Sistema de Gestão</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 9999;
+        }
+        .loading.show {
+            display: flex;
+        }
+        .form-section {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            background: white;
+        }
+        .form-section h3 {
+            color: #374151;
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 0.5rem;
+        }
+        .required {
+            color: #ef4444;
+        }
+        .success-message {
+            display: none;
+            background: #10b981;
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        .error-message {
+            display: none;
+            background: #ef4444;
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Loading Overlay -->
+    <div id="loading" class="loading items-center justify-center">
+        <div class="text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p class="text-gray-600">Carregando...</p>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <button onclick="window.close()" class="mr-4 text-gray-600 hover:text-gray-900">
+                        <i class="fas fa-arrow-left text-xl"></i>
+                    </button>
+                    <h1 id="page-title" class="text-2xl font-bold text-gray-900">
+                        <i class="fas fa-building mr-2 text-blue-600"></i>
+                        Cadastro de Imóvel
+                    </h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button onclick="resetForm()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+                        <i class="fas fa-undo mr-2"></i>
+                        Limpar
+                    </button>
+                    <button onclick="saveProperty()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors">
+                        <i class="fas fa-save mr-2"></i>
+                        Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Success/Error Messages -->
+        <div id="success-message" class="success-message">
+            <i class="fas fa-check-circle mr-2"></i>
+            <span id="success-text">Imóvel salvo com sucesso!</span>
+        </div>
+        
+        <div id="error-message" class="error-message">
+            <i class="fas fa-exclamation-circle mr-2"></i>
+            <span id="error-text">Erro ao salvar imóvel!</span>
+        </div>
+
+        <form id="property-form" class="space-y-6">
+            <!-- Informações Básicas -->
+            <div class="form-section">
+                <h3><i class="fas fa-info-circle mr-2"></i>Informações Básicas</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700 mb-2">
+                            Nome do Imóvel <span class="required">*</span>
+                        </label>
+                        <input type="text" id="name" name="name" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="Ex: Apartamento Centro">
+                    </div>
+                    
+                    <div>
+                        <label for="nickname" class="block text-sm font-medium text-gray-700 mb-2">
+                            Apelido/Nome Fantasia
+                        </label>
+                        <input type="text" id="nickname" name="nickname"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="Ex: Apto Centro">
+                    </div>
+                    
+                    <div>
+                        <label for="property-type" class="block text-sm font-medium text-gray-700 mb-2">
+                            Tipo de Imóvel <span class="required">*</span>
+                        </label>
+                        <select id="property-type" name="propertyType" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Selecione o tipo</option>
+                            <option value="apartment">Apartamento</option>
+                            <option value="house">Casa</option>
+                            <option value="commercial">Comercial</option>
+                            <option value="land">Terreno</option>
+                            <option value="warehouse">Galpão</option>
+                            <option value="office">Escritório</option>
+                            <option value="store">Loja</option>
+                            <option value="other">Outro</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="status" class="block text-sm font-medium text-gray-700 mb-2">
+                            Status <span class="required">*</span>
+                        </label>
+                        <select id="status" name="status" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="active">Ativo</option>
+                            <option value="inactive">Inativo</option>
+                            <option value="rented">Alugado</option>
+                            <option value="for-sale">À Venda</option>
+                            <option value="maintenance">Em Manutenção</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Endereço -->
+            <div class="form-section">
+                <h3><i class="fas fa-map-marker-alt mr-2"></i>Endereço</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="md:col-span-2">
+                        <label for="address" class="block text-sm font-medium text-gray-700 mb-2">
+                            Endereço Completo <span class="required">*</span>
+                        </label>
+                        <input type="text" id="address" name="address" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="Rua, número, complemento">
+                    </div>
+                    
+                    <div>
+                        <label for="cep" class="block text-sm font-medium text-gray-700 mb-2">
+                            CEP
+                        </label>
+                        <input type="text" id="cep" name="cep" maxlength="9"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="00000-000">
+                    </div>
+                    
+                    <div>
+                        <label for="neighborhood" class="block text-sm font-medium text-gray-700 mb-2">
+                            Bairro
+                        </label>
+                        <input type="text" id="neighborhood" name="neighborhood"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="Nome do bairro">
+                    </div>
+                    
+                    <div>
+                        <label for="city" class="block text-sm font-medium text-gray-700 mb-2">
+                            Cidade <span class="required">*</span>
+                        </label>
+                        <input type="text" id="city" name="city" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="Nome da cidade">
+                    </div>
+                    
+                    <div>
+                        <label for="state" class="block text-sm font-medium text-gray-700 mb-2">
+                            Estado <span class="required">*</span>
+                        </label>
+                        <select id="state" name="state" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Selecione o estado</option>
+                            <option value="AC">Acre</option>
+                            <option value="AL">Alagoas</option>
+                            <option value="AP">Amapá</option>
+                            <option value="AM">Amazonas</option>
+                            <option value="BA">Bahia</option>
+                            <option value="CE">Ceará</option>
+                            <option value="DF">Distrito Federal</option>
+                            <option value="ES">Espírito Santo</option>
+                            <option value="GO">Goiás</option>
+                            <option value="MA">Maranhão</option>
+                            <option value="MT">Mato Grosso</option>
+                            <option value="MS">Mato Grosso do Sul</option>
+                            <option value="MG">Minas Gerais</option>
+                            <option value="PA">Pará</option>
+                            <option value="PB">Paraíba</option>
+                            <option value="PR">Paraná</option>
+                            <option value="PE">Pernambuco</option>
+                            <option value="PI">Piauí</option>
+                            <option value="RJ">Rio de Janeiro</option>
+                            <option value="RN">Rio Grande do Norte</option>
+                            <option value="RS">Rio Grande do Sul</option>
+                            <option value="RO">Rondônia</option>
+                            <option value="RR">Roraima</option>
+                            <option value="SC">Santa Catarina</option>
+                            <option value="SP">São Paulo</option>
+                            <option value="SE">Sergipe</option>
+                            <option value="TO">Tocantins</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Características do Imóvel -->
+            <div class="form-section">
+                <h3><i class="fas fa-home mr-2"></i>Características do Imóvel</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div>
+                        <label for="bedrooms" class="block text-sm font-medium text-gray-700 mb-2">
+                            Quartos
+                        </label>
+                        <input type="number" id="bedrooms" name="bedrooms" min="0"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="0">
+                    </div>
+                    
+                    <div>
+                        <label for="bathrooms" class="block text-sm font-medium text-gray-700 mb-2">
+                            Banheiros
+                        </label>
+                        <input type="number" id="bathrooms" name="bathrooms" min="0"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="0">
+                    </div>
+                    
+                    <div>
+                        <label for="parking-spaces" class="block text-sm font-medium text-gray-700 mb-2">
+                            Vagas de Garagem
+                        </label>
+                        <input type="number" id="parking-spaces" name="parkingSpaces" min="0"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="0">
+                    </div>
+                    
+                    <div>
+                        <label for="area" class="block text-sm font-medium text-gray-700 mb-2">
+                            Área (m²)
+                        </label>
+                        <input type="number" id="area" name="area" min="0" step="0.01"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="0.00">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Informações Financeiras -->
+            <div class="form-section">
+                <h3><i class="fas fa-dollar-sign mr-2"></i>Informações Financeiras</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div>
+                        <label for="purchase-price" class="block text-sm font-medium text-gray-700 mb-2">
+                            Preço de Compra (R$)
+                        </label>
+                        <input type="number" id="purchase-price" name="purchasePrice" min="0" step="0.01"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="0.00">
+                    </div>
+                    
+                    <div>
+                        <label for="current-value" class="block text-sm font-medium text-gray-700 mb-2">
+                            Valor Atual (R$)
+                        </label>
+                        <input type="number" id="current-value" name="currentValue" min="0" step="0.01"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="0.00">
+                    </div>
+                    
+                    <div>
+                        <label for="rental-value" class="block text-sm font-medium text-gray-700 mb-2">
+                            Valor do Aluguel (R$)
+                        </label>
+                        <input type="number" id="rental-value" name="rentalValue" min="0" step="0.01"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="0.00">
+                    </div>
+                    
+                    <div>
+                        <label for="rental-type" class="block text-sm font-medium text-gray-700 mb-2">
+                            Tipo de Locação
+                        </label>
+                        <select id="rental-type" name="rentalType"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Selecione o tipo</option>
+                            <option value="monthly">Mensal</option>
+                            <option value="daily">Diária</option>
+                            <option value="weekly">Semanal</option>
+                            <option value="seasonal">Temporada</option>
+                            <option value="commercial">Comercial</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="condo-fee" class="block text-sm font-medium text-gray-700 mb-2">
+                            Taxa de Condomínio (R$)
+                        </label>
+                        <input type="number" id="condo-fee" name="condoFee" min="0" step="0.01"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="0.00">
+                    </div>
+                    
+                    <div>
+                        <label for="iptu" class="block text-sm font-medium text-gray-700 mb-2">
+                            IPTU Anual (R$)
+                        </label>
+                        <input type="number" id="iptu" name="iptu" min="0" step="0.01"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="0.00">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Informações do Inquilino -->
+            <div class="form-section">
+                <h3><i class="fas fa-user mr-2"></i>Informações do Inquilino</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="tenant-name" class="block text-sm font-medium text-gray-700 mb-2">
+                            Nome do Inquilino
+                        </label>
+                        <input type="text" id="tenant-name" name="tenantName"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="Nome completo">
+                    </div>
+                    
+                    <div>
+                        <label for="tenant-phone" class="block text-sm font-medium text-gray-700 mb-2">
+                            Telefone do Inquilino
+                        </label>
+                        <input type="tel" id="tenant-phone" name="tenantPhone"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="(00) 00000-0000">
+                    </div>
+                    
+                    <div>
+                        <label for="tenant-email" class="block text-sm font-medium text-gray-700 mb-2">
+                            Email do Inquilino
+                        </label>
+                        <input type="email" id="tenant-email" name="tenantEmail"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="email@exemplo.com">
+                    </div>
+                    
+                    <div>
+                        <label for="lease-start" class="block text-sm font-medium text-gray-700 mb-2">
+                            Início do Contrato
+                        </label>
+                        <input type="date" id="lease-start" name="leaseStart"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    
+                    <div>
+                        <label for="lease-end" class="block text-sm font-medium text-gray-700 mb-2">
+                            Fim do Contrato
+                        </label>
+                        <input type="date" id="lease-end" name="leaseEnd"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    
+                    <div>
+                        <label for="deposit" class="block text-sm font-medium text-gray-700 mb-2">
+                            Valor do Depósito (R$)
+                        </label>
+                        <input type="number" id="deposit" name="deposit" min="0" step="0.01"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="0.00">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Observações -->
+            <div class="form-section">
+                <h3><i class="fas fa-sticky-note mr-2"></i>Observações</h3>
+                <div>
+                    <label for="notes" class="block text-sm font-medium text-gray-700 mb-2">
+                        Observações Gerais
+                    </label>
+                    <textarea id="notes" name="notes" rows="4"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Informações adicionais sobre o imóvel..."></textarea>
+                </div>
+            </div>
+
+            <!-- Botões de Ação -->
+            <div class="flex justify-end space-x-4 pt-6 border-t">
+                <button type="button" onclick="resetForm()" 
+                        class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-colors">
+                    <i class="fas fa-undo mr-2"></i>
+                    Limpar Formulário
+                </button>
+                <button type="button" onclick="saveProperty()" 
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg transition-colors">
+                    <i class="fas fa-save mr-2"></i>
+                    Salvar Imóvel
+                </button>
+            </div>
+        </form>
+    </main>
+
+    <script src="property-form.js"></script>
+</body>
+</html>

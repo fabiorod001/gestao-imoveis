@@ -11,83 +11,290 @@ app.use(express.json());
 const mockProperties = [
     {
         id: 1,
-        name: 'Apartamento Centro',
-        address: 'Rua das Flores, 123 - Centro',
+        name: 'Sevilha 307',
+        nickname: 'Sevilha 307',
+        address: 'Condomínio Andalus, Rua Einstein, 307 - Morumbi, São Paulo, SP',
         type: 'Apartamento',
-        value: 350000,
-        monthlyRent: 2500,
-        createdAt: '2024-01-15'
+        value: 682957,
+        purchasePrice: 412461,
+        monthlyRent: 3200,
+        createdAt: '2021-03-15'
     },
     {
         id: 2,
-        name: 'Casa Jardim América',
-        address: 'Av. Brasil, 456 - Jardim América',
-        type: 'Casa',
-        value: 580000,
-        monthlyRent: 3800,
-        createdAt: '2024-02-20'
+        name: 'Sevilha G07',
+        nickname: 'Sevilha G07',
+        address: 'Condomínio Andalus, Rua Einstein, G07 - Morumbi, São Paulo, SP',
+        type: 'Apartamento',
+        value: 1008137,
+        purchasePrice: 804992,
+        monthlyRent: 3500,
+        createdAt: '2022-01-20'
     },
     {
         id: 3,
-        name: 'Sala Comercial',
-        address: 'Rua Comercial, 789 - Centro Comercial',
+        name: 'Málaga M07',
+        nickname: 'Málaga M07',
+        address: 'Condomínio Andalus, Rua Einstein, M07 - Morumbi, São Paulo, SP',
+        type: 'Apartamento',
+        value: 770536,
+        purchasePrice: 540446,
+        monthlyRent: 3800,
+        createdAt: '2020-11-10'
+    },
+    {
+        id: 4,
+        name: 'MaxHaus 43R',
+        nickname: 'MaxHaus 43R',
+        address: 'MaxHaus Berrini, Av. Berrini, 43R - Brooklin, São Paulo, SP',
+        type: 'Apartamento',
+        value: 1267701,
+        purchasePrice: 666631,
+        monthlyRent: 4200,
+        createdAt: '2019-08-05'
+    },
+    {
+        id: 5,
+        name: 'Next Haddock Lobo ap 33',
+        nickname: 'Next Haddock Lobo ap 33',
+        address: 'Next Haddock Lobo, Rua Haddock Lobo, 33 - Cerqueira César, São Paulo, SP',
+        type: 'Studio',
+        value: 177025,
+        purchasePrice: 130000,
+        monthlyRent: 2800,
+        createdAt: '2022-06-12'
+    },
+    {
+        id: 6,
+        name: 'Thera by You',
+        nickname: 'Thera by You',
+        address: 'Thera by You, Rua Funchal - Vila Olímpia, São Paulo, SP',
+        type: 'Apartamento',
+        value: 450000,
+        purchasePrice: 380000,
+        monthlyRent: 3600,
+        createdAt: '2023-02-18'
+    },
+    {
+        id: 7,
+        name: 'Salas Brasal',
+        nickname: 'Salas Brasal',
+        address: 'Edifício Brasal, Av. Paulista - Bela Vista, São Paulo, SP',
         type: 'Comercial',
-        value: 280000,
-        monthlyRent: 1800,
-        createdAt: '2024-03-10'
+        value: 320000,
+        purchasePrice: 280000,
+        monthlyRent: 2200,
+        createdAt: '2021-09-25'
+    },
+    {
+        id: 8,
+        name: 'Casa Ibirapuera torre 3 ap 1411',
+        nickname: 'Casa Ibirapuera torre 3 ap 1411',
+        address: 'Casa Ibirapuera, Torre 3, Ap 1411 - Ibirapuera, São Paulo, SP',
+        type: 'Apartamento',
+        value: 580000,
+        purchasePrice: 520000,
+        monthlyRent: 3900,
+        createdAt: '2022-11-08'
+    },
+    {
+        id: 9,
+        name: 'Sesimbra ap 505- Portugal',
+        nickname: 'Sesimbra ap 505- Portugal',
+        address: 'Apartamento 505, Sesimbra - Portugal',
+        type: 'Apartamento',
+        value: 180000,
+        purchasePrice: 165000,
+        monthlyRent: 1200,
+        currency: 'EUR',
+        createdAt: '2023-05-14'
+    },
+    {
+        id: 10,
+        name: 'Living Full Faria Lima setor 1 res 1808',
+        nickname: 'Living Full Faria Lima setor 1 res 1808',
+        address: 'Living Full Faria Lima, Setor 1, Res 1808 - Itaim Bibi, São Paulo, SP',
+        type: 'Apartamento',
+        value: 264804,
+        purchasePrice: 194000,
+        monthlyRent: 2900,
+        createdAt: '2022-04-30'
     }
 ];
 
 const mockTransactions = [
+    // Receitas de Aluguel - Janeiro 2025
     {
         id: 1,
-        date: '2024-07-01',
+        date: '2025-01-01',
         type: 'income',
         category: 'Aluguel',
-        amount: 2500,
+        amount: 3200,
         propertyId: 1,
-        propertyName: 'Apartamento Centro',
-        description: 'Aluguel mensal'
+        propertyName: 'Sevilha 307',
+        description: 'Aluguel mensal - Janeiro 2025'
     },
     {
         id: 2,
-        date: '2024-07-01',
+        date: '2025-01-01',
         type: 'income',
         category: 'Aluguel',
-        amount: 3800,
+        amount: 3500,
         propertyId: 2,
-        propertyName: 'Casa Jardim América',
-        description: 'Aluguel mensal'
+        propertyName: 'Sevilha G07',
+        description: 'Aluguel mensal - Janeiro 2025'
     },
     {
         id: 3,
-        date: '2024-07-05',
-        type: 'expense',
-        category: 'Manutenção',
-        amount: 450,
-        propertyId: 1,
-        propertyName: 'Apartamento Centro',
-        description: 'Reparo hidráulico'
+        date: '2025-01-01',
+        type: 'income',
+        category: 'Aluguel',
+        amount: 3800,
+        propertyId: 3,
+        propertyName: 'Málaga M07',
+        description: 'Aluguel mensal - Janeiro 2025'
     },
     {
         id: 4,
-        date: '2024-07-10',
-        type: 'expense',
-        category: 'IPTU',
-        amount: 320,
-        propertyId: 2,
-        propertyName: 'Casa Jardim América',
-        description: 'IPTU mensal'
+        date: '2025-01-01',
+        type: 'income',
+        category: 'Aluguel',
+        amount: 4200,
+        propertyId: 4,
+        propertyName: 'MaxHaus 43R',
+        description: 'Aluguel mensal - Janeiro 2025'
     },
     {
         id: 5,
-        date: '2024-07-01',
+        date: '2025-01-01',
         type: 'income',
         category: 'Aluguel',
-        amount: 1800,
+        amount: 2800,
+        propertyId: 5,
+        propertyName: 'Next Haddock Lobo ap 33',
+        description: 'Aluguel mensal - Janeiro 2025'
+    },
+    {
+        id: 6,
+        date: '2025-01-01',
+        type: 'income',
+        category: 'Aluguel',
+        amount: 3600,
+        propertyId: 6,
+        propertyName: 'Thera by You',
+        description: 'Aluguel mensal - Janeiro 2025'
+    },
+    {
+        id: 7,
+        date: '2025-01-01',
+        type: 'income',
+        category: 'Aluguel',
+        amount: 2200,
+        propertyId: 7,
+        propertyName: 'Salas Brasal',
+        description: 'Aluguel mensal - Janeiro 2025'
+    },
+    {
+        id: 8,
+        date: '2025-01-01',
+        type: 'income',
+        category: 'Aluguel',
+        amount: 3900,
+        propertyId: 8,
+        propertyName: 'Casa Ibirapuera torre 3 ap 1411',
+        description: 'Aluguel mensal - Janeiro 2025'
+    },
+    {
+        id: 9,
+        date: '2025-01-01',
+        type: 'income',
+        category: 'Aluguel',
+        amount: 1200,
+        propertyId: 9,
+        propertyName: 'Sesimbra ap 505- Portugal',
+        description: 'Aluguel mensal - Janeiro 2025',
+        currency: 'EUR'
+    },
+    {
+        id: 10,
+        date: '2025-01-01',
+        type: 'income',
+        category: 'Aluguel',
+        amount: 2900,
+        propertyId: 10,
+        propertyName: 'Living Full Faria Lima setor 1 res 1808',
+        description: 'Aluguel mensal - Janeiro 2025'
+    },
+    // Despesas - Janeiro 2025
+    {
+        id: 11,
+        date: '2025-01-05',
+        type: 'expense',
+        category: 'Condomínio',
+        amount: 580,
+        propertyId: 1,
+        propertyName: 'Sevilha 307',
+        description: 'Taxa condomínio + energia + gás + água'
+    },
+    {
+        id: 12,
+        date: '2025-01-05',
+        type: 'expense',
+        category: 'Condomínio',
+        amount: 620,
+        propertyId: 2,
+        propertyName: 'Sevilha G07',
+        description: 'Taxa condomínio + energia + gás + água'
+    },
+    {
+        id: 13,
+        date: '2025-01-05',
+        type: 'expense',
+        category: 'Condomínio',
+        amount: 650,
         propertyId: 3,
-        propertyName: 'Sala Comercial',
-        description: 'Aluguel mensal'
+        propertyName: 'Málaga M07',
+        description: 'Taxa condomínio + energia + gás + água'
+    },
+    {
+        id: 14,
+        date: '2025-01-10',
+        type: 'expense',
+        category: 'Manutenção',
+        amount: 450,
+        propertyId: 4,
+        propertyName: 'MaxHaus 43R',
+        description: 'Reparo hidráulico'
+    },
+    {
+        id: 15,
+        date: '2025-01-15',
+        type: 'expense',
+        category: 'Impostos',
+        amount: 320,
+        propertyId: 6,
+        propertyName: 'Thera by You',
+        description: 'IPTU mensal'
+    },
+    {
+        id: 16,
+        date: '2025-01-20',
+        type: 'expense',
+        category: 'Limpezas',
+        amount: 180,
+        propertyId: 5,
+        propertyName: 'Next Haddock Lobo ap 33',
+        description: 'Limpeza pós-hóspede'
+    },
+    {
+        id: 17,
+        date: '2025-01-25',
+        type: 'expense',
+        category: 'Gestão',
+        amount: 1500,
+        propertyId: null,
+        propertyName: 'Gestão - Maurício',
+        description: 'Taxa de gestão mensal - rateio entre propriedades'
     }
 ];
 

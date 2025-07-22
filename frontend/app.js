@@ -177,6 +177,7 @@ async function loadReceitas() {
         await aplicarFiltrosReceitas();
         
         hideLoading();
+
     } catch (error) {
         console.error('Error loading receitas:', error);
         showError('Erro ao carregar receitas');
@@ -351,16 +352,48 @@ async function loadImoveis() {
     try {
         showLoading();
         
-        const properties = await apiCall('/api/properties');
-        const transactions = await apiCall('/api/transactions');
+        const propertiesResponse = await apiCall('/properties');
+        const transactionsResponse = await apiCall('/transactions');
+        
+        const properties = propertiesResponse.data || propertiesResponse;
+        const transactions = transactionsResponse.data || transactionsResponse;
+        
+        console.log('Properties loaded:', properties);
+        console.log('Transactions loaded:', transactions);
         
         const imoveisData = processImoveisData(properties, transactions);
         renderImoveisList(imoveisData);
+
+        // Add event listener for the Sevilha 307 button
+        const sevilhaBtn = document.getElementById('sevilha-btn');
+        if (sevilhaBtn) {
+            // Remove any existing listeners to avoid duplicates
+            const newSevilhaBtn = sevilhaBtn.cloneNode(true);
+            sevilhaBtn.parentNode.replaceChild(newSevilhaBtn, sevilhaBtn);
+
+            newSevilhaBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Stop event from bubbling up
+                console.log('Sevilha 307 button clicked, redirecting...');
+                window.location.href = 'sevilha-307.html';
+            });
+        }
+
+        const malagaBtn = document.getElementById('malaga-btn');
+        if (malagaBtn) {
+            const newMalagaBtn = malagaBtn.cloneNode(true);
+            malagaBtn.parentNode.replaceChild(newMalagaBtn, malagaBtn);
+            newMalagaBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                console.log('Málaga M07 button clicked, redirecting...');
+                window.location.href = 'malaga-m07.html';
+            });
+        }
         
         hideLoading();
     } catch (error) {
         console.error('Error loading imoveis:', error);
         showError('Erro ao carregar imóveis');
+        hideLoading();
     }
 }
 
@@ -371,17 +404,17 @@ function processImoveisData(properties, transactions) {
     return properties.map(property => {
         // Calculate current month revenues
         const receitas = transactions
-            .filter(t => t.property_id === property.id && t.type === 'income')
+            .filter(t => t.propertyId === property.id && t.type === 'income')
             .filter(t => {
                 const transactionDate = new Date(t.date);
                 const transactionMonth = transactionDate.toISOString().slice(0, 7);
                 return transactionMonth === currentMonth;
             })
-            .reduce((sum, t) => sum + (t.status === 'completed' || t.status === 'pending' ? t.amount : 0), 0);
+            .reduce((sum, t) => sum + t.amount, 0);
         
         // Calculate current month expenses
         const despesas = transactions
-            .filter(t => t.property_id === property.id && t.type === 'expense')
+            .filter(t => t.propertyId === property.id && t.type === 'expense')
             .filter(t => {
                 const transactionDate = new Date(t.date);
                 const transactionMonth = transactionDate.toISOString().slice(0, 7);
@@ -390,7 +423,7 @@ function processImoveisData(properties, transactions) {
             .reduce((sum, t) => sum + t.amount, 0);
         
         const resultadoMes = receitas - despesas;
-        const valorImovel = property.current_value || property.purchase_price || 1;
+        const valorImovel = property.value || property.purchasePrice || 1;
         const resultadoPercentual = (resultadoMes / valorImovel) * 100;
         
         return {
@@ -408,39 +441,93 @@ function renderImoveisList(imoveisData) {
     const container = document.getElementById('imoveis-list');
     
     if (imoveisData.length === 0) {
-        container.innerHTML = '<div class="text-center text-gray-500 py-8">Nenhum imóvel cadastrado</div>';
+        container.innerHTML = '<div class="text-center text-gray-500 py-2">Nenhum imóvel cadastrado</div>';
         return;
     }
     
     container.innerHTML = imoveisData.map(imovel => `
-        <div class="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer" onclick="openImovelDetails(${imovel.id})">
-            <div class="flex justify-between items-start">
-                <div class="flex-1">
-                    <h4 class="text-lg font-medium text-gray-900 mb-2">${imovel.nickname || 'Imóvel sem nome'}</h4>
-                    <p class="text-sm text-gray-600 mb-4">${imovel.address}</p>
-                    
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <span class="text-sm text-gray-500">Resultado do Mês:</span>
-                            <p class="text-lg font-medium ${imovel.resultadoMes >= 0 ? 'text-green-600' : 'text-red-600'}">
-                                ${formatCurrency(imovel.resultadoMes)}
-                            </p>
+        <div class="bg-white border border-gray-200 rounded p-2 hover:shadow-md transition-shadow cursor-pointer" data-id="${imovel.id}">
+            <div class="flex justify-between items-center" onclick="openImovelDetails(${imovel.id})">
+                <div class="flex items-center">
+                    <div class="mr-2 cursor-grab active:cursor-grabbing" onclick="event.stopPropagation()">
+                         <i class="fas fa-grip-vertical text-gray-400 text-xs"></i>
+                     </div>
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between mb-1">
+                            <h4 class="text-xs font-medium text-gray-900">${imovel.nickname || 'Imóvel sem nome'}</h4>
+                            <p class="text-xs text-gray-600 hidden sm:block ml-2 text-right">${imovel.address}</p>
                         </div>
-                        <div>
-                            <span class="text-sm text-gray-500">Resultado %:</span>
-                            <p class="text-lg font-medium ${imovel.resultadoPercentual >= 0 ? 'text-green-600' : 'text-red-600'}">
-                                ${imovel.resultadoPercentual.toFixed(2)}%
-                            </p>
+                        
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center space-x-4">
+                                <div>
+                                    <span class="text-xs text-gray-500">Resultado:</span>
+                                    <span class="text-xs font-medium ml-1 ${imovel.resultadoMes >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                        ${formatCurrency(imovel.resultadoMes)}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span class="text-xs text-gray-500">%:</span>
+                                    <span class="text-xs font-medium ml-1 ${imovel.resultadoPercentual >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                        ${imovel.resultadoPercentual.toFixed(2)}%
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="ml-4">
-                    <i class="fas fa-chevron-right text-gray-400"></i>
+                <div class="ml-2">
+                    <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
                 </div>
             </div>
         </div>
     `).join('');
+    
+    // Initialize sortable functionality
+    initSortableImoveis();
+}
+
+// Função para inicializar drag and drop dos imóveis
+function initSortableImoveis() {
+    const container = document.getElementById('imoveis-list');
+    if (!container) return;
+    
+    new Sortable(container, {
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        dragClass: 'sortable-drag',
+        handle: '.fa-grip-vertical',
+        onEnd: function(evt) {
+            // Salvar nova ordem dos imóveis
+            saveImoveisOrder();
+        }
+    });
+}
+
+// Função para salvar a nova ordem dos imóveis
+function saveImoveisOrder() {
+    const container = document.getElementById('imoveis-list');
+    const items = container.querySelectorAll('[data-id]');
+    const newOrder = Array.from(items).map((item, index) => ({
+        id: parseInt(item.dataset.id),
+        order: index
+    }));
+    
+    // Atualizar ordem no localStorage
+    const imoveisData = JSON.parse(localStorage.getItem('imoveisData') || '[]');
+    
+    // Reordenar array baseado na nova ordem
+    const reorderedImoveis = newOrder.map(orderItem => 
+        imoveisData.find(imovel => imovel.id === orderItem.id)
+    ).filter(Boolean);
+    
+    // Salvar nova ordem
+    localStorage.setItem('imoveisData', JSON.stringify(reorderedImoveis));
+    
+    // Atualizar dados globais
+    window.imoveisData = reorderedImoveis;
 }
 
 // Load Configurações
@@ -487,6 +574,8 @@ function tornarDespesasClicaveis() {
 
 function openNovaPropriedadeModal() {
     console.log('Open nova propriedade modal');
+    // Redirecionar para a página de cadastro de propriedades
+    window.open('property-form.html', '_blank');
 }
 
 function openUsuariosModal() {
@@ -503,6 +592,33 @@ function openConfigGeralModal() {
 
 function openImovelDetails(imovelId) {
     console.log('Open imovel details for ID:', imovelId);
+    
+    // Mapear IDs específicos para suas páginas correspondentes
+    let url;
+    switch(imovelId) {
+        case 1:
+            url = 'sevilha-307.html';
+            break;
+        case 2:
+            url = 'malaga-m07.html';
+            break;
+        case 3:
+            url = 'valencia-v15.html';
+            break;
+        case 4:
+            url = 'barcelona-b22.html';
+            break;
+        case 5:
+            url = 'madrid-m33.html';
+            break;
+        default:
+            // Para outros imóveis, usar a página genérica
+            url = `property-details.html?id=${imovelId}`;
+            break;
+    }
+    
+    console.log('Redirecting to:', url);
+    window.location.href = url;
 }
 
 // Search function for imoveis

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste - Detalhes do Imóvel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <div class="max-w-4xl mx-auto p-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-8">Teste de Navegação - Detalhes do Imóvel</h1>
+        
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Teste de Links Diretos</h2>
+            <div class="space-y-4">
+                <div>
+                    <p class="text-gray-600 mb-2">Clique nos links abaixo para testar a navegação:</p>
+                    <div class="space-x-4">
+                        <a href="property-details.html?id=1" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 inline-block">
+                            <i class="fas fa-home mr-2"></i>Imóvel 1
+                        </a>
+                        <a href="property-details.html?id=2" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 inline-block">
+                            <i class="fas fa-home mr-2"></i>Imóvel 2
+                        </a>
+                        <a href="property-details.html?id=3" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 inline-block">
+                            <i class="fas fa-home mr-2"></i>Imóvel 3
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Teste de Função JavaScript</h2>
+            <div class="space-y-4">
+                <p class="text-gray-600 mb-2">Clique nos botões abaixo para testar a função openImovelDetails:</p>
+                <div class="space-x-4">
+                    <button onclick="testOpenImovelDetails(1)" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                        <i class="fas fa-home mr-2"></i>Teste Imóvel 1
+                    </button>
+                    <button onclick="testOpenImovelDetails(2)" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                        <i class="fas fa-home mr-2"></i>Teste Imóvel 2
+                    </button>
+                    <button onclick="testOpenImovelDetails(3)" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
+                        <i class="fas fa-home mr-2"></i>Teste Imóvel 3
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Acesso Direto - Sevilha 307</h2>
+            <div class="space-y-4">
+                <a href="sevilha-307.html" class="bg-yellow-600 text-white px-6 py-3 rounded hover:bg-yellow-700 inline-block">
+                    <i class="fas fa-home mr-2"></i>Sevilha 307 - Página Dedicada
+                </a>
+                <br>
+                <a href="property-details.html?id=sevilha307" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 inline-block">
+                    <i class="fas fa-info-circle mr-2"></i>Sevilha 307 - Via Sistema
+                </a>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Voltar ao Sistema Principal</h2>
+            <a href="index.html" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 inline-block">
+                <i class="fas fa-arrow-left mr-2"></i>Voltar ao Dashboard
+            </a>
+        </div>
+    </div>
+    
+    <script>
+        function testOpenImovelDetails(imovelId) {
+            console.log('Testing openImovelDetails with ID:', imovelId);
+            const url = `property-details.html?id=${imovelId}`;
+            console.log('Navigating to:', url);
+            window.location.href = url;
+        }
+    </script>
+</body>
+</html>
