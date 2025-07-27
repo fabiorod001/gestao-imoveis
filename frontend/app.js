@@ -352,11 +352,22 @@ async function loadImoveis() {
     try {
         showLoading();
         
-        const propertiesResponse = await apiCall('/properties');
-        const transactionsResponse = await apiCall('/transactions');
+        // Dados estáticos dos 10 imóveis
+        const properties = [
+            { id: 1, nickname: 'Sevilha 307', address: 'Rua Sevilha, 307 - Vila Madalena', value: 850000 },
+            { id: 2, nickname: 'Sevilha G07', address: 'Rua Sevilha, G07 - Vila Madalena', value: 750000 },
+            { id: 3, nickname: 'Málaga M07', address: 'Rua Málaga, M07 - Vila Madalena', value: 920000 },
+            { id: 4, nickname: 'MaxHaus 43R', address: 'MaxHaus Residencial, Apto 43R', value: 680000 },
+            { id: 5, nickname: 'Next Haddock Lobo Ap 33', address: 'Next Haddock Lobo, Apto 33', value: 1200000 },
+            { id: 6, nickname: 'Thera By You', address: 'Thera By You Residencial', value: 580000 },
+            { id: 7, nickname: 'Salas Brasal', address: 'Edifício Brasal - Salas Comerciais', value: 450000 },
+            { id: 8, nickname: 'Casa Ibirapuera Torre 3 Ap 1411', address: 'Casa Ibirapuera, Torre 3, Apto 1411', value: 1100000 },
+            { id: 9, nickname: 'Sesimbra Ap 505 Portugal', address: 'Sesimbra, Apto 505 - Portugal', value: 320000 },
+            { id: 10, nickname: 'Living Full Faria Lima', address: 'Living Full Faria Lima', value: 980000 }
+        ];
         
-        const properties = propertiesResponse.data || propertiesResponse;
-        const transactions = transactionsResponse.data || transactionsResponse;
+        // Dados de transações simuladas para cálculos
+        const transactions = [];
         
         console.log('Properties loaded:', properties);
         console.log('Transactions loaded:', transactions);
@@ -387,7 +398,7 @@ function processImoveisData(properties, transactions) {
                 const transactionMonth = transactionDate.toISOString().slice(0, 7);
                 return transactionMonth === currentMonth;
             })
-            .reduce((sum, t) => sum + t.amount, 0);
+            .reduce((sum, t) => sum + (t.amount || 0), 0);
         
         // Calculate current month expenses
         const despesas = transactions
@@ -397,20 +408,20 @@ function processImoveisData(properties, transactions) {
                 const transactionMonth = transactionDate.toISOString().slice(0, 7);
                 return transactionMonth === currentMonth;
             })
-            .reduce((sum, t) => sum + t.amount, 0);
+            .reduce((sum, t) => sum + (t.amount || 0), 0);
         
         const resultadoMes = receitas - despesas;
-        const valorImovel = property.value || property.purchasePrice || 1;
-        const resultadoPercentual = (resultadoMes / valorImovel) * 100;
-        
-        return {
-            ...property,
-            receitas,
-            despesas,
-            resultadoMes,
-            resultadoPercentual
-        };
-    });
+         const valorImovel = property.value || property.purchasePrice || 1;
+         const resultadoPercentual = (resultadoMes / valorImovel) * 100;
+         
+         return {
+             ...property,
+             receitas,
+             despesas,
+             resultadoMes,
+             resultadoPercentual
+         };
+     });
 }
 
 // Render imoveis list
@@ -626,6 +637,17 @@ function searchImoveis() {
             card.style.display = 'none';
         }
     });
+}
+
+// Navigate to selected property from dropdown
+function navigateToSelectedProperty() {
+    const select = document.getElementById('propertyNavigator');
+    const selectedValue = select.value;
+    if (selectedValue) {
+        window.location.href = selectedValue + '.html';
+        // Reset select after navigation
+        select.value = '';
+    }
 }
 
 function editProperty(id) {

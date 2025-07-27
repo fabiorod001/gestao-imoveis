@@ -329,10 +329,10 @@ const mockSuppliers = [
 app.get('/api/dashboard/overview', (req, res) => {
     const totalProperties = mockProperties.length;
     const monthlyIncome = mockTransactions
-        .filter(t => t.type === 'income' && t.date.startsWith('2024-07'))
+        .filter(t => t.type === 'income' && t.date.startsWith('2025-01'))
         .reduce((sum, t) => sum + t.amount, 0);
     const monthlyExpenses = mockTransactions
-        .filter(t => t.type === 'expense' && t.date.startsWith('2024-07'))
+        .filter(t => t.type === 'expense' && t.date.startsWith('2025-01'))
         .reduce((sum, t) => sum + t.amount, 0);
     
     const totalValue = mockProperties.reduce((sum, p) => sum + p.value, 0);

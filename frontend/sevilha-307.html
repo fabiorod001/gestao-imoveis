@@ -19,12 +19,25 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center py-4">
                 <div class="flex items-center">
-                    <a href="index.html#imoveis" class="text-blue-600 hover:text-blue-800 mr-4">
+                    <button onclick="goToHome()" class="text-blue-600 hover:text-blue-800 mr-4 bg-transparent border-none cursor-pointer">
                         <i class="fas fa-arrow-left"></i> Voltar
-                    </a>
+                    </button>
                     <h1 class="text-2xl font-bold text-gray-900">Sevilha 307</h1>
                 </div>
                 <div class="flex space-x-3">
+                    <select id="propertyNavigation" onchange="navigateToSelectedProperty()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                        <option value="">Ir para Imóvel</option>
+                        <option value="casa-ibirapuera-torre-3-ap-1411.html">Casa Ibirapuera Torre 3 Ap 1411</option>
+                        <option value="living-full-faria-lima.html">Living Full Faria Lima</option>
+                        <option value="malaga-m07.html">Málaga M07</option>
+                        <option value="maxhaus-43r.html">MaxHaus 43R</option>
+                        <option value="next-haddock-lobo-ap-33.html">Next Haddock Lobo Ap 33</option>
+                        <option value="salas-brasal.html">Salas Brasal</option>
+                        <option value="sesimbra-ap-505-portugal.html">Sesimbra Ap 505 Portugal</option>
+                        <option value="sevilha-307.html" selected>Sevilha 307</option>
+                        <option value="sevilha-g07.html">Sevilha G07</option>
+                        <option value="thera-by-you.html">Thera By You</option>
+                    </select>
                     <button onclick="window.open('property-form.html', '_blank')" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                         <i class="fas fa-plus mr-2"></i>Cadastrar Imóvel
                     </button>
@@ -71,7 +84,7 @@
                     Limpar Filtros
                 </button>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="grid grid-cols-1 gap-3">
                 <div>
                     <label class="block text-xs font-medium text-gray-600 mb-1">Meses</label>
                     <div class="relative">
@@ -90,23 +103,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Propriedades</label>
-                    <select id="propertyFilter" class="w-full border border-gray-300 rounded px-2 py-1 text-sm" onchange="updateTable()">
-                        <option value="sevilha307">Sevilha 307</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Tipos de Financiamento</label>
-                    <select id="financeFilter" class="w-full border border-gray-300 rounded px-2 py-1 text-sm" onchange="updateTable()">
-                        <option value="all">Todos</option>
-                        <option value="parcela">Parcela Financiamento</option>
-                        <option value="entrada">Entrada</option>
-                        <option value="amortizacao">Amortização</option>
-                        <option value="juros">Juros</option>
-                        <option value="vista">Pagamento à Vista</option>
-                    </select>
                 </div>
             </div>
         </div>
@@ -392,6 +388,23 @@
                 dropdown.classList.add('hidden');
             }
         });
+
+        // Função para voltar à página inicial
+        function goToHome() {
+            console.log('Navegando para a página inicial');
+            window.location.href = 'index.html';
+        }
+        
+        // Função para navegar para o imóvel selecionado
+        function navigateToSelectedProperty() {
+            const select = document.getElementById('propertyNavigation') || document.getElementById('propertyFilter');
+            const selectedValue = select.value;
+            
+            if (selectedValue && selectedValue !== '') {
+                console.log('Navegando para:', selectedValue);
+                window.location.href = selectedValue;
+            }
+        }
 
         // Inicializar página
         document.addEventListener('DOMContentLoaded', function() {
