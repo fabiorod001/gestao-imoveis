@@ -581,46 +581,10 @@ function openConfigGeralModal() {
 function openImovelDetails(imovelId) {
     console.log('Open imovel details for ID:', imovelId);
     
-    // Mapear IDs específicos para suas páginas correspondentes
-    let url;
-    switch(imovelId) {
-        case 1:
-            url = 'sevilha-307.html';
-            break;
-        case 2:
-            url = 'sevilha-g07.html';
-            break;
-        case 3:
-            url = 'malaga-m07.html';
-            break;
-        case 4:
-            url = 'maxhaus-43r.html';
-            break;
-        case 5:
-            url = 'next-haddock-lobo-ap-33.html';
-            break;
-        case 6:
-            url = 'thera-by-you.html';
-            break;
-        case 7:
-            url = 'salas-brasal.html';
-            break;
-        case 8:
-            url = 'casa-ibirapuera-torre-3-ap-1411.html';
-            break;
-        case 9:
-            url = 'sesimbra-ap-505-portugal.html';
-            break;
-        case 10:
-            url = 'living-full-faria-lima.html';
-            break;
-        default:
-            // Para outros imóveis, usar a página genérica
-            url = `property-details.html?id=${imovelId}`;
-            break;
-    }
+    // Usar o novo sistema de framework centralizado
+    const url = `property-template.html?id=${imovelId}`;
     
-    console.log('Redirecting to:', url);
+    console.log('Redirecting to framework template:', url);
     window.location.href = url;
 }
 

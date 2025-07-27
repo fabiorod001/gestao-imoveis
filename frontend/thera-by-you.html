@@ -3,441 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thera by You - Detalhes do Imóvel</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>Redirecionando...</title>
+    <script>
+        // Redirecionamento automático para o novo sistema
+        window.location.href = 'property-template.html?id=5';
+    </script>
     <style>
-        .positive-bg { background-color: #dcfce7; }
-        .negative-bg { background-color: #fecaca; }
-        .positive-text { color: #166534; }
-        .negative-text { color: #dc2626; }
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .redirect-message {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
-<body class="bg-gray-50">
-    <!-- Header -->
-    <header class="bg-white shadow-sm border-b border-gray-200">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center py-4">
-                <div class="flex items-center">
-                    <button onclick="goToHome()" class="text-blue-600 hover:text-blue-800 mr-4 bg-transparent border-none cursor-pointer">
-                        <i class="fas fa-arrow-left"></i> Voltar
-                    </button>
-                    <h1 class="text-2xl font-bold text-gray-900">Thera by You</h1>
-                </div>
-                <div class="flex space-x-3">
-                    <select id="propertyNavigation" onchange="navigateToSelectedProperty()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
-                        <option value="">Ir para Imóvel</option>
-                        <option value="casa-ibirapuera-torre-3-ap-1411.html">Casa Ibirapuera Torre 3 Ap 1411</option>
-                        <option value="living-full-faria-lima.html">Living Full Faria Lima</option>
-                        <option value="malaga-m07.html">Málaga M07</option>
-                        <option value="maxhaus-43r.html">MaxHaus 43R</option>
-                        <option value="next-haddock-lobo-ap-33.html">Next Haddock Lobo Ap 33</option>
-                        <option value="salas-brasal.html">Salas Brasal</option>
-                        <option value="sesimbra-ap-505-portugal.html">Sesimbra Ap 505 Portugal</option>
-                        <option value="sevilha-307.html">Sevilha 307</option>
-                        <option value="sevilha-g07.html">Sevilha G07</option>
-                        <option value="thera-by-you.html" selected>Thera By You</option>
-                    </select>
-                    <button onclick="window.open('property-form.html', '_blank')" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
-                        <i class="fas fa-plus mr-2"></i>Cadastrar Imóvel
-                    </button>
-                    <button onclick="window.open('property-form.html?id=therabyyou', '_blank')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                        <i class="fas fa-edit mr-2"></i>Editar Imóvel
-                    </button>
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Property Info Card -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Informações do Imóvel</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-500">Nome</label>
-                    <p class="text-sm text-gray-900">Thera by You</p>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-500">Endereço</label>
-                    <p class="text-sm text-gray-900">Rua Thera, 123 - Vila Olímpia, São Paulo, SP</p>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-500">Status</label>
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Alugado
-                    </span>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-500">Valor Atualizado (IPCA)</label>
-                    <p class="text-sm text-gray-900">R$ 1.123.456,00</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Filtros -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-            <div class="flex justify-between items-center mb-3">
-                <h3 class="text-base font-medium text-gray-900">Filtros Avançados</h3>
-                <button onclick="resetFilters()" class="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 border border-blue-200 rounded">
-                    Limpar Filtros
-                </button>
-            </div>
-            <div class="grid grid-cols-1 gap-3">
-                <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Meses</label>
-                    <div class="relative">
-                        <button onclick="toggleMonthDropdown()" class="w-full text-left border border-gray-300 rounded px-2 py-1 text-sm bg-white hover:bg-gray-50">
-                            <span id="selectedMonthsText"></span>
-                            <i class="fas fa-chevron-down float-right mt-0.5"></i>
-                        </button>
-                        <div id="monthDropdown" class="hidden absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-60 overflow-y-auto">
-                            <div class="p-2">
-                                <div class="text-xs font-medium text-gray-500 mb-1">Próximos Meses</div>
-                                <div id="futureMonths" class="space-y-1 mb-2"></div>
-                                <div class="text-xs font-medium text-gray-500 mb-1">Mês Atual</div>
-                                <div id="currentMonth" class="mb-2"></div>
-                                <div class="text-xs font-medium text-gray-500 mb-1">Meses Anteriores</div>
-                                <div id="pastMonths" class="space-y-1"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tabela Dinâmica -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-            <div class="overflow-x-auto">
-                <table class="min-w-full text-sm" id="dynamicTable">
-                    <thead>
-                        <tr class="border-b border-gray-200">
-                            <th class="text-left py-2 px-3 font-medium text-gray-700 bg-gray-50 text-xs">Categoria</th>
-                            <th class="text-right py-2 px-3 font-medium text-gray-700 bg-gray-50 text-xs" id="monthHeader"></th>
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody">
-                        <!-- Conteúdo será gerado dinamicamente -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Transações -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-semibold text-gray-900">Transações</h3>
-                <div class="flex space-x-2">
-                    <button onclick="addTransaction('revenue')" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
-                        <i class="fas fa-plus mr-1"></i>Receita
-                    </button>
-                    <button onclick="addTransaction('expense')" class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">
-                        <i class="fas fa-minus mr-1"></i>Despesa
-                    </button>
-                </div>
-            </div>
-            
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200" id="transactionsBody">
-                        <!-- Transações serão carregadas dinamicamente -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </main>
-
-    <script>
-        // Dados conforme especificação
-        const propertyValue = 1123456; // Valor atualizado do imóvel
-        const currentDate = new Date();
-        const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-        let selectedMonths = [currentMonthKey]; // Mês atual como padrão
-        
-        const transactions = [
-            { date: '2025-07-15', type: 'revenue', category: 'Receitas Actual', description: 'Aluguel Julho 2025', amount: 3800, status: 'paid' },
-            { date: '2025-07-25', type: 'revenue', category: 'Receitas Pending', description: 'Aluguel Pendente', amount: 3800, status: 'pending' },
-            { date: '2025-07-10', type: 'expense', category: 'Condominio', description: 'Condomínio Julho 2025', amount: 850, status: 'paid' },
-            { date: '2025-07-05', type: 'expense', category: 'Gestão - Mauricio', description: 'Taxa de Gestão Julho', amount: 290, status: 'paid' },
-            { date: '2025-07-12', type: 'expense', category: 'Limpezas', description: 'Limpeza Mensal', amount: 600, status: 'paid' },
-            { date: '2025-07-20', type: 'expense', category: 'Impostos', description: 'Impostos Julho', amount: 420, status: 'paid' }
-        ];
-
-        function formatCurrency(value) {
-            return new Intl.NumberFormat('pt-BR', {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0
-            }).format(value);
-        }
-
-        function formatPercentage(value) {
-            return (value * 100).toFixed(2) + '%';
-        }
-
-        function generateMonthOptions() {
-            const currentDate = new Date();
-            const currentYear = currentDate.getFullYear();
-            const currentMonth = currentDate.getMonth();
-            
-            // Próximos 11 meses
-            const futureMonths = [];
-            for (let i = 1; i <= 11; i++) {
-                const date = new Date(currentYear, currentMonth + i, 1);
-                const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                const label = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-                futureMonths.push({ key, label });
-            }
-            
-            // Mês atual
-            const currentKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
-            const currentLabel = new Date(currentYear, currentMonth, 1).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-            
-            // 11 meses anteriores
-            const pastMonths = [];
-            for (let i = 1; i <= 11; i++) {
-                const date = new Date(currentYear, currentMonth - i, 1);
-                const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                const label = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-                pastMonths.push({ key, label });
-            }
-            
-            return { futureMonths, currentMonth: { key: currentKey, label: currentLabel }, pastMonths };
-        }
-
-        function renderMonthOptions() {
-            const { futureMonths, currentMonth, pastMonths } = generateMonthOptions();
-            
-            const futureContainer = document.getElementById('futureMonths');
-            const currentContainer = document.getElementById('currentMonth');
-            const pastContainer = document.getElementById('pastMonths');
-            
-            futureContainer.innerHTML = futureMonths.map(month => 
-                `<label class="flex items-center text-xs">
-                    <input type="checkbox" value="${month.key}" onchange="updateSelectedMonths()" class="mr-2">
-                    ${month.label}
-                </label>`
-            ).join('');
-            
-            currentContainer.innerHTML = 
-                `<label class="flex items-center text-xs font-medium">
-                    <input type="checkbox" value="${currentMonth.key}" onchange="updateSelectedMonths()" class="mr-2" checked>
-                    ${currentMonth.label}
-                </label>`;
-            
-            pastContainer.innerHTML = pastMonths.map(month => 
-                `<label class="flex items-center text-xs">
-                    <input type="checkbox" value="${month.key}" onchange="updateSelectedMonths()" class="mr-2">
-                    ${month.label}
-                </label>`
-            ).join('');
-        }
-
-        function updateSelectedMonths() {
-            const checkboxes = document.querySelectorAll('#monthDropdown input[type="checkbox"]:checked');
-            selectedMonths = Array.from(checkboxes).map(cb => cb.value);
-            
-            const selectedText = selectedMonths.length === 0 ? 'Nenhum mês selecionado' : 
-                selectedMonths.length === 1 ? '1 mês selecionado' : 
-                `${selectedMonths.length} meses selecionados`;
-            
-            document.getElementById('selectedMonthsText').textContent = selectedText;
-            updateTable();
-        }
-
-        function toggleMonthDropdown() {
-            const dropdown = document.getElementById('monthDropdown');
-            dropdown.classList.toggle('hidden');
-        }
-
-        function resetFilters() {
-            const currentDate = new Date();
-            const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-            selectedMonths = [currentMonthKey];
-            
-            // Reset checkboxes
-            document.querySelectorAll('#monthDropdown input[type="checkbox"]').forEach(cb => {
-                cb.checked = cb.value === currentMonthKey;
-            });
-            
-            document.getElementById('propertyFilter').value = 'therabyyou';
-            document.getElementById('financeFilter').value = 'all';
-            
-            updateSelectedMonths();
-        }
-
-        function updateTable() {
-            const monthHeader = document.getElementById('monthHeader');
-            const tableBody = document.getElementById('tableBody');
-            
-            if (selectedMonths.length === 0) {
-                monthHeader.textContent = 'Nenhum mês';
-                tableBody.innerHTML = '<tr><td colspan="2" class="text-center py-4 text-gray-500">Selecione pelo menos um mês</td></tr>';
-                return;
-            }
-            
-            // Atualizar cabeçalho
-            if (selectedMonths.length === 1) {
-                const date = new Date(selectedMonths[0] + '-01');
-                monthHeader.textContent = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-            } else {
-                monthHeader.textContent = `${selectedMonths.length} meses`;
-            }
-            
-            // Calcular totais por categoria
-            const categoryTotals = {};
-            
-            transactions.forEach(transaction => {
-                const transactionMonth = transaction.date.substring(0, 7);
-                if (selectedMonths.includes(transactionMonth)) {
-                    if (!categoryTotals[transaction.category]) {
-                        categoryTotals[transaction.category] = { revenue: 0, expense: 0 };
-                    }
-                    
-                    if (transaction.type === 'revenue') {
-                        categoryTotals[transaction.category].revenue += transaction.amount;
-                    } else {
-                        categoryTotals[transaction.category].expense += transaction.amount;
-                    }
-                }
-            });
-            
-            // Renderizar tabela
-            let totalRevenue = 0;
-            let totalExpense = 0;
-            let tableHTML = '';
-            
-            Object.keys(categoryTotals).forEach(category => {
-                const data = categoryTotals[category];
-                const netAmount = data.revenue - data.expense;
-                const isPositive = netAmount >= 0;
-                
-                if (data.revenue > 0) totalRevenue += data.revenue;
-                if (data.expense > 0) totalExpense += data.expense;
-                
-                tableHTML += `
-                    <tr class="border-b border-gray-100">
-                        <td class="py-2 px-3 text-xs">${category}</td>
-                        <td class="py-2 px-3 text-right text-xs ${isPositive ? 'positive-text' : 'negative-text'}">
-                            R$ ${formatCurrency(Math.abs(netAmount))}
-                        </td>
-                    </tr>
-                `;
-            });
-            
-            const netTotal = totalRevenue - totalExpense;
-            const isNetPositive = netTotal >= 0;
-            const percentageReturn = (netTotal / propertyValue) * 100;
-            
-            tableHTML += `
-                <tr class="border-t-2 border-gray-300 font-medium">
-                    <td class="py-2 px-3 text-xs">Total Líquido</td>
-                    <td class="py-2 px-3 text-right text-xs ${isNetPositive ? 'positive-text' : 'negative-text'}">
-                        R$ ${formatCurrency(Math.abs(netTotal))}
-                    </td>
-                </tr>
-                <tr class="font-medium">
-                    <td class="py-2 px-3 text-xs">% Retorno</td>
-                    <td class="py-2 px-3 text-right text-xs ${isNetPositive ? 'positive-text' : 'negative-text'}">
-                        ${percentageReturn.toFixed(2)}%
-                    </td>
-                </tr>
-            `;
-            
-            tableBody.innerHTML = tableHTML;
-        }
-
-        function renderTransactions() {
-            const tbody = document.getElementById('transactionsBody');
-            
-            const transactionHTML = transactions.map(transaction => {
-                const isRevenue = transaction.type === 'revenue';
-                const statusClass = transaction.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
-                const statusText = transaction.status === 'paid' ? 'Pago' : 'Pendente';
-                
-                return `
-                    <tr>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ${new Date(transaction.date).toLocaleDateString('pt-BR')}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                isRevenue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                            }">
-                                ${isRevenue ? 'Receita' : 'Despesa'}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.category}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium ${
-                            isRevenue ? 'text-green-600' : 'text-red-600'
-                        }">
-                            ${isRevenue ? '+' : '-'}R$ ${formatCurrency(transaction.amount)}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">
-                                ${statusText}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button class="text-blue-600 hover:text-blue-900 mr-2">Editar</button>
-                            <button class="text-red-600 hover:text-red-900">Excluir</button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-            
-            tbody.innerHTML = transactionHTML;
-        }
-
-        function addTransaction(type) {
-            alert(`Adicionar ${type === 'revenue' ? 'receita' : 'despesa'}`);
-        }
-
-        // Fechar dropdown ao clicar fora
-        document.addEventListener('click', function(event) {
-            const dropdown = document.getElementById('monthDropdown');
-            const button = event.target.closest('button');
-            
-            if (!dropdown.contains(event.target) && (!button || !button.onclick || button.onclick.toString().indexOf('toggleMonthDropdown') === -1)) {
-                dropdown.classList.add('hidden');
-            }
-        });
-
-        // Função para voltar à página inicial
-        function goToHome() {
-            console.log('Navegando para a página inicial');
-            window.location.href = 'index.html';
-        }
-        
-        // Função para navegar para o imóvel selecionado
-        function navigateToSelectedProperty() {
-            const select = document.getElementById('propertyNavigation') || document.getElementById('propertyFilter');
-            const selectedValue = select.value;
-            
-            if (selectedValue && selectedValue !== '') {
-                console.log('Navegando para:', selectedValue);
-                window.location.href = selectedValue;
-            }
-        }
-
-        // Inicializar página
-        document.addEventListener('DOMContentLoaded', function() {
-            renderMonthOptions();
-            updateSelectedMonths();
-            renderTransactions();
-        });
-    </script>
+<body>
+    <div class="redirect-message">
+        <div class="spinner"></div>
+        <h2>Redirecionando para o novo sistema...</h2>
+        <p>Você será redirecionado automaticamente em alguns segundos.</p>
+        <p><a href="property-template.html?id=5" style="color: white; text-decoration: underline;">Clique aqui se não for redirecionado automaticamente</a></p>
+    </div>
 </body>
 </html>

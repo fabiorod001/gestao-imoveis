@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Málaga M07 - Detalhes do Imóvel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .positive-bg { background-color: #dcfce7; }
+        .negative-bg { background-color: #fecaca; }
+        .positive-text { color: #166534; }
+        .negative-text { color: #dc2626; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <button onclick="goToHome()" class="text-blue-600 hover:text-blue-800 mr-4 bg-transparent border-none cursor-pointer">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </button>
+                    <h1 class="text-2xl font-bold text-gray-900">Málaga M07</h1>
+                </div>
+                <div class="flex space-x-3">
+                    <select id="propertyNavigation" onchange="navigateToSelectedProperty()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                        <option value="">Ir para Imóvel</option>
+                        <option value="casa-ibirapuera-torre-3-ap-1411.html">Casa Ibirapuera Torre 3 Ap 1411</option>
+                        <option value="living-full-faria-lima.html">Living Full Faria Lima</option>
+                        <option value="malaga-m07.html" selected>Málaga M07</option>
+                        <option value="maxhaus-43r.html">MaxHaus 43R</option>
+                        <option value="next-haddock-lobo-ap-33.html">Next Haddock Lobo Ap 33</option>
+                        <option value="salas-brasal.html">Salas Brasal</option>
+                        <option value="sesimbra-ap-505-portugal.html">Sesimbra Ap 505 Portugal</option>
+                        <option value="sevilha-307.html">Sevilha 307</option>
+                        <option value="sevilha-g07.html">Sevilha G07</option>
+                        <option value="thera-by-you.html">Thera By You</option>
+                    </select>
+                    <button onclick="window.open('property-form.html', '_blank')" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                        <i class="fas fa-plus mr-2"></i>Cadastrar Imóvel
+                    </button>
+                    <button onclick="window.open('property-form.html?id=malaga-m07', '_blank')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                        <i class="fas fa-edit mr-2"></i>Editar Imóvel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Property Info Card -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Informações do Imóvel</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-500">Nome</label>
+                    <p class="text-sm text-gray-900">Málaga M07</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-500">Endereço</label>
+                    <p class="text-sm text-gray-900">Condomínio Andalus, Rua Einstein, M07 - Morumbi, São Paulo, SP</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-500">Status</label>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Alugado
+                    </span>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-500">Valor Atualizado (IPCA)</label>
+                    <p class="text-sm text-gray-900">R$ 850.000,00</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-base font-medium text-gray-900">Filtros Avançados</h3>
+                <button onclick="resetFilters()" class="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 border border-blue-200 rounded">
+                    Limpar Filtros
+                </button>
+            </div>
+            <div class="grid grid-cols-1 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Meses</label>
+                    <div class="relative">
+                        <button onclick="toggleMonthDropdown()" class="w-full text-left border border-gray-300 rounded px-2 py-1 text-sm bg-white hover:bg-gray-50">
+                            <span id="selectedMonthsText"></span>
+                            <i class="fas fa-chevron-down float-right mt-0.5"></i>
+                        </button>
+                        <div id="monthDropdown" class="hidden absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-60 overflow-y-auto">
+                            <div class="p-2">
+                                <div class="text-xs font-medium text-gray-500 mb-1">Próximos Meses</div>
+                                <div id="futureMonths" class="space-y-1 mb-2"></div>
+                                <div class="text-xs font-medium text-gray-500 mb-1">Mês Atual</div>
+                                <div id="currentMonth" class="mb-2"></div>
+                                <div class="text-xs font-medium text-gray-500 mb-1">Meses Anteriores</div>
+                                <div id="pastMonths" class="space-y-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela Dinâmica -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm" id="dynamicTable">
+                    <thead>
+                        <tr class="border-b border-gray-200">
+                            <th class="text-left py-2 px-3 font-medium text-gray-700 bg-gray-50 text-xs">Categoria</th>
+                            <th class="text-right py-2 px-3 font-medium text-gray-700 bg-gray-50 text-xs" id="monthHeader"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Conteúdo será gerado dinamicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Transações -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Transações</h3>
+                <div class="flex space-x-2">
+                    <button onclick="addTransaction('revenue')" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
+                        <i class="fas fa-plus mr-1"></i>Receita
+                    </button>
+                    <button onclick="addTransaction('expense')" class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">
+                        <i class="fas fa-minus mr-1"></i>Despesa
+                    </button>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="transactionsBody">
+                        <!-- Transações serão carregadas dinamicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Dados específicos do Málaga M07
+        const propertyValue = 850000; // Valor atualizado do imóvel
+        const currentDate = new Date();
+        const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+        let selectedMonths = [currentMonthKey]; // Mês atual como padrão
+        
+        const transactions = [
+            { date: '2025-01-15', type: 'revenue', category: 'Receitas Actual', description: 'Aluguel Janeiro 2025', amount: 3800, status: 'paid' },
+            { date: '2025-01-10', type: 'expense', category: 'Condominio', description: 'Condomínio Janeiro 2025', amount: 450, status: 'paid' },
+            { date: '2025-01-05', type: 'expense', category: 'Gestão - Mauricio', description: 'Taxa de Gestão Janeiro', amount: 190, status: 'paid' },
+            { date: '2025-01-12', type: 'expense', category: 'Limpezas', description: 'Limpeza Mensal', amount: 300, status: 'paid' },
+            { date: '2025-01-20', type: 'expense', category: 'Impostos', description: 'Impostos Janeiro', amount: 285, status: 'paid' }
+        ];
+
+
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('pt-BR', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(value);
+        }
+
+        function formatPercentage(value) {
+            return (value * 100).toFixed(2) + '%';
+        }
+
+        function generateMonthOptions() {
+            const currentDate = new Date();
+            const currentYear = currentDate.getFullYear();
+            const currentMonth = currentDate.getMonth();
+            
+            // Próximos 11 meses
+            const futureMonths = [];
+            for (let i = 1; i <= 11; i++) {
+                const date = new Date(currentYear, currentMonth + i, 1);
+                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                const monthText = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
+                futureMonths.push({ key: monthKey, text: monthText });
+            }
+            
+            // Mês atual
+            const currentMonthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+            const currentMonthText = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
+            
+            // Últimos 36 meses
+            const pastMonths = [];
+            for (let i = 1; i <= 36; i++) {
+                const date = new Date(currentYear, currentMonth - i, 1);
+                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                const monthText = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
+                pastMonths.push({ key: monthKey, text: monthText });
+            }
+            
+            return { futureMonths, currentMonth: { key: currentMonthKey, text: currentMonthText }, pastMonths };
+        }
+
+        function initializeMonthDropdown() {
+            const { futureMonths, currentMonth, pastMonths } = generateMonthOptions();
+            
+            document.getElementById('futureMonths').innerHTML = futureMonths.map(m => 
+                `<label class="flex items-center text-xs"><input type="checkbox" value="${m.key}" onchange="updateSelectedMonths()" class="mr-1"> ${m.text}</label>`
+            ).join('');
+            
+            document.getElementById('currentMonth').innerHTML = 
+                `<label class="flex items-center text-xs"><input type="checkbox" value="${currentMonth.key}" onchange="updateSelectedMonths()" class="mr-1" checked> ${currentMonth.text}</label>`;
+            
+            document.getElementById('pastMonths').innerHTML = pastMonths.map(m => 
+                `<label class="flex items-center text-xs"><input type="checkbox" value="${m.key}" onchange="updateSelectedMonths()" class="mr-1"> ${m.text}</label>`
+            ).join('');
+        }
+
+        function toggleMonthDropdown() {
+            const dropdown = document.getElementById('monthDropdown');
+            dropdown.classList.toggle('hidden');
+        }
+
+        function updateSelectedMonths() {
+            const checkboxes = document.querySelectorAll('#monthDropdown input[type="checkbox"]:checked');
+            selectedMonths = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (selectedMonths.length === 0) {
+                selectedMonths = [currentMonthKey];
+                const currentCheckbox = document.querySelector(`#monthDropdown input[value="${currentMonthKey}"]`);
+                if (currentCheckbox) currentCheckbox.checked = true;
+            }
+            
+            const monthTexts = Array.from(checkboxes).map(cb => cb.parentElement.textContent.trim());
+            const currentMonthText = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
+            document.getElementById('selectedMonthsText').textContent = monthTexts.length > 0 ? monthTexts.join(', ') : currentMonthText;
+            
+            updateTable();
+        }
+
+        function resetFilters() {
+            selectedMonths = [currentMonthKey];
+            document.querySelectorAll('#monthDropdown input[type="checkbox"]').forEach(cb => cb.checked = false);
+            const currentCheckbox = document.querySelector(`#monthDropdown input[value="${currentMonthKey}"]`);
+            if (currentCheckbox) currentCheckbox.checked = true;
+            const currentMonthText = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
+            document.getElementById('selectedMonthsText').textContent = currentMonthText;
+            document.getElementById('categoryFilter').value = 'all';
+            document.getElementById('financeFilter').value = 'all';
+            updateTable();
+        }
+
+        function updateTable() {
+            const selectedCategory = document.getElementById('categoryFilter').value;
+            
+            // Filtrar transações pelos meses selecionados e categoria
+            const filteredTransactions = transactions.filter(t => {
+                const transactionMonth = t.date.substring(0, 7);
+                const monthMatch = selectedMonths.includes(transactionMonth);
+                const categoryMatch = selectedCategory === 'all' || t.category === selectedCategory;
+                return monthMatch && categoryMatch;
+            });
+
+            // Dados específicos do Málaga M07
+            const data = {
+                'Receitas Actual': 3800,
+                'Receitas Pending': 0,
+                'Total Receitas': 3800,
+                'Condominio': 450,
+                'Gestão - Mauricio': 190,
+                'Limpezas': 300,
+                'Manutrenção': 0,
+                'Impostos': 285,
+                'Total despesas': 1225,
+                'Resultado imóvel': 2575,
+                'Resultado imóvel %': 0.30
+            };
+
+            let tableHTML = '';
+            
+            // Receitas
+            tableHTML += `
+                <tr><td class="py-1 px-2 text-blue-600 text-xs font-medium">Receitas Actual</td><td class="py-1 px-2 text-right text-blue-600 text-xs">${formatCurrency(data['Receitas Actual'])}</td></tr>
+                <tr><td class="py-1 px-2 text-blue-600 text-xs font-medium">Receitas Pending</td><td class="py-1 px-2 text-right text-blue-600 text-xs">${data['Receitas Pending'] > 0 ? formatCurrency(data['Receitas Pending']) : '-'}</td></tr>
+                <tr class="bg-blue-50"><td class="py-1 px-2 text-blue-800 text-xs font-semibold">Total Receitas</td><td class="py-1 px-2 text-right text-blue-800 text-xs font-semibold">${formatCurrency(data['Total Receitas'])}</td></tr>
+                <tr><td colspan="2" class="py-1"></td></tr>
+            `;
+            
+            // Despesas
+            tableHTML += `
+                <tr><td class="py-1 px-2 text-red-600 text-xs font-medium">Condominio</td><td class="py-1 px-2 text-right text-red-600 text-xs">${formatCurrency(data['Condominio'])}</td></tr>
+                <tr><td class="py-1 px-2 text-red-600 text-xs font-medium">Gestão - Mauricio</td><td class="py-1 px-2 text-right text-red-600 text-xs">${formatCurrency(data['Gestão - Mauricio'])}</td></tr>
+                <tr><td class="py-1 px-2 text-red-600 text-xs font-medium">Limpezas</td><td class="py-1 px-2 text-right text-red-600 text-xs">${formatCurrency(data['Limpezas'])}</td></tr>
+                <tr><td class="py-1 px-2 text-red-600 text-xs font-medium">Manutrenção</td><td class="py-1 px-2 text-right text-red-600 text-xs">-</td></tr>
+                <tr><td class="py-1 px-2 text-red-600 text-xs font-medium">Impostos</td><td class="py-1 px-2 text-right text-red-600 text-xs">${formatCurrency(data['Impostos'])}</td></tr>
+                <tr class="bg-red-50"><td class="py-1 px-2 text-red-800 text-xs font-semibold">Total despesas</td><td class="py-1 px-2 text-right text-red-800 text-xs font-semibold">${formatCurrency(data['Total despesas'])}</td></tr>
+                <tr><td colspan="2" class="py-1"></td></tr>
+            `;
+            
+            // Resultado
+            const resultClass = data['Resultado imóvel'] >= 0 ? 'positive-bg positive-text' : 'negative-bg negative-text';
+            tableHTML += `
+                <tr class="${resultClass}"><td class="py-1 px-2 text-xs font-bold">Resultado imóvel</td><td class="py-1 px-2 text-right text-xs font-bold">${formatCurrency(data['Resultado imóvel'])}</td></tr>
+                <tr class="${resultClass}"><td class="py-1 px-2 text-xs font-bold">Resultado imóvel</td><td class="py-1 px-2 text-right text-xs font-bold">${data['Resultado imóvel %']}%</td></tr>
+            `;
+
+            document.getElementById('tableBody').innerHTML = tableHTML;
+            
+            // Atualizar cabeçalho da tabela
+            const monthTexts = selectedMonths.map(monthKey => {
+                const [year, month] = monthKey.split('-');
+                const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
+            });
+            document.getElementById('monthHeader').textContent = monthTexts.join(', ');
+            
+            loadTransactions();
+        }
+
+        function loadTransactions() {
+            const selectedCategory = document.getElementById('categoryFilter').value;
+            const tbody = document.getElementById('transactionsBody');
+            let html = '';
+            
+            // Filtrar transações pelos meses selecionados e categoria
+            const filteredTransactions = transactions.filter(t => {
+                const transactionMonth = t.date.substring(0, 7);
+                const monthMatch = selectedMonths.includes(transactionMonth);
+                const categoryMatch = selectedCategory === 'all' || t.category === selectedCategory;
+                return monthMatch && categoryMatch;
+            });
+            
+            filteredTransactions.forEach((t, index) => {
+                const typeClass = t.type === 'revenue' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                const amountClass = t.type === 'revenue' ? 'text-green-600' : 'text-red-600';
+                const statusClass = t.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
+                const statusText = t.status === 'paid' ? 'Pago' : 'Pendente';
+                
+                html += `
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${new Date(t.date).toLocaleDateString('pt-BR')}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${typeClass}">
+                                ${t.type === 'revenue' ? 'Receita' : 'Despesa'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${t.category}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${t.description}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium ${amountClass}">${formatCurrency(t.amount)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass}">
+                                ${statusText}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button onclick="editTransaction(${index})" class="text-blue-600 hover:text-blue-900 mr-2">Editar</button>
+                            <button onclick="deleteTransaction(${index})" class="text-red-600 hover:text-red-900">Excluir</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            tbody.innerHTML = html;
+        }
+
+        function addTransaction(type) {
+            alert(`Adicionar ${type === 'revenue' ? 'Receita' : 'Despesa'}`);
+        }
+
+        function editTransaction(index) {
+            alert(`Editar transação ${index + 1}`);
+        }
+
+        function deleteTransaction(index) {
+            if (confirm('Tem certeza que deseja excluir esta transação?')) {
+                transactions.splice(index, 1);
+                updateTable();
+            }
+        }
+
+        // Inicializar página
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentMonthText = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
+            document.getElementById('selectedMonthsText').textContent = currentMonthText;
+            document.getElementById('monthHeader').textContent = currentMonthText;
+            initializeMonthDropdown();
+            updateTable();
+        });
+
+        // Fechar dropdown ao clicar fora
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('monthDropdown');
+            const button = event.target.closest('button');
+            if (!dropdown.contains(event.target) && button?.onclick !== toggleMonthDropdown) {
+                dropdown.classList.add('hidden');
+            }
+        });
+
+        // Função para voltar à página inicial
+        function goToHome() {
+            console.log('Navegando para a página inicial');
+            window.location.href = 'index.html';
+        }
+        
+        // Função para navegar para o imóvel selecionado
+        function navigateToSelectedProperty() {
+            const select = document.getElementById('propertyNavigation') || document.getElementById('propertyFilter');
+            const selectedValue = select.value;
+            
+            if (selectedValue && selectedValue !== '') {
+                console.log('Navegando para:', selectedValue);
+                window.location.href = selectedValue;
+            }
+        }
+    </script>
+</body>
+</html>
