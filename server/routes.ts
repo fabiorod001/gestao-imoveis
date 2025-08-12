@@ -4181,11 +4181,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const { cookies, csrfToken } = req.body;
       
-      if (!cookies || !csrfToken) {
-        return res.status(400).json({ error: 'Cookies e CSRF token são obrigatórios' });
+      if (!cookies) {
+        return res.status(400).json({ error: 'Cookies são obrigatórios' });
       }
       
-      await airbnbIntegration.saveSession(cookies, csrfToken, userId);
+      // CSRF token is now optional
+      await airbnbIntegration.saveSession(cookies, csrfToken || '', userId);
       res.json({ success: true, message: 'Sessão salva com sucesso' });
     } catch (error) {
       console.error('Error saving Airbnb session:', error);
