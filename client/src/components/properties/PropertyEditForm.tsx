@@ -102,6 +102,7 @@ const formSchema = z.object({
   // New identification fields
   registrationNumber: z.string().optional(),
   iptuCode: z.string().optional(),
+  airbnbName: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -168,6 +169,7 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
       // New identification fields  
       registrationNumber: '',
       iptuCode: '',
+      airbnbName: '',
     },
   });
 
@@ -208,6 +210,7 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
         // New identification fields
         registrationNumber: property.registrationNumber || '',
         iptuCode: property.iptuCode || '',
+        airbnbName: property.airbnbName || '',
       });
     }
   }, [property, form]);
@@ -402,6 +405,27 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
                     <FormControl>
                       <Input placeholder="Ex: 012.345.678-9" {...field} value={field.value || ""} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="airbnbName"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Nome no Airbnb</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Ex: Cozy Apt in Faria Lima - Nome exato do anúncio no Airbnb" 
+                        {...field} 
+                        value={field.value || ""} 
+                      />
+                    </FormControl>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Nome exato do anúncio no Airbnb (para sincronização automática)
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}

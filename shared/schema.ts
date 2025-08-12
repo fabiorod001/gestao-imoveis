@@ -44,6 +44,7 @@ export const properties = pgTable("properties", {
   // Basic identification
   name: varchar("name").notNull(), // Apelido (nome que aparece na aplicação)
   nickname: varchar("nickname"), // Nome do empreendimento (nome completo oficial)
+  airbnbName: varchar("airbnb_name"), // Nome no Airbnb (para sincronização automática)
   registrationNumber: varchar("registration_number"), // Matrícula
   iptuCode: varchar("iptu_code"), // Código IPTU
   

@@ -29,6 +29,7 @@ const formSchema = insertPropertySchema.extend({
   tower: z.string().optional(),
   unit: z.string().optional(),
   neighborhood: z.string().optional(),
+  airbnbName: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -46,6 +47,7 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
     defaultValues: {
       name: '',
       nickname: '',
+      airbnbName: '',
       address: '',
       type: '',
       status: 'inactive',
@@ -156,6 +158,29 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
                   <FormControl>
                     <Input placeholder="Ex: Málaga M0" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="airbnbName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nome no Airbnb</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="Ex: Cozy Apt in Faria Lima" 
+                      {...field} 
+                      value={field.value || ''}
+                    />
+                  </FormControl>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Nome exato do anúncio no Airbnb (para sincronização automática)
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}
