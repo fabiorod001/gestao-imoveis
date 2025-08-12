@@ -1,4 +1,4 @@
-import Layout from "@/components/layout/Layout";
+
 import ExcelImport from "@/components/import/ExcelImport";
 import QuickPropertySetup from "@/components/import/QuickPropertySetup";
 import HistoricalDataImport from "@/components/import/HistoricalDataImport";
@@ -70,9 +70,8 @@ export default function Import() {
   };
 
   return (
-    <Layout>
-      <div className="container mx-auto p-6 space-y-8">
-        <div className="flex items-center justify-between">
+    <div className="container mx-auto p-6 space-y-8">
+      <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Importar Dados</h1>
             <p className="text-muted-foreground">
@@ -178,7 +177,6 @@ export default function Import() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </Layout>
+    </div>
   );
 }
