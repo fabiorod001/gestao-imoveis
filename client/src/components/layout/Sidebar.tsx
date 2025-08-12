@@ -12,7 +12,8 @@ import {
   Settings,
   Calculator,
   X,
-  DollarSign
+  DollarSign,
+  Home
 } from "lucide-react";
 
 const navigation = [
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'Relatórios', href: '/reports', icon: FileText },
   { name: 'Conversão', href: '/conversion', icon: RefreshCw },
   { name: 'Importar Dados', href: '/import', icon: Upload },
+  { name: 'Sync Airbnb', href: '/airbnb-sync', icon: Home },
 ];
 
 const settings = [
