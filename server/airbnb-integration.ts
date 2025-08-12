@@ -85,12 +85,20 @@ export class AirbnbIntegration {
     const transactions: AirbnbTransaction[] = [];
     
     try {
-      // Try to use Airbnb's internal API endpoints
-      // These endpoints may change, so we need error handling
+      // Try multiple possible Airbnb API endpoints
+      const endpoints = [
+        'https://www.airbnb.com/api/v3/EarningsHistory',
+        'https://www.airbnb.com/api/v2/earnings/transaction_history',
+        'https://www.airbnb.com/api/v2/users/transaction_history',
+        'https://www.airbnb.com/hosting/earnings/transaction-history'
+      ];
+
       const headers: any = {
         'Cookie': this.session.cookies,
         'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.airbnb.com/hosting/earnings',
         'X-Csrf-Without-Token': '1'
       };
       
@@ -99,33 +107,58 @@ export class AirbnbIntegration {
         headers['X-Csrf-Token'] = this.session.xCsrfToken;
       }
       
-      const response = await axios.get('https://www.airbnb.com/api/v2/earnings/transaction_history', {
-        headers,
-        params: {
-          limit: 1000,
-          offset: 0,
-          year: 'all' // Try to get all years
-        }
-      });
-
-      if (response.data && response.data.transactions) {
-        for (const item of response.data.transactions) {
-          transactions.push({
-            propertyName: item.listing_name || item.property_name,
-            amount: parseFloat(item.amount || item.payout_amount || 0),
-            date: this.formatDate(item.date || item.payout_date),
-            description: this.buildDescription(item),
-            type: 'payout',
-            reservationCode: item.confirmation_code,
-            guestName: item.guest_name
+      let lastError: any = null;
+      
+      // Try each endpoint
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`🔍 Trying endpoint: ${endpoint}`);
+          const response = await axios.get(endpoint, {
+            headers,
+            params: {
+              limit: 1000,
+              offset: 0,
+              year: 'all'
+            },
+            timeout: 10000
           });
+
+          if (response.data) {
+            // Handle different response formats
+            const data = response.data.transactions || 
+                        response.data.earnings || 
+                        response.data.data?.transactions ||
+                        response.data.data;
+                        
+            if (Array.isArray(data)) {
+              for (const item of data) {
+                transactions.push({
+                  propertyName: item.listing_name || item.property_name || item.listing?.name,
+                  amount: parseFloat(item.amount || item.payout_amount || item.earnings || 0),
+                  date: this.formatDate(item.date || item.payout_date || item.created_at),
+                  description: this.buildDescription(item),
+                  type: 'payout',
+                  reservationCode: item.confirmation_code || item.reservation_code,
+                  guestName: item.guest_name || item.guest?.name
+                });
+              }
+              console.log(`✅ Fetched ${transactions.length} transactions from ${endpoint}`);
+              return transactions;
+            }
+          }
+        } catch (error) {
+          lastError = error;
+          console.log(`❌ Endpoint failed: ${endpoint}`);
+          continue;
         }
       }
-
-      console.log(`✅ Fetched ${transactions.length} transactions via API`);
+      
+      // If all endpoints failed
+      console.error('❌ All API endpoints failed:', lastError?.message);
+      console.log('💡 API do Airbnb não está acessível via automação');
+      throw new Error('API_NOT_ACCESSIBLE');
     } catch (error: any) {
       console.error('❌ API fetch failed:', error.message);
-      console.log('💡 Falling back to CSV import method');
       throw new Error('API_FAILED');
     }
 

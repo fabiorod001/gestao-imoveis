@@ -311,52 +311,77 @@ export default function AirbnbSync() {
           <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <h4 className="font-semibold mb-2">Último resultado:</h4>
             <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                {lastSyncResult.success ? (
-                  <CheckCircle className="w-4 h-4 text-green-600" />
-                ) : (
-                  <XCircle className="w-4 h-4 text-red-600" />
-                )}
-                <span>
-                  Status: {lastSyncResult.success ? 'Sucesso' : 'Falha'}
-                </span>
-              </div>
-              
-              {lastSyncResult.totalFound !== undefined && (
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-gray-600" />
-                  <span>Total encontrado: {lastSyncResult.totalFound}</span>
-                </div>
-              )}
-              
-              {lastSyncResult.imported !== undefined && (
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
-                  <span>Importadas: {lastSyncResult.imported}</span>
-                </div>
-              )}
-              
-              {lastSyncResult.skipped !== undefined && (
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-yellow-600" />
-                  <span>Ignoradas: {lastSyncResult.skipped}</span>
-                </div>
-              )}
-              
-              {lastSyncResult.errors && lastSyncResult.errors.length > 0 && (
-                <div className="mt-2">
-                  <p className="font-medium text-red-600">Erros:</p>
-                  <ul className="list-disc list-inside ml-2">
-                    {lastSyncResult.errors.slice(0, 5).map((error, index) => (
-                      <li key={index} className="text-red-600">{error}</li>
-                    ))}
-                    {lastSyncResult.errors.length > 5 && (
-                      <li className="text-gray-600">
-                        ... e mais {lastSyncResult.errors.length - 5} erros
-                      </li>
+              {lastSyncResult.fallbackToCsv ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600" />
+                    <span className="text-amber-600 font-medium">
+                      API do Airbnb não acessível
+                    </span>
+                  </div>
+                  <p className="text-gray-600 mt-2">
+                    A sincronização automática não está disponível no momento. 
+                    O Airbnb pode ter alterado sua API ou implementado novas proteções.
+                  </p>
+                  <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                    <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                      Recomendação: Use o método de importação CSV
+                    </p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      É mais confiável e sempre funcionará independente de mudanças do Airbnb.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    {lastSyncResult.success ? (
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-600" />
                     )}
-                  </ul>
-                </div>
+                    <span>
+                      Status: {lastSyncResult.success ? 'Sucesso' : 'Falha'}
+                    </span>
+                  </div>
+                  
+                  {lastSyncResult.totalFound !== undefined && (
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-gray-600" />
+                      <span>Total encontrado: {lastSyncResult.totalFound}</span>
+                    </div>
+                  )}
+                  
+                  {lastSyncResult.imported !== undefined && (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      <span>Importadas: {lastSyncResult.imported}</span>
+                    </div>
+                  )}
+                  
+                  {lastSyncResult.skipped !== undefined && (
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-yellow-600" />
+                      <span>Ignoradas: {lastSyncResult.skipped}</span>
+                    </div>
+                  )}
+                  
+                  {lastSyncResult.errors && lastSyncResult.errors.length > 0 && (
+                    <div className="mt-2">
+                      <p className="font-medium text-red-600">Erros:</p>
+                      <ul className="list-disc list-inside ml-2">
+                        {lastSyncResult.errors.slice(0, 5).map((error, index) => (
+                          <li key={index} className="text-red-600">{error}</li>
+                        ))}
+                        {lastSyncResult.errors.length > 5 && (
+                          <li className="text-gray-600">
+                            ... e mais {lastSyncResult.errors.length - 5} erros
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -393,7 +418,7 @@ export default function AirbnbSync() {
         </div>
 
         <Button
-          onClick={() => setLocation('/import/airbnb')}
+          onClick={() => setLocation('/import')}
           variant="outline"
           className="w-full"
         >
