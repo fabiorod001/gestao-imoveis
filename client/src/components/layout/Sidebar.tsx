@@ -50,10 +50,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         onClick={onClose}
       />
 
-      {/* Sidebar - single instance */}
+      {/* Sidebar */}
       <div className={cn(
         "bg-white w-64 min-h-screen shadow-lg transition-transform duration-300 ease-in-out",
-        "fixed md:sticky md:top-0 z-30",
+        "fixed md:static z-30",
         isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       )}>
         <div className="p-6 border-b border-gray-200">
