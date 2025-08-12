@@ -37,12 +37,12 @@ export class AirbnbIntegration {
    * 2. Open DevTools (F12)
    * 3. Go to Network tab
    * 4. Find any request to airbnb.com
-   * 5. Copy Cookie header and X-Csrf-Token
+   * 5. Copy Cookie header (CSRF token is optional)
    */
-  async saveSession(cookies: string, csrfToken: string, userId: string) {
+  async saveSession(cookies: string, csrfToken: string = '', userId: string) {
     this.session = {
       cookies,
-      xCsrfToken: csrfToken,
+      xCsrfToken: csrfToken || '', // CSRF token can be empty
       userId,
       lastUpdated: new Date()
     };
@@ -87,13 +87,20 @@ export class AirbnbIntegration {
     try {
       // Try to use Airbnb's internal API endpoints
       // These endpoints may change, so we need error handling
+      const headers: any = {
+        'Cookie': this.session.cookies,
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'X-Csrf-Without-Token': '1'
+      };
+      
+      // Only add X-Csrf-Token if it's not empty
+      if (this.session.xCsrfToken && this.session.xCsrfToken.trim() !== '') {
+        headers['X-Csrf-Token'] = this.session.xCsrfToken;
+      }
+      
       const response = await axios.get('https://www.airbnb.com/api/v2/earnings/transaction_history', {
-        headers: {
-          'Cookie': this.session.cookies,
-          'X-Csrf-Token': this.session.xCsrfToken,
-          'Accept': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        },
+        headers,
         params: {
           limit: 1000,
           offset: 0,

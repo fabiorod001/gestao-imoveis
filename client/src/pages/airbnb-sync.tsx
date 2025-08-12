@@ -132,7 +132,7 @@ export default function AirbnbSync() {
             <li>Recarregue a página (F5)</li>
             <li>Clique em qualquer requisição para "www.airbnb.com"</li>
             <li>Na aba "Headers", copie o valor de "Cookie"</li>
-            <li>Procure e copie também o valor de "X-Csrf-Token"</li>
+            <li>Procure e copie também o valor de "X-Csrf-Token" (se estiver vazio, pule este passo)</li>
           </ol>
         </div>
 
@@ -156,10 +156,10 @@ export default function AirbnbSync() {
     const [saving, setSaving] = useState(false);
 
     const handleSaveSession = async () => {
-      if (!cookies || !csrfToken) {
+      if (!cookies) {
         toast({
-          title: 'Campos obrigatórios',
-          description: 'Por favor, preencha os cookies e o CSRF token',
+          title: 'Campo obrigatório',
+          description: 'Por favor, preencha os cookies',
           variant: 'destructive',
         });
         return;
@@ -219,21 +219,24 @@ export default function AirbnbSync() {
 
           <div className="space-y-2">
             <label htmlFor="csrf" className="text-sm font-medium">
-              CSRF Token (valor do header X-Csrf-Token)
+              CSRF Token (opcional - deixe vazio se não encontrar)
             </label>
             <input
               id="csrf"
               type="text"
               className="w-full p-3 border rounded-md text-sm font-mono"
-              placeholder="Exemplo: V4$.airbnb.com$..."
+              placeholder="Deixe vazio se o valor estiver em branco"
               value={csrfToken}
               onChange={(e) => setCsrfToken(e.target.value)}
             />
+            <p className="text-xs text-gray-500">
+              Se o X-Csrf-Token aparecer vazio no DevTools, pode deixar este campo em branco
+            </p>
           </div>
 
           <Button 
             onClick={handleSaveSession}
-            disabled={saving || !cookies || !csrfToken}
+            disabled={saving || !cookies}
             className="w-full"
           >
             {saving ? (
