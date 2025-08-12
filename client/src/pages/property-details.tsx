@@ -316,7 +316,7 @@ export default function PropertyDetails() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Link href="/dashboard">
+            <Link href="/properties">
               <Button variant="outline" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Voltar

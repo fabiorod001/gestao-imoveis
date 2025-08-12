@@ -4,11 +4,11 @@ import { Building, TrendingUp, DollarSign, BarChart3 } from "lucide-react";
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-blue-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-16">
           <div className="flex items-center justify-center mb-6">
-            <div className="w-16 h-16 bg-primary-600 rounded-2xl flex items-center justify-center">
+            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center">
               <Building className="w-8 h-8 text-white" />
             </div>
           </div>

@@ -1,559 +1,180 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import { useToast } from '../hooks/use-toast';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Input } from '../components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
-import {
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
-  Filter,
-  Plus,
-  Download,
-  TrendingDown,
-  Calendar,
-  Building,
-  Edit3
-} from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Calendar, Filter, Download, ChevronDown, X, TrendingUp, TrendingDown, Check, ArrowUpDown, ArrowUp, ArrowDown, FileSpreadsheet, FileText, Plus } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { useToast } from "@/hooks/use-toast";
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import AdvancedExpenseManager from "@/components/expenses/AdvancedExpenseManager";
 
-// Dados mockup para despesas do mês corrente (julho)
-const mockupExpenses = [
-  {
-    id: 1,
-    categoria: "Manutenção",
-    imovel: "Apartamento Centro - 101",
-    valor: 450,
-    data: "2024-07-15",
-    descricao: "Reparo ar condicionado",
-    status: "Pago"
-  },
-  {
-    id: 2,
-    categoria: "Limpeza",
-    imovel: "Casa Praia - Villa Mar",
-    valor: 200,
-    data: "2024-07-10",
-    descricao: "Limpeza pós checkout",
-    status: "Pago"
-  },
-  {
-    id: 3,
-    categoria: "Manutenção",
-    imovel: "Apartamento Zona Sul - 205",
-    valor: 320,
-    data: "2024-07-20",
-    descricao: "Troca de fechadura",
-    status: "Pendente"
-  },
-  {
-    id: 4,
-    categoria: "Condomínio",
-    imovel: "Apartamento Centro - 101",
-    valor: 380,
-    data: "2024-07-05",
-    descricao: "Taxa condominial julho",
-    status: "Pago"
-  },
-  {
-    id: 5,
-    categoria: "Condomínio",
-    imovel: "Apartamento Zona Sul - 205",
-    valor: 420,
-    data: "2024-07-05",
-    descricao: "Taxa condominial julho",
-    status: "Pago"
-  },
-  {
-    id: 6,
-    categoria: "Limpeza",
-    imovel: "Studio Downtown",
-    valor: 150,
-    data: "2024-07-18",
-    descricao: "Limpeza semanal",
-    status: "Pago"
-  },
-  {
-    id: 7,
-    categoria: "Reforma",
-    imovel: "Apartamento Reformando",
-    valor: 2500,
-    data: "2024-07-01",
-    descricao: "Material de construção",
-    status: "Pago"
-  },
-  {
-    id: 8,
-    categoria: "Utilities",
-    imovel: "Cobertura Luxury",
-    valor: 280,
-    data: "2024-07-12",
-    descricao: "Conta de luz",
-    status: "Pago"
-  },
-  {
-    id: 9,
-    categoria: "Manutenção",
-    imovel: "Casa Praia - Villa Mar",
-    valor: 180,
-    data: "2024-07-25",
-    descricao: "Jardinagem",
-    status: "Pendente"
-  },
-  {
-    id: 10,
-    categoria: "Limpeza",
-    imovel: "Cobertura Luxury",
-    valor: 300,
-    data: "2024-07-22",
-    descricao: "Limpeza profunda",
-    status: "Pago"
-  }
+interface Property {
+  id: number;
+  name: string;
+  status: string;
+}
+
+interface Transaction {
+  id: number;
+  propertyId: number | null;
+  propertyName?: string | null;
+  date: string;
+  description: string;
+  amount: number;
+  type: string;
+  category: string;
+  supplier?: string | null;
+  cpfCnpj?: string | null;
+}
+
+interface PivotRow {
+  category: string;
+  monthlyData: { [monthKey: string]: number };
+  total: number;
+  monthlyAverage: number;
+}
+
+interface PivotTableData {
+  rows: PivotRow[];
+  monthHeaders: string[];
+  columnTotals: { [monthKey: string]: number };
+  grandTotal: number;
+}
+
+const EXPENSE_CATEGORIES = [
+  'taxes',
+  'maintenance', 
+  'condominium',
+  'financing',
+  'cleaning',
+  'management',
+  'other'
 ];
 
-// Lista de imóveis para filtro
-const imoveis = [
-  "Apartamento Centro - 101",
-  "Casa Praia - Villa Mar",
-  "Apartamento Zona Sul - 205",
-  "Studio Downtown",
-  "Cobertura Luxury",
-  "Apartamento Reformando"
+// Order for display in the table
+const CATEGORY_ORDER = [
+  'Impostos',
+  'Manutenção', 
+  'Condomínio',
+  'Financiamento',
+  'Limpezas',
+  'Gestão - Maurício',
+  'Despesas Gerais'
 ];
 
-// Lista de categorias para filtro
-const categorias = [
-  "Manutenção",
-  "Limpeza",
-  "Condomínio",
-  "Reforma",
-  "Utilities"
-];
+const EXPENSE_CATEGORY_LABELS = {
+  'taxes': 'Impostos',
+  'maintenance': 'Manutenção',
+  'condominium': 'Condomínio',
+  'financing': 'Financiamento',
+  'cleaning': 'Limpezas',
+  'management': 'Gestão - Maurício',
+  'other': 'Despesas Gerais'
+};
 
-// Lista de meses para filtro
-const meses = [
-  { value: "2024-07", label: "Julho 2024" },
-  { value: "2024-06", label: "Junho 2024" },
-  { value: "2024-05", label: "Maio 2024" },
-  { value: "2024-04", label: "Abril 2024" },
-  { value: "2024-03", label: "Março 2024" }
-];
-
-export default function Expenses() {
-  const { toast } = useToast();
-  const { isAuthenticated, isLoading } = useAuth();
+export default function ExpensesPage() {
+  // Function to get current month in MM/YYYY format
+  const getCurrentMonth = () => {
+    const now = new Date();
+    return `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+  };
+  
+  // Always default to current month
+  const currentMonth = getCurrentMonth(); // "07/2025"
+  const defaultMonths = [currentMonth];
+  
+  const [selectedMonths, setSelectedMonths] = useState<string[]>(defaultMonths);
+  const [selectedProperties, setSelectedProperties] = useState<number[]>([]);
+  const [selectedExpenseTypes, setSelectedExpenseTypes] = useState<string[]>(EXPENSE_CATEGORIES);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: 'asc' | 'desc';
   } | null>(null);
-  const [filterImovel, setFilterImovel] = useState<string>('todos');
-  const [filterCategoria, setFilterCategoria] = useState<string>('todos');
-  const [filterMes, setFilterMes] = useState<string>('2024-07');
-  const [filterStatus, setFilterStatus] = useState<string>('todos');
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [showNewExpenseForm, setShowNewExpenseForm] = useState<boolean>(false);
-  const [editingExpense, setEditingExpense] = useState<number | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
+  const [columnWidths, setColumnWidths] = useState<{ [key: string]: number }>({});
+  const [isResizing, setIsResizing] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'consolidated' | 'detailed'>('consolidated');
+  
+  // Navigation hook
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-      return;
-    }
-  }, [isAuthenticated, isLoading, toast]);
+  // Expense form state
+  const [isAddingExpense, setIsAddingExpense] = useState(false);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
-  // Função de ordenação
-  const handleSort = (key: string) => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev?.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  };
-
-  // Filtrar e ordenar dados
-  const filteredData = mockupExpenses
-    .filter(item => {
-      if (filterImovel !== 'todos' && item.imovel !== filterImovel) return false;
-      if (filterCategoria !== 'todos' && item.categoria !== filterCategoria) return false;
-      if (filterStatus !== 'todos' && item.status !== filterStatus) return false;
-      if (filterMes !== 'todos' && !item.data.startsWith(filterMes)) return false;
-      if (searchTerm && !item.descricao.toLowerCase().includes(searchTerm.toLowerCase())) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      if (!sortConfig) return 0;
-      
-      const aVal = a[sortConfig.key as keyof typeof a];
-      const bVal = b[sortConfig.key as keyof typeof b];
-      
-      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
+  // Handle category click navigation
+  const handleCategoryClick = (categoryName: string) => {
+    // Map category display name back to internal category and route
+    const categoryMapping: { [key: string]: { key: string; route: string } } = {
+      'Impostos': { key: 'taxes', route: '/expenses/taxes-detail' },
+      'Manutenção': { key: 'maintenance', route: '/expenses/maintenance-detail' },
+      'Condomínio': { key: 'condominium', route: '/expenses/condominium-detail' },
+      'Financiamento': { key: 'financing', route: '/expenses/financing-detail' },
+      'Limpezas': { key: 'cleaning', route: '/expenses/cleaning-detail' },
+      'Gestão - Maurício': { key: 'management', route: '/expenses/management-detail' },
+      'Despesas Gerais': { key: 'other', route: '/expenses/other-detail' }
+    };
+    
+    const categoryInfo = categoryMapping[categoryName];
+    if (!categoryInfo) return;
+    
+    // Navigate to specific category detail page with preset filters:
+    // - Current month only
+    // - All properties selected
+    // - Only the specific category
+    const currentMonth = getCurrentMonth();
+    const allPropertyIds = allProperties.map(p => p.id);
+    
+    const params = new URLSearchParams({
+      months: currentMonth,
+      properties: allPropertyIds.join(','),
+      category: categoryInfo.key
     });
-
-  // Agrupar despesas por categoria para o resumo
-  const expensesByCategory = filteredData.reduce((acc, expense) => {
-    if (!acc[expense.categoria]) {
-      acc[expense.categoria] = 0;
-    }
-    acc[expense.categoria] += expense.valor;
-    return acc;
-  }, {} as Record<string, number>);
-
-  // Calcular total
-  const totalExpenses = filteredData.reduce((acc, item) => acc + item.valor, 0);
-
-  // Função para editar valor inline
-  const handleEditValue = (id: number, newValue: string) => {
-    const numValue = parseFloat(newValue.replace(',', '.'));
-    if (!isNaN(numValue)) {
-      // Aqui você atualizaria o valor no backend
-      toast({
-        title: "Valor atualizado",
-        description: `Despesa atualizada para R$ ${numValue.toLocaleString('pt-BR')}`,
-      });
-    }
-    setEditingExpense(null);
-    setEditValue('');
+    
+    setLocation(`${categoryInfo.route}?${params.toString()}`);
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm border p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Gestão de Despesas
-              </h1>
-              <p className="text-sm text-gray-600 mt-1">
-                Controle financeiro • {meses.find(m => m.value === filterMes)?.label || 'Julho 2024'}
-              </p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button 
-                onClick={() => setShowNewExpenseForm(true)}
-                className="bg-red-600 hover:bg-red-700 text-white"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Nova Despesa
-              </Button>
-            </div>
-          </div>
-        </div>
+  // Fetch all properties for filters
+  const { data: allProperties = [] } = useQuery<Property[]>({
+    queryKey: ['/api/properties'],
+  });
 
-        {/* Resumo por Categoria */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {Object.entries(expensesByCategory).map(([categoria, valor]) => (
-            <Card key={categoria} className="cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => setFilterCategoria(categoria)}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <TrendingDown className="w-5 h-5 text-red-600" />
-                  <Badge variant="outline" className="text-red-600 border-red-600">
-                    {Math.round((valor / totalExpenses) * 100)}%
-                  </Badge>
-                </div>
-                <CardTitle className="text-lg text-red-600">
-                  R$ {valor.toLocaleString('pt-BR')}
-                </CardTitle>
-                <p className="text-sm text-gray-600">{categoria}</p>
-              </CardHeader>
-            </Card>
-          ))}
-        </div>
+  // Fetch expense transactions - optimized endpoint
+  const { data: expenses = [], isLoading } = useQuery({
+    queryKey: ['/api/expenses/dashboard'],
+  });
 
-        {/* Total Geral */}
-        <Card className="bg-red-50 border-red-200">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <TrendingDown className="w-6 h-6 text-red-600 mr-3" />
-                <div>
-                  <CardTitle className="text-2xl font-bold text-red-600">
-                    R$ {totalExpenses.toLocaleString('pt-BR')}
-                  </CardTitle>
-                  <p className="text-sm text-red-700">Total de Despesas - {meses.find(m => m.value === filterMes)?.label}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-red-600">Número de Despesas</p>
-                <p className="text-xl font-bold text-red-600">{filteredData.length}</p>
-              </div>
-            </div>
-          </CardHeader>
-        </Card>
+  // Handle expense completion from AdvancedExpenseManager
+  const handleExpenseComplete = () => {
+    setIsAddingExpense(false);
+    queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
+  };
 
-        {/* Tabela Dinâmica de Despesas */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Tabela Dinâmica - Despesas Detalhadas</CardTitle>
-              <div className="flex items-center space-x-2">
-                <Button variant="outline" size="sm">
-                  <Download className="w-4 h-4 mr-2" />
-                  Exportar
-                </Button>
-              </div>
-            </div>
-            
-            {/* Filtros */}
-            <div className="flex flex-wrap gap-4 mt-4">
-              <div className="flex items-center space-x-2">
-                <Filter className="w-4 h-4 text-gray-500" />
-                <Input
-                  placeholder="Buscar descrição..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-48"
-                />
-              </div>
-              
-              <Select value={filterMes} onValueChange={setFilterMes}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Mês" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos Meses</SelectItem>
-                  {meses.map(mes => (
-                    <SelectItem key={mes.value} value={mes.value}>{mes.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              <Select value={filterImovel} onValueChange={setFilterImovel}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Imóvel" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos Imóveis</SelectItem>
-                  {imoveis.map(imovel => (
-                    <SelectItem key={imovel} value={imovel}>{imovel}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              <Select value={filterCategoria} onValueChange={setFilterCategoria}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todas Categorias</SelectItem>
-                  {categorias.map(categoria => (
-                    <SelectItem key={categoria} value={categoria}>{categoria}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos Status</SelectItem>
-                  <SelectItem value="Pago">Pago</SelectItem>
-                  <SelectItem value="Pendente">Pendente</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardHeader>
-          
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b">
-                    <th 
-                      className="text-left p-3 font-medium cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('data')}
-                    >
-                      <div className="flex items-center">
-                        Data
-                        {sortConfig?.key === 'data' && (
-                          sortConfig.direction === 'asc' ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
-                        )}
-                        {sortConfig?.key !== 'data' && <ArrowUpDown className="w-4 h-4 ml-1 text-gray-400" />}
-                      </div>
-                    </th>
-                    <th 
-                      className="text-left p-3 font-medium cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('categoria')}
-                    >
-                      <div className="flex items-center">
-                        Categoria
-                        {sortConfig?.key === 'categoria' && (
-                          sortConfig.direction === 'asc' ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
-                        )}
-                        {sortConfig?.key !== 'categoria' && <ArrowUpDown className="w-4 h-4 ml-1 text-gray-400" />}
-                      </div>
-                    </th>
-                    <th 
-                      className="text-left p-3 font-medium cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('imovel')}
-                    >
-                      <div className="flex items-center">
-                        Imóvel
-                        {sortConfig?.key === 'imovel' && (
-                          sortConfig.direction === 'asc' ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
-                        )}
-                        {sortConfig?.key !== 'imovel' && <ArrowUpDown className="w-4 h-4 ml-1 text-gray-400" />}
-                      </div>
-                    </th>
-                    <th className="text-left p-3 font-medium">Descrição</th>
-                    <th 
-                      className="text-right p-3 font-medium cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleSort('valor')}
-                    >
-                      <div className="flex items-center justify-end">
-                        Valor
-                        {sortConfig?.key === 'valor' && (
-                          sortConfig.direction === 'asc' ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
-                        )}
-                        {sortConfig?.key !== 'valor' && <ArrowUpDown className="w-4 h-4 ml-1 text-gray-400" />}
-                      </div>
-                    </th>
-                    <th className="text-center p-3 font-medium">Status</th>
-                    <th className="text-center p-3 font-medium">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredData.map((item) => (
-                    <tr key={item.id} className="border-b hover:bg-gray-50">
-                      <td className="p-3">
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 text-gray-400 mr-2" />
-                          {new Date(item.data).toLocaleDateString('pt-BR')}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <Badge 
-                          variant="outline" 
-                          className="cursor-pointer hover:bg-gray-100"
-                          onClick={() => setFilterCategoria(item.categoria)}
-                        >
-                          {item.categoria}
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        <div className="flex items-center">
-                          <Building className="w-4 h-4 text-gray-400 mr-2" />
-                          <span className="text-sm">{item.imovel}</span>
-                        </div>
-                      </td>
-                      <td className="p-3 text-sm">{item.descricao}</td>
-                      <td className="p-3 text-right">
-                        {editingExpense === item.id ? (
-                          <div className="flex items-center justify-end space-x-2">
-                            <Input
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={() => handleEditValue(item.id, editValue)}
-                              onKeyPress={(e) => e.key === 'Enter' && handleEditValue(item.id, editValue)}
-                              className="w-24 text-right"
-                              autoFocus
-                            />
-                          </div>
-                        ) : (
-                          <div 
-                            className="text-red-600 font-medium cursor-pointer hover:bg-red-50 px-2 py-1 rounded"
-                            onClick={() => {
-                              setEditingExpense(item.id);
-                              setEditValue(item.valor.toString());
-                            }}
-                          >
-                            R$ {item.valor.toLocaleString('pt-BR')}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge className={
-                          item.status === 'Pago' ? 'bg-green-100 text-green-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }>
-                          {item.status}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-center">
-                        <Button variant="ghost" size="sm">
-                          <Edit3 className="w-4 h-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                  
-                  {/* Linha de total */}
-                  <tr className="border-t-2 border-gray-300 bg-red-50 font-bold">
-                    <td className="p-3" colSpan={4}>TOTAL</td>
-                    <td className="p-3 text-right text-red-600">
-                      R$ {totalExpenses.toLocaleString('pt-BR')}
-                    </td>
-                    <td className="p-3 text-center">
-                      {filteredData.filter(item => item.status === 'Pago').length} / {filteredData.length}
-                    </td>
-                    <td className="p-3"></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Modal/Form para Nova Despesa - Placeholder */}
-        {showNewExpenseForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-md">
-              <CardHeader>
-                <CardTitle>Nova Despesa</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <p className="text-gray-600">Formulário de cadastro de nova despesa será implementado aqui.</p>
-                  <div className="flex justify-end space-x-2">
-                    <Button variant="outline" onClick={() => setShowNewExpenseForm(false)}>
-                      Cancelar
-                    </Button>
-                    <Button className="bg-red-600 hover:bg-red-700">
-                      Salvar
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+  // Generate month options (future 12 months + current + past 24 months, ordered newest first)
+  const generateMonthOptions = () => {
+    const options = [];
+    const now = new Date();
+    
+    // Future 12 months (newest first)
+    for (let i = 12; i >= 1; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const monthKey = `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+      const monthName = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+      options.push({ key: monthKey, label: monthName });
+    }
+    
+    // Past 24 months (newest first - current month down to oldest)
     for (let i = 0; i <= 23; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthKey = `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
@@ -925,22 +546,6 @@ export default function Expenses() {
             <Plus className="h-4 w-4 mr-2" />
             {isAddingExpense ? 'Fechar Formulário' : 'Nova Despesa'}
           </Button>
-          <Button 
-            onClick={() => handleOpenDistributionModal('limpeza')}
-            variant="outline"
-            size="sm"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Despesa de Limpeza
-          </Button>
-          <Button 
-            onClick={() => handleOpenDistributionModal('gestao')}
-            variant="outline"
-            size="sm"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Despesa de Gestão
-          </Button>
           <Button onClick={exportToExcel} variant="outline" size="sm">
             <FileSpreadsheet className="h-4 w-4 mr-2" />
             Excel
@@ -951,6 +556,16 @@ export default function Expenses() {
           </Button>
         </div>
       </div>
+
+      {/* Advanced Expense Manager - MOVED TO TOP */}
+      {isAddingExpense && (
+        <div className="mb-6">
+          <AdvancedExpenseManager 
+            onComplete={handleExpenseComplete}
+            onCancel={() => setIsAddingExpense(false)}
+          />
+        </div>
+      )}
 
       {/* Consolidated View - Pivot Table */}
       {viewMode === 'consolidated' && (
@@ -1293,24 +908,6 @@ export default function Expenses() {
           </CardContent>
         </Card>
       )}
-
-      {/* Advanced Expense Manager - AFTER THE TABLE */}
-      {isAddingExpense && (
-        <div className="mt-6">
-          <AdvancedExpenseManager 
-            onComplete={handleExpenseComplete}
-            onCancel={() => setIsAddingExpense(false)}
-          />
-        </div>
-      )}
-
-      {/* Expense Distribution Modal */}
-      <ExpenseDistributionModal
-        isOpen={isDistributionModalOpen}
-        onClose={() => setIsDistributionModalOpen(false)}
-        onSave={handleSaveDistribution}
-        expenseType={selectedExpenseType}
-      />
     </div>
   );
 }

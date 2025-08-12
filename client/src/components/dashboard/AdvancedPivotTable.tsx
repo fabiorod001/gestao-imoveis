@@ -129,6 +129,8 @@ export default function AdvancedPivotTable() {
 
   const monthOptions = generateMonthOptions();
 
+
+
   // Fetch transaction data based on filters
   const { data: transactionData = [], isLoading } = useQuery<TransactionData[]>({
     queryKey: ['/api/analytics/transactions-by-periods', selectedMonths, selectedProperties, selectedTransactionTypes, selectedCategories],
@@ -370,11 +372,15 @@ export default function AdvancedPivotTable() {
   };
 
   const toggleTransactionType = (type: string) => {
-    setSelectedTransactionTypes(prev => 
-      prev.includes(type) 
-        ? prev.filter(t => t !== type)
-        : [...prev, type]
-    );
+    setSelectedTransactionTypes(prev => {
+      if (prev.includes(type)) {
+        const newTypes = prev.filter(t => t !== type);
+        // Never allow empty selection - if removing the last type, add the other one
+        return newTypes.length === 0 ? (type === 'revenue' ? ['expense'] : ['revenue']) : newTypes;
+      } else {
+        return [...prev, type];
+      }
+    });
   };
 
   const toggleCategory = (category: string) => {
@@ -722,65 +728,83 @@ export default function AdvancedPivotTable() {
 
   return (
     <div className="space-y-6">
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Tabela Dinâmica - Filtros Avançados
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
-                <CollapsibleTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <ChevronDown className={`h-4 w-4 transition-transform ${isFiltersOpen ? 'rotate-180' : ''}`} />
-                    Filtros
-                  </Button>
-                </CollapsibleTrigger>
-              </Collapsible>
-            </div>
-          </div>
-          
-          {/* Active Filters Summary */}
-          <div className="flex flex-wrap gap-2">
-            {selectedMonths.length > 0 && (
-              <Badge variant="secondary">
-                {selectedMonths.length} mês{selectedMonths.length > 1 ? 'es' : ''}
-              </Badge>
-            )}
-            {selectedProperties.length > 0 && (
-              <Badge variant="secondary">
-                {selectedProperties.length} propriedade{selectedProperties.length > 1 ? 's' : ''}
-              </Badge>
-            )}
-            {selectedTransactionTypes.length > 0 && (
-              <Badge variant="secondary">
-                {selectedTransactionTypes.includes('revenue') && selectedTransactionTypes.includes('expense') 
-                  ? 'Receitas + Despesas'
-                  : selectedTransactionTypes.includes('revenue') 
-                    ? 'Apenas Receitas'
-                    : 'Apenas Despesas'
-                }
-              </Badge>
-            )}
-            {selectedCategories.length > 0 && (
-              <Badge variant="secondary">
-                {selectedCategories.length} categoria{selectedCategories.length > 1 ? 's' : ''}
-              </Badge>
-            )}
-            {(selectedMonths.length > 1 || selectedProperties.length > 0 || selectedCategories.length > 0 || 
-              !(selectedTransactionTypes.includes('revenue') && selectedTransactionTypes.includes('expense'))) && (
-              <Button variant="ghost" size="sm" onClick={clearAllFilters}>
-                <X className="h-3 w-3 mr-1" />
-                Limpar
-              </Button>
-            )}
-          </div>
-        </CardHeader>
+      {/* Filter Buttons - Cash Flow Style */}
+      <div className="flex justify-center items-center space-x-4 mb-6">
+        {/* Data Type Filter - Additive System */}
+        <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+          <button
+            onClick={() => toggleTransactionType('revenue')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              selectedTransactionTypes.includes('revenue')
+                ? 'bg-green-500 text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            Receitas
+          </button>
+          <button
+            onClick={() => toggleTransactionType('expense')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              selectedTransactionTypes.includes('expense')
+                ? 'bg-red-500 text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            Despesas
+          </button>
+        </div>
 
-        <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
-          <CollapsibleContent>
+        {/* Filters Button - Dropdown Style */}
+        <div className="flex items-center space-x-2">
+          <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
+            <CollapsibleTrigger asChild>
+              <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                <button className="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors flex items-center space-x-2">
+                  <Filter className="h-4 w-4" />
+                  <span>Filtros</span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${isFiltersOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+            </CollapsibleTrigger>
+          </Collapsible>
+        </div>
+
+        {/* Clear Filters */}
+        {(selectedMonths.length > 1 || selectedProperties.length > 0 || selectedCategories.length > 0 || 
+          !(selectedTransactionTypes.includes('revenue') && selectedTransactionTypes.includes('expense'))) && (
+          <Button variant="ghost" size="sm" onClick={clearAllFilters}>
+            <X className="h-3 w-3 mr-1" />
+            Limpar
+          </Button>
+        )}
+      </div>
+
+      {/* Active Filters Summary */}
+      <div className="flex flex-wrap justify-center gap-2 mb-4">
+        {selectedMonths.length > 0 && (
+          <Badge variant="secondary">
+            {selectedMonths.length} mês{selectedMonths.length > 1 ? 'es' : ''}
+          </Badge>
+        )}
+        {selectedProperties.length > 0 && (
+          <Badge variant="secondary">
+            {selectedProperties.length} propriedade{selectedProperties.length > 1 ? 's' : ''}
+          </Badge>
+        )}
+        {selectedCategories.length > 0 && (
+          <Badge variant="secondary">
+            {selectedCategories.length} categoria{selectedCategories.length > 1 ? 's' : ''}
+          </Badge>
+        )}
+      </div>
+
+      {/* Collapsible Filters Panel */}
+      <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
+        <CollapsibleContent>
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Filtros Avançados</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-6">
               {/* Month Selection */}
               <div>
@@ -929,9 +953,9 @@ export default function AdvancedPivotTable() {
                 </div>
               )}
             </CardContent>
-          </CollapsibleContent>
-        </Collapsible>
-      </Card>
+          </Card>
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* Pivot Table */}
       <Card>

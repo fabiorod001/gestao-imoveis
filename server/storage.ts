@@ -3,6 +3,7 @@ import {
   properties,
   transactions,
   exchangeRates,
+  expenseComponents,
   type User,
   type UpsertUser,
   type Property,
@@ -536,21 +537,107 @@ export class DatabaseStorage implements IStorage {
 
   // Expense components management
   async getExpenseComponents(propertyId: number, userId: string): Promise<any[]> {
-    // TODO: Implement when expenseComponents table is available
-    return [];
+    const result = await this.db
+      .select()
+      .from(expenseComponents)
+      .where(and(
+        eq(expenseComponents.propertyId, propertyId),
+        exists(
+          this.db
+            .select()
+            .from(properties)
+            .where(and(
+              eq(properties.id, propertyId),
+              eq(properties.userId, userId)
+            ))
+        )
+      ))
+      .orderBy(expenseComponents.displayOrder, expenseComponents.name);
+    
+    return result;
   }
 
   async saveExpenseComponents(propertyId: number, userId: string, components: any[]): Promise<any> {
-    // TODO: Implement when expenseComponents table is available
-    return { success: true, message: 'Components saved successfully (placeholder)' };
+    // Verify property ownership
+    const property = await this.getProperty(propertyId, userId);
+    if (!property) {
+      throw new Error('Property not found or access denied');
+    }
+
+    // Delete existing components for this property
+    await this.db
+      .delete(expenseComponents)
+      .where(eq(expenseComponents.propertyId, propertyId));
+
+    // Insert new components
+    if (components.length > 0) {
+      const componentsToInsert = components
+        .filter(comp => comp.name && comp.name.trim())
+        .map((comp, index) => ({
+          propertyId,
+          name: comp.name.trim(),
+          category: comp.category || 'utilities',
+          isActive: comp.isActive !== false,
+          displayOrder: index
+        }));
+
+      if (componentsToInsert.length > 0) {
+        await this.db
+          .insert(expenseComponents)
+          .values(componentsToInsert);
+      }
+    }
+
+    return { success: true, message: 'Components saved successfully' };
   }
 
   async copyExpenseTemplate(sourcePropertyId: number, targetPropertyIds: number[], userId: string): Promise<any> {
-    // TODO: Implement when expenseComponents table is available
+    // Get source components
+    const sourceComponents = await this.getExpenseComponents(sourcePropertyId, userId);
+    
+    if (sourceComponents.length === 0) {
+      throw new Error('No components found in source property');
+    }
+
+    // Verify target properties ownership and copy components
+    const results = [];
+    for (const targetId of targetPropertyIds) {
+      const targetProperty = await this.getProperty(targetId, userId);
+      if (!targetProperty) {
+        results.push({ propertyId: targetId, success: false, message: 'Property not found or access denied' });
+        continue;
+      }
+
+      // Delete existing components for target property
+      await this.db
+        .delete(expenseComponents)
+        .where(eq(expenseComponents.propertyId, targetId));
+
+      // Copy components from source
+      const componentsToInsert = sourceComponents.map(comp => ({
+        propertyId: targetId,
+        name: comp.name,
+        category: comp.category,
+        isActive: comp.isActive,
+        displayOrder: comp.displayOrder
+      }));
+
+      await this.db
+        .insert(expenseComponents)
+        .values(componentsToInsert);
+
+      results.push({ 
+        propertyId: targetId, 
+        propertyName: targetProperty.name,
+        success: true, 
+        message: `${sourceComponents.length} components copied successfully` 
+      });
+    }
+
     return { 
       success: true, 
-      message: 'Template copied successfully (placeholder)',
-      results: [] 
+      message: `Template copied to ${results.filter(r => r.success).length} properties`,
+      results 
     };
   }
 

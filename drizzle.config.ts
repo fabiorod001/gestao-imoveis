@@ -1,12 +1,14 @@
-import type { Config } from 'drizzle-kit';
+import { defineConfig } from "drizzle-kit";
 
-export default {
-  schema: './shared/schema.ts',
-  out: './drizzle',
-  driver: 'better-sqlite',
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL, ensure the database is provisioned");
+}
+
+export default defineConfig({
+  out: "./migrations",
+  schema: "./shared/schema.ts",
+  dialect: "postgresql",
   dbCredentials: {
-    url: './data/gestao-imoveis.db',
+    url: process.env.DATABASE_URL,
   },
-  verbose: true,
-  strict: true,
-} satisfies Config;
+});

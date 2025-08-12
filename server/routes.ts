@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 // For now, use Replit auth while we prepare the migration
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertPropertySchema, insertTransactionSchema, type Property, cashFlowSettings, transactions as transactionsTable, taxPayments, cleaningServiceDetails as cleaningServiceDetailsTable, properties } from "@shared/schema";
+import { insertPropertySchema, insertTransactionSchema, type Property, cashFlowSettings, transactions as transactions, taxPayments, cleaningServiceDetails as cleaningServiceDetails, properties } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
 import * as XLSX from "xlsx";
@@ -398,27 +398,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Exclude parent transactions (isCompositeParent = true) from dashboard
       const expenseData = await db
         .select({
-          id: transactionsTable.id,
-          propertyId: transactionsTable.propertyId,
+          id: transactions.id,
+          propertyId: transactions.propertyId,
           propertyName: properties.name,
-          date: transactionsTable.date,
-          amount: transactionsTable.amount,
-          type: transactionsTable.type,
-          category: transactionsTable.category,
-          description: transactionsTable.description,
-          supplier: transactionsTable.supplier,
-          cpfCnpj: transactionsTable.cpfCnpj,
-          parentTransactionId: transactionsTable.parentTransactionId,
-          isCompositeParent: transactionsTable.isCompositeParent
+          date: transactions.date,
+          amount: transactions.amount,
+          type: transactions.type,
+          category: transactions.category,
+          description: transactions.description,
+          supplier: transactions.supplier,
+          cpfCnpj: transactions.cpfCnpj,
+          parentTransactionId: transactions.parentTransactionId,
+          isCompositeParent: transactions.isCompositeParent
         })
-        .from(transactionsTable)
-        .leftJoin(properties, eq(transactionsTable.propertyId, properties.id))
+        .from(transactions)
+        .leftJoin(properties, eq(transactions.propertyId, properties.id))
         .where(and(
-          eq(transactionsTable.userId, userId),
-          eq(transactionsTable.type, 'expense'),
-          sql`${transactionsTable.propertyId} IS NOT NULL` // Exclude parent transactions (they have propertyId = null)
+          eq(transactions.userId, userId),
+          eq(transactions.type, 'expense'),
+          sql`${transactions.propertyId} IS NOT NULL` // Exclude parent transactions (they have propertyId = null)
         ))
-        .orderBy(desc(transactionsTable.date));
+        .orderBy(desc(transactions.date));
       
       res.json(expenseData);
     } catch (error) {
@@ -2693,7 +2693,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Group transactions by property
       const propertyData = new Map();
       
-      transactions.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         if (!propertyData.has(transaction.propertyId)) {
           propertyData.set(transaction.propertyId, {
             propertyId: transaction.propertyId,
@@ -2929,7 +2929,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : totalAmount;
 
       // Create the main transaction (parent) without propertyId
-      const mainTransaction = await db.insert(transactionsTable).values({
+      const mainTransaction = await db.insert(transactions).values({
         userId,
         propertyId: null, // This is a consolidated payment
         type: 'expense',
@@ -2948,7 +2948,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create child transactions for each property
       const transactions = [];
       for (const item of distribution) {
-        const childTransaction = await db.insert(transactionsTable).values({
+        const childTransaction = await db.insert(transactions).values({
           userId,
           propertyId: item.propertyId,
           type: 'expense',
@@ -3063,11 +3063,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     // For monthly periods, show day of month
-    if (period === 'current_month' || period === '2_months') {
+    if (period === 'current_month' || period === '2_months' || period === '1m' || period === '2m') {
       return current.getDate().toString();
     }
     
-    // For weekly periods and default, show actual date in DD MMM format
+    // For all other periods, show actual date in DD MMM format
     const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     const day = current.getDate().toString().padStart(2, '0');
     const month = months[current.getMonth()];
@@ -3086,20 +3086,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         startDate.setDate(today.getDate() - 1);
         endDate.setDate(today.getDate() + 5);
         break;
-      case '2w':
-        // 2 sem: D-1 to D+12 (14 days total)
-        startDate.setDate(today.getDate() - 1);
-        endDate.setDate(today.getDate() + 12);
+      case '1d':
+        // 1 day: Only today
+        startDate = new Date(today);
+        endDate = new Date(today);
         break;
+      case '2d':
+        // 2 days: Today + 1 day
+        startDate = new Date(today);
+        endDate.setDate(today.getDate() + 1);
+        break;
+      case '3d':
+        // 3 days: Today + 2 days
+        startDate = new Date(today);
+        endDate.setDate(today.getDate() + 2);
+        break;
+      case '4d':
+        // 4 days: Today + 3 days
+        startDate = new Date(today);
+        endDate.setDate(today.getDate() + 3);
+        break;
+      case '5d':
+        // 5 days: Today + 4 days
+        startDate = new Date(today);
+        endDate.setDate(today.getDate() + 4);
+        break;
+      case '1m':
       case 'current_month':
-        // Current month from day 1 to last day
+        // 1 month: Current month from day 1 to last day
         startDate = new Date(today.getFullYear(), today.getMonth(), 1);
         endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Last day of current month
         break;
+      case '2m':
       case '2_months':
         // 2 Months: Day 1 of current month to last day of next month
         startDate = new Date(today.getFullYear(), today.getMonth(), 1);
         endDate = new Date(today.getFullYear(), today.getMonth() + 2, 0); // Last day of next month
+        break;
+      case '2w':
+        // 2 sem: D-1 to D+12 (14 days total)
+        startDate.setDate(today.getDate() - 1);
+        endDate.setDate(today.getDate() + 12);
         break;
       default:
         // Default to Padrão if period not recognized
@@ -3137,15 +3164,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (startDateStr > settings.initialDate) {
         const transactionsBeforeStart = await db.select({
-          amount: sql<number>`CAST(${transactionsTable.amount} AS DECIMAL)`,
-          type: transactionsTable.type,
-          isCompositeParent: transactionsTable.isCompositeParent,
-        }).from(transactionsTable)
+          amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+          type: transactions.type,
+          isCompositeParent: transactions.isCompositeParent,
+        }).from(transactions)
           .where(
             and(
-              eq(transactionsTable.userId, userId),
-              gte(transactionsTable.date, settings.initialDate),
-              lt(transactionsTable.date, startDateStr)
+              eq(transactions.userId, userId),
+              gte(transactions.date, settings.initialDate),
+              lt(transactions.date, startDateStr)
             )
           );
         
@@ -3164,26 +3191,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get all transactions in the date range
-      const transactions = await db.select({
-        date: sql<string>`${transactionsTable.date}`,
-        amount: sql<number>`CAST(${transactionsTable.amount} AS DECIMAL)`,
-        type: transactionsTable.type,
-        description: transactionsTable.description,
-        isCompositeParent: transactionsTable.isCompositeParent
-      }).from(transactionsTable)
+      const periodTransactions = await db.select({
+        date: sql<string>`${transactions.date}`,
+        amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        type: transactions.type,
+        description: transactions.description,
+        isCompositeParent: transactions.isCompositeParent
+      }).from(transactions)
         .where(
           and(
-            eq(transactionsTable.userId, userId),
-            gte(transactionsTable.date, startDate.toISOString().split('T')[0]),
-            lte(transactionsTable.date, endDate.toISOString().split('T')[0])
+            eq(transactions.userId, userId),
+            gte(transactions.date, startDate.toISOString().split('T')[0]),
+            lte(transactions.date, endDate.toISOString().split('T')[0])
           )
         )
-        .orderBy(asc(transactionsTable.date));
+        .orderBy(asc(transactions.date));
       
       // Process daily cash flow
       const dailyData: { [key: string]: { revenue: number; expenses: number; } } = {};
       
-      transactions.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         // Skip parent transactions in cash flow
         if (transaction.isCompositeParent) {
           return;
@@ -3263,15 +3290,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (startDateStr > settings.initialDate) {
         const transactionsBeforeStart = await db.select({
-          amount: sql<number>`CAST(${transactionsTable.amount} AS DECIMAL)`,
-          type: transactionsTable.type,
-          isCompositeParent: transactionsTable.isCompositeParent,
-        }).from(transactionsTable)
+          amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+          type: transactions.type,
+          isCompositeParent: transactions.isCompositeParent,
+        }).from(transactions)
           .where(
             and(
-              eq(transactionsTable.userId, userId),
-              gte(transactionsTable.date, settings.initialDate),
-              lt(transactionsTable.date, startDateStr)
+              eq(transactions.userId, userId),
+              gte(transactions.date, settings.initialDate),
+              lt(transactions.date, startDateStr)
             )
           );
         
@@ -3290,26 +3317,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get all transactions in the date range
-      const transactions = await db.select({
-        date: sql<string>`${transactionsTable.date}`,
-        amount: sql<number>`CAST(${transactionsTable.amount} AS DECIMAL)`,
-        type: transactionsTable.type,
-        description: transactionsTable.description,
-        isCompositeParent: transactionsTable.isCompositeParent
-      }).from(transactionsTable)
+      const periodTransactions = await db.select({
+        date: sql<string>`${transactions.date}`,
+        amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        type: transactions.type,
+        description: transactions.description,
+        isCompositeParent: transactions.isCompositeParent
+      }).from(transactions)
         .where(
           and(
-            eq(transactionsTable.userId, userId),
-            gte(transactionsTable.date, startDate.toISOString().split('T')[0]),
-            lte(transactionsTable.date, endDate.toISOString().split('T')[0])
+            eq(transactions.userId, userId),
+            gte(transactions.date, startDate.toISOString().split('T')[0]),
+            lte(transactions.date, endDate.toISOString().split('T')[0])
           )
         )
-        .orderBy(asc(transactionsTable.date));
+        .orderBy(asc(transactions.date));
       
       // Process daily cash flow
       const dailyData: { [key: string]: { revenue: number; expenses: number; } } = {};
       
-      transactions.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         // Skip parent transactions in cash flow
         if (transaction.isCompositeParent) {
           return;
@@ -3426,11 +3453,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get properties for distribution
       const properties = await db
         .select()
-        .from(propertiesTable)
+        .from(properties)
         .where(
           and(
-            eq(propertiesTable.userId, userId),
-            or(...selectedPropertyIds.map((id: number) => eq(propertiesTable.id, id)))
+            eq(properties.userId, userId),
+            or(...selectedPropertyIds.map((id: number) => eq(properties.id, id)))
           )
         );
 
@@ -3449,15 +3476,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const revenuePromises = properties.map(async (property) => {
         const revenues = await db
           .select({
-            total: sql<number>`COALESCE(SUM(${transactionsTable.amount}), 0)`
+            total: sql<number>`COALESCE(SUM(${transactions.amount}), 0)`
           })
-          .from(transactionsTable)
+          .from(transactions)
           .where(
             and(
-              eq(transactionsTable.propertyId, property.id),
-              eq(transactionsTable.type, 'revenue'),
-              gte(transactionsTable.date, startDate.toISOString().split('T')[0]),
-              lte(transactionsTable.date, endDate.toISOString().split('T')[0])
+              eq(transactions.propertyId, property.id),
+              eq(transactions.type, 'revenue'),
+              gte(transactions.date, startDate.toISOString().split('T')[0]),
+              lte(transactions.date, endDate.toISOString().split('T')[0])
             )
           );
         
@@ -3493,7 +3520,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             'maintenance': 'maintenance'
           };
 
-          return await db.insert(transactionsTable).values({
+          return await db.insert(transactions).values({
             propertyId: propRevenue.propertyId,
             type: 'expense',
             category: categoryMap[expenseType] || 'other',
@@ -3565,7 +3592,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const mappedCategory = categoryMap[category] || 'other';
 
       // Create transaction for company expense (no propertyId)
-      const transaction = await db.insert(transactionsTable).values({
+      const transaction = await db.insert(transactions).values({
         userId,
         propertyId: null, // Company expense, not linked to any property
         type: 'expense',
@@ -3606,7 +3633,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const amount = item.total;
         totalAmount += amount;
 
-        const transaction = await db.insert(transactionsTable).values({
+        const transaction = await db.insert(transactions).values({
           userId,
           propertyId: item.propertyId,
           type: 'expense',
@@ -3651,11 +3678,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get properties
       const properties = await db
         .select()
-        .from(propertiesTable)
+        .from(properties)
         .where(
           and(
-            eq(propertiesTable.userId, userId),
-            or(...selectedPropertyIds.map((id: number) => eq(propertiesTable.id, id)))
+            eq(properties.userId, userId),
+            or(...selectedPropertyIds.map((id: number) => eq(properties.id, id)))
           )
         );
 
@@ -3670,15 +3697,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const revenuePromises = properties.map(async (property) => {
         const revenues = await db
           .select({
-            total: sql<number>`COALESCE(SUM(${transactionsTable.amount}), 0)`
+            total: sql<number>`COALESCE(SUM(${transactions.amount}), 0)`
           })
-          .from(transactionsTable)
+          .from(transactions)
           .where(
             and(
-              eq(transactionsTable.propertyId, property.id),
-              eq(transactionsTable.type, 'revenue'),
-              gte(transactionsTable.date, startDate.toISOString().split('T')[0]),
-              lte(transactionsTable.date, endDate.toISOString().split('T')[0])
+              eq(transactions.propertyId, property.id),
+              eq(transactions.type, 'revenue'),
+              gte(transactions.date, startDate.toISOString().split('T')[0]),
+              lte(transactions.date, endDate.toISOString().split('T')[0])
             )
           );
         
@@ -3753,23 +3780,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get gross revenue for selected properties in competency period
       const transactions = await db.select({
-        propertyId: transactionsTable.propertyId,
-        amount: sql<number>`CAST(${transactionsTable.amount} AS DECIMAL)`,
-        type: transactionsTable.type
-      }).from(transactionsTable)
+        propertyId: transactions.propertyId,
+        amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        type: transactions.type
+      }).from(transactions)
         .where(
           and(
-            eq(transactionsTable.userId, userId),
-            or(...selectedPropertyIds.map(id => eq(transactionsTable.propertyId, id))),
-            eq(transactionsTable.type, 'revenue'),
-            gte(transactionsTable.date, competencyStart.toISOString().split('T')[0]),
-            lte(transactionsTable.date, competencyEnd.toISOString().split('T')[0])
+            eq(transactions.userId, userId),
+            or(...selectedPropertyIds.map(id => eq(transactions.propertyId, id))),
+            eq(transactions.type, 'revenue'),
+            gte(transactions.date, competencyStart.toISOString().split('T')[0]),
+            lte(transactions.date, competencyEnd.toISOString().split('T')[0])
           )
         );
       
       // Calculate total revenue by property
       const propertyRevenues = new Map<number, number>();
-      transactions.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         const current = propertyRevenues.get(transaction.propertyId) || 0;
         propertyRevenues.set(transaction.propertyId, current + transaction.amount);
       });
@@ -3815,23 +3842,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get gross revenue for selected properties in competency period
       const transactions = await db.select({
-        propertyId: transactionsTable.propertyId,
-        amount: sql<number>`CAST(${transactionsTable.amount} AS DECIMAL)`,
-        type: transactionsTable.type
-      }).from(transactionsTable)
+        propertyId: transactions.propertyId,
+        amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        type: transactions.type
+      }).from(transactions)
         .where(
           and(
-            eq(transactionsTable.userId, userId),
-            or(...selectedPropertyIds.map(id => eq(transactionsTable.propertyId, id))),
-            eq(transactionsTable.type, 'revenue'),
-            gte(transactionsTable.date, competencyStart.toISOString().split('T')[0]),
-            lte(transactionsTable.date, competencyEnd.toISOString().split('T')[0])
+            eq(transactions.userId, userId),
+            or(...selectedPropertyIds.map(id => eq(transactions.propertyId, id))),
+            eq(transactions.type, 'revenue'),
+            gte(transactions.date, competencyStart.toISOString().split('T')[0]),
+            lte(transactions.date, competencyEnd.toISOString().split('T')[0])
           )
         );
       
       // Calculate total revenue by property
       const propertyRevenues = new Map<number, number>();
-      transactions.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         const current = propertyRevenues.get(transaction.propertyId) || 0;
         propertyRevenues.set(transaction.propertyId, current + transaction.amount);
       });
@@ -3901,23 +3928,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get gross revenue for selected properties in competency period
       const transactions = await db.select({
-        propertyId: transactionsTable.propertyId,
-        amount: sql<number>`CAST(${transactionsTable.amount} AS DECIMAL)`,
-        type: transactionsTable.type
-      }).from(transactionsTable)
+        propertyId: transactions.propertyId,
+        amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        type: transactions.type
+      }).from(transactions)
         .where(
           and(
-            eq(transactionsTable.userId, userId),
-            or(...selectedPropertyIds.map(id => eq(transactionsTable.propertyId, id))),
-            eq(transactionsTable.type, 'revenue'),
-            gte(transactionsTable.date, competencyStart.toISOString().split('T')[0]),
-            lte(transactionsTable.date, competencyEnd.toISOString().split('T')[0])
+            eq(transactions.userId, userId),
+            or(...selectedPropertyIds.map(id => eq(transactions.propertyId, id))),
+            eq(transactions.type, 'revenue'),
+            gte(transactions.date, competencyStart.toISOString().split('T')[0]),
+            lte(transactions.date, competencyEnd.toISOString().split('T')[0])
           )
         );
       
       // Calculate total revenue by property
       const propertyRevenues = new Map<number, number>();
-      transactions.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         const current = propertyRevenues.get(transaction.propertyId) || 0;
         propertyRevenues.set(transaction.propertyId, current + transaction.amount);
       });
@@ -4083,7 +4110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create the main transaction
-      const mainTransaction = await db.insert(transactionsTable).values({
+      const mainTransaction = await db.insert(transactions).values({
         userId,
         propertyId: null, // This is a consolidated payment
         type: 'expense',
@@ -4110,7 +4137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : detail.amount;
 
         // Insert into cleaning_service_details table
-        const detailRecord = await db.insert(cleaningServiceDetailsTable).values({
+        const detailRecord = await db.insert(cleaningServiceDetails).values({
           transactionId: parentId,
           propertyId: detail.propertyId,
           serviceDate: new Date(detail.serviceDate),
@@ -4121,7 +4148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         detailRecords.push(detailRecord[0]);
 
         // Also create a child transaction for each property
-        await db.insert(transactionsTable).values({
+        await db.insert(transactions).values({
           userId,
           propertyId: detail.propertyId,
           type: 'expense',

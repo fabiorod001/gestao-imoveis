@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
+import CashFlow from "@/pages/cash-flow";
 import Dashboard from "@/pages/dashboard";
 import Properties from "@/pages/properties";
 import PropertyDetails from "@/pages/property-details";
@@ -15,9 +16,6 @@ import Expenses from "@/pages/expenses";
 import Reports from "@/pages/reports";
 import Conversion from "@/pages/conversion";
 import Import from "@/pages/import";
-import ImportData from "@/pages/import-data";
-import BulkDataEntry from "@/pages/BulkDataEntry";
-import BulkTransactionEntry from "@/pages/BulkTransactionEntry";
 import Taxes from "@/pages/taxes";
 import ManagementExpenses from "@/pages/expenses/management";
 import CleaningExpenses from "@/pages/expenses/cleaning";
@@ -32,20 +30,29 @@ import MaintenanceDetailPage from "@/pages/expenses/maintenance-detail";
 import CleaningDetailPage from "@/pages/expenses/cleaning-detail";
 import FinancingDetailPage from "@/pages/expenses/financing-detail";
 import OtherDetailPage from "@/pages/expenses/other-detail";
-import GeneralDetailPage from "@/pages/expenses/general-detail";
 
 import Layout from "@/components/layout/Layout";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
 
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <Switch>
-      {isLoading || !isAuthenticated ? (
+      {!isAuthenticated ? (
         <Route path="/" component={Landing} />
       ) : (
         <Layout>
-          <Route path="/" component={Dashboard} />
+          <Route path="/" component={CashFlow} />
+          <Route path="/dashboard" component={Dashboard} />
           <Route path="/properties" component={Properties} />
           <Route path="/property/:id" component={PropertyDetails} />
           <Route path="/property/:id/edit" component={EditProperty} />
@@ -54,9 +61,6 @@ function Router() {
           <Route path="/reports" component={Reports} />
           <Route path="/conversion" component={Conversion} />
           <Route path="/import" component={Import} />
-          <Route path="/import-data" component={ImportData} />
-          <Route path="/bulk-data-entry" component={BulkDataEntry} />
-          <Route path="/bulk-transaction-entry" component={BulkTransactionEntry} />
           <Route path="/taxes" component={Taxes} />
           <Route path="/expenses/management" component={ManagementExpenses} />
           <Route path="/expenses/cleaning" component={CleaningExpenses} />
@@ -71,7 +75,6 @@ function Router() {
           <Route path="/expenses/cleaning-detail" component={CleaningDetailPage} />
           <Route path="/expenses/financing-detail" component={FinancingDetailPage} />
           <Route path="/expenses/other-detail" component={OtherDetailPage} />
-          <Route path="/expenses/general-detail" component={GeneralDetailPage} />
         </Layout>
       )}
       <Route component={NotFound} />

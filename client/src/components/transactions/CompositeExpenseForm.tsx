@@ -70,11 +70,11 @@ export default function CompositeExpenseForm({ propertyId, onSuccess }: Composit
     // Only initialize once when dialog opens
     if (isInitialized) return;
     
-    if (!propertyComponents) return;
+    if (!propertyComponents || !Array.isArray(propertyComponents)) return;
     
     // Initialize components when opening the dialog
     if (propertyComponents.length > 0) {
-      setAvailableComponents(propertyComponents);
+      setAvailableComponents([...propertyComponents]);
       if (showForm) {
         const activeComponents = propertyComponents
           .filter((c: any) => c.isActive)
@@ -98,7 +98,26 @@ export default function CompositeExpenseForm({ propertyId, onSuccess }: Composit
     }
     
     setIsInitialized(true);
-  }, [showForm, showComponentSetup, propertyComponents, isInitialized]);
+  }, [showForm, showComponentSetup, isInitialized]); // Removed propertyComponents from dependencies
+
+  // Separate effect to handle propertyComponents changes
+  useEffect(() => {
+    if (!propertyComponents || !Array.isArray(propertyComponents) || !isInitialized || (!showForm && !showComponentSetup)) return;
+    
+    // Update available components when data loads
+    if (propertyComponents.length > 0) {
+      setAvailableComponents([...propertyComponents]);
+      if (showForm) {
+        const activeComponents = propertyComponents
+          .filter((c: any) => c.isActive)
+          .map((c: any) => ({
+            ...c,
+            amount: ''
+          }));
+        setComponents(activeComponents);
+      }
+    }
+  }, [propertyComponents, showForm, showComponentSetup, isInitialized]); // Fixed dependencies
 
   const saveComponentsMutation = useMutation({
     mutationFn: async (componentList: ExpenseComponent[]) => {
