@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,8 +15,11 @@ import {
   Calendar,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  DollarSign
 } from "lucide-react";
+import CashFlowChart from "@/components/dashboard/CashFlowChart";
+import AdvancedPivotTable from "@/components/dashboard/AdvancedPivotTable";
 
 // Dados mockup para a tabela dinâmica principal
 const mockupData = [
@@ -416,42 +419,6 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-              <div className="text-sm text-gray-600">
-                <div className="flex justify-between">
-                  <span>Manutenção:</span>
-                  <span className="font-medium">R$ 7.200</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Condomínio:</span>
-                  <span className="font-medium">R$ 11.720</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <DollarSign className="w-6 h-6 text-blue-600" />
-                <Badge variant="outline" className="text-blue-600 border-blue-600">58.2%</Badge>
-              </div>
-              <CardTitle className="text-2xl font-bold text-gray-900">R$ 26.360</CardTitle>
-              <CardDescription>Lucro Líquido (Últimos 30 dias)</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm text-gray-600">
-                <div className="flex justify-between">
-                  <span>Margem de Lucro:</span>
-                  <span className="font-medium text-blue-600">58.2%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>ROI Mensal:</span>
-                  <span className="font-medium text-blue-600">3.1%</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
         {/* Cash Flow Chart */}
         <CashFlowChart />
