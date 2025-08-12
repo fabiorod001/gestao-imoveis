@@ -12,7 +12,7 @@ import { db } from "./db";
 import { eq, and, gte, lte, lt, asc, desc, sql, inArray, or } from "drizzle-orm";
 import { parseAirbnbCSV, mapListingToProperty } from "./csvParser";
 import { format } from "date-fns";
-import { airbnbIntegration } from './airbnb-integration';
+
 
 // Helper function to clean numeric, date and text fields
 function cleanPropertyData(data: any) {
@@ -4175,45 +4175,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Airbnb integration routes
-  app.post('/api/airbnb/save-session', isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      const { cookies, csrfToken } = req.body;
-      
-      if (!cookies) {
-        return res.status(400).json({ error: 'Cookies são obrigatórios' });
-      }
-      
-      // CSRF token is now optional
-      await airbnbIntegration.saveSession(cookies, csrfToken || '', userId);
-      res.json({ success: true, message: 'Sessão salva com sucesso' });
-    } catch (error) {
-      console.error('Error saving Airbnb session:', error);
-      res.status(500).json({ error: 'Erro ao salvar sessão' });
-    }
-  });
-  
-  app.get('/api/airbnb/check-session', isAuthenticated, async (req, res) => {
-    try {
-      const hasSession = await airbnbIntegration.loadSession();
-      res.json({ hasSession });
-    } catch (error) {
-      console.error('Error checking Airbnb session:', error);
-      res.status(500).json({ error: 'Erro ao verificar sessão' });
-    }
-  });
-  
-  app.post('/api/airbnb/sync', isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      const result = await airbnbIntegration.syncAirbnbData(userId);
-      res.json(result);
-    } catch (error) {
-      console.error('Error syncing Airbnb data:', error);
-      res.status(500).json({ error: 'Erro ao sincronizar dados do Airbnb' });
-    }
-  });
+
 
   const httpServer = createServer(app);
   return httpServer;

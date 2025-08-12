@@ -30,7 +30,6 @@ import MaintenanceDetailPage from "@/pages/expenses/maintenance-detail";
 import CleaningDetailPage from "@/pages/expenses/cleaning-detail";
 import FinancingDetailPage from "@/pages/expenses/financing-detail";
 import OtherDetailPage from "@/pages/expenses/other-detail";
-import AirbnbSync from "@/pages/airbnb-sync";
 
 import Layout from "@/components/layout/Layout";
 
@@ -62,7 +61,6 @@ function Router() {
           <Route path="/reports" component={Reports} />
           <Route path="/conversion" component={Conversion} />
           <Route path="/import" component={Import} />
-          <Route path="/airbnb-sync" component={AirbnbSync} />
           <Route path="/taxes" component={Taxes} />
           <Route path="/expenses/management" component={ManagementExpenses} />
           <Route path="/expenses/cleaning" component={CleaningExpenses} />
