@@ -1,4 +1,5 @@
 # RentManager - Property Management System
+**QUICK START:** Veja `QUICK_START.md` para contexto rápido do projeto
 
 ## Overview
 RentManager is a comprehensive financial management system for rental properties. It enables property owners to manage multiple properties, track financial transactions (revenues and expenses), generate analytical reports, and handle currency conversions. The project aims to provide a robust, modern, and user-friendly solution for efficient property financial management.
