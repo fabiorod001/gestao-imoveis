@@ -1,69 +1,71 @@
-import express from 'express';
-import cors from 'cors';
-import { json } from 'body-parser';
-import { initializeDatabase } from './database';
-import { propertyRoutes } from './routes/properties';
-import { transactionRoutes } from './routes/transactions';
-import { dashboardRoutes } from './routes/dashboard';
-import { airbnbRoutes } from './routes/airbnb';
-import { authRoutes } from './routes/auth';
-import { errorHandler } from './middleware/errorHandler';
-import { authMiddleware } from './middleware/auth';
+import express, { type Request, Response, NextFunction } from "express";
+import { registerRoutes } from "./routes";
+import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+// Increase payload limits for large CSV files (histórico Airbnb)
+app.use(express.json({ limit: "200mb" }));
+app.use(express.urlencoded({ limit: "200mb", extended: true }));
 
-// Middleware
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://gestao-imoveis.vercel.app'] 
-    : ['http://localhost:3000', 'http://localhost:5173'],
-  credentials: true
-}));
+app.use((req, res, next) => {
+  const start = Date.now();
+  const path = req.path;
+  let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
-app.use(json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+  const originalResJson = res.json;
+  res.json = function (bodyJson, ...args) {
+    capturedJsonResponse = bodyJson;
+    return originalResJson.apply(res, [bodyJson, ...args]);
+  };
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (path.startsWith("/api")) {
+      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse) {
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      }
+
+      if (logLine.length > 80) {
+        logLine = logLine.slice(0, 79) + "…";
+      }
+
+      log(logLine);
+    }
+  });
+
+  next();
 });
 
-// Auth routes (public)
-app.use('/api/auth', authRoutes);
+(async () => {
+  const server = await registerRoutes(app);
 
-// Protected routes
-app.use('/api', authMiddleware);
-app.use('/api/properties', propertyRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/airbnb', airbnbRoutes);
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
 
-// Error handling
-app.use(errorHandler);
+    res.status(status).json({ message });
+    throw err;
+  });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Endpoint não encontrado' });
-});
-
-async function startServer() {
-  try {
-    // Initialize database
-    await initializeDatabase();
-    console.log('✅ Database initialized successfully');
-    
-    // Start server
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📊 Dashboard: http://localhost:${PORT}/health`);
-    });
-  } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    process.exit(1);
+  // importantly only setup vite in development and after
+  // setting up all the other routes so the catch-all route
+  // doesn't interfere with the other routes
+  if (app.get("env") === "development") {
+    await setupVite(app, server);
+  } else {
+    serveStatic(app);
   }
-}
 
-startServer();
-
-export default app;
+  // ALWAYS serve the app on port 5000
+  // this serves both the API and the client.
+  // It is the only port that is not firewalled.
+  const port = 5000;
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true,
+  }, () => {
+    log(`serving on port ${port}`);
+  });
+})();
