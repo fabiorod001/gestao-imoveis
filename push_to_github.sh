@@ -5,7 +5,7 @@
 # Data: 12/08/2025
 
 echo "================================================"
-echo "Push para GitHub - Property Manager"
+echo "Push para GitHub - Gestão de Imóveis"
 echo "================================================"
 
 # Configurar credenciais
@@ -20,7 +20,7 @@ rm -f .git/config.lock
 # Configurar o repositório remoto
 echo "Configurando repositório remoto..."
 git remote remove origin 2>/dev/null
-git remote add origin https://fabiorod001:${GITHUB_TOKEN}@github.com/fabiorod001/property-manager.git
+git remote add origin https://fabiorod001:${GITHUB_TOKEN}@github.com/fabiorod001/gestao-imoveis.git
 
 # Adicionar todos os arquivos
 echo "Adicionando arquivos..."
@@ -36,5 +36,5 @@ git push -f origin main
 
 echo "================================================"
 echo "Push concluído com sucesso!"
-echo "Acesse: https://github.com/fabiorod001/property-manager"
+echo "Acesse: https://github.com/fabiorod001/gestao-imoveis"
 echo "================================================"

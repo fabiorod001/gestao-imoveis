@@ -22,7 +22,7 @@ rm -f .git/config.lock
 
 # 3. Configurar o repositório remoto
 git remote remove origin
-git remote add origin https://fabiorod001:${GITHUB_TOKEN}@github.com/fabiorod001/property-manager.git
+git remote add origin https://fabiorod001:${GITHUB_TOKEN}@github.com/fabiorod001/gestao-imoveis.git
 
 # 4. Adicionar todos os arquivos
 git add -A
@@ -34,10 +34,11 @@ git commit -m "Sistema completo de gestão de propriedades - checkpoint"
 git push -f origin main
 ```
 
-## Repositórios disponíveis:
+## Repositório Principal:
 
-1. **property-manager** (recomendado): https://github.com/fabiorod001/property-manager
-2. **gestao-imoveis**: https://github.com/fabiorod001/gestao-imoveis
+**gestao-imoveis**: https://github.com/fabiorod001/gestao-imoveis
+
+(O repositório property-manager está desatualizado e não deve ser usado)
 
 ## Importante:
 
@@ -52,6 +53,6 @@ git push -f origin main
 ## Verificação:
 
 Após o push, verifique em:
-https://github.com/fabiorod001/property-manager
+https://github.com/fabiorod001/gestao-imoveis
 
 O sistema estará 100% independente do Replit e poderá ser clonado e executado em qualquer ambiente.
