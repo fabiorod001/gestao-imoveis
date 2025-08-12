@@ -341,7 +341,14 @@ export default function AirbnbImport() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Alert variant={importResult.success ? "default" : "destructive"}>
-              <AlertDescription>{importResult.message}</AlertDescription>
+              <AlertDescription>
+                {importResult.message}
+                {importResult.discrepancies && importResult.discrepancies > 0 && (
+                  <div className="mt-2 text-sm">
+                    <strong>Nota:</strong> {importResult.discrepancies} valores anteriores foram atualizados com os novos valores do CSV.
+                  </div>
+                )}
+              </AlertDescription>
             </Alert>
 
             {importResult.success && importResult.summary && (
@@ -480,7 +487,12 @@ export default function AirbnbImport() {
             <Alert className="border-amber-200 bg-amber-50">
               <AlertCircle className="h-4 w-4 text-amber-600" />
               <AlertDescription className="text-amber-800">
-                <strong>Atenção:</strong> Os dados existentes deste período serão substituídos pelos novos dados do Airbnb.
+                <strong>Como funciona a importação:</strong>
+                <ul className="mt-2 ml-4 list-disc">
+                  <li>Todas as receitas do Airbnb nas datas do relatório serão substituídas pelos novos valores</li>
+                  <li>Receitas de outras fontes (aluguéis manuais, etc.) serão preservadas</li>
+                  <li>Isso garante que você sempre tenha os valores mais atualizados do Airbnb</li>
+                </ul>
               </AlertDescription>
             </Alert>
 
