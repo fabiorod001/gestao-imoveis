@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, blob } from 'drizzle-orm/sqlite-core';
+import { pgTable, text, integer, real, timestamp, boolean, decimal } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -7,22 +7,22 @@ import { z } from 'zod';
 // ============================================================================
 
 // Users table
-export const users = sqliteTable('users', {
+export const users = pgTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 // Properties table - Expanded with all required fields
-export const properties = sqliteTable('properties', {
+export const properties = pgTable('properties', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id),
   
   // Basic identification
   nickname: text('nickname').notNull(), // Used throughout the system
-  officialName: text('official_name'), // Official development name
+  name: text('name').notNull(), // Main name field for compatibility
   
   // Address structure
   condominiumName: text('condominium_name'),
@@ -37,38 +37,42 @@ export const properties = sqliteTable('properties', {
   zipCode: text('zip_code'),
   
   // Legal documents
-  propertyRegistration: text('property_registration'),
-  iptuRegistration: text('iptu_registration'),
+  registration: text('registration'),
+  iptuCode: text('iptu_code'),
   
   // Acquisition values
-  purchaseValue: real('purchase_value').notNull().default(0),
-  commissionValue: real('commission_value').notNull().default(0),
-  taxesValue: real('taxes_value').notNull().default(0),
-  renovationValue: real('renovation_value').notNull().default(0),
-  otherValues: real('other_values').notNull().default(0),
-  totalAcquisitionValue: real('total_acquisition_value').notNull().default(0), // Auto-calculated
-  acquisitionDate: integer('acquisition_date', { mode: 'timestamp' }).notNull(),
+  purchasePrice: decimal('purchase_price').default('0'),
+  commissionValue: decimal('commission_value').default('0'),
+  taxesAndRegistration: decimal('taxes_and_registration').default('0'),
+  renovationAndDecoration: decimal('renovation_and_decoration').default('0'),
+  otherInitialValues: decimal('other_initial_values').default('0'),
   
-  // IPCA updated value (auto-calculated)
-  ipcaUpdatedValue: real('ipca_updated_value').notNull().default(0),
-  lastIpcaUpdate: integer('last_ipca_update', { mode: 'timestamp' }),
+  // Property details
+  area: decimal('area'),
+  bedrooms: integer('bedrooms'),
+  bathrooms: integer('bathrooms'),
+  marketValue: decimal('market_value'),
+  
+  // Dates
+  purchaseDate: timestamp('purchase_date'),
+  marketValueDate: timestamp('market_value_date'),
   
   // Property type and status
-  propertyType: text('property_type').notNull().default('residential'), // residential, commercial, etc.
   status: text('status').notNull().default('active'), // active, construction, renovation, sold
   
-  // Condominium structure type (for expense breakdown)
-  condominiumStructure: text('condominium_structure').notNull().default('standard'), // sevilha, maxhaus, thera, haddock, standard
+  // Financing
+  isFullyPaid: boolean('is_fully_paid').default(true),
+  financingAmount: decimal('financing_amount'),
   
   // Airbnb integration
   airbnbPropertyId: text('airbnb_property_id'),
   
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 // Transactions table - Unified for all income and expenses
-export const transactions = sqliteTable('transactions', {
+export const transactions = pgTable('transactions', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id),
   propertyId: text('property_id').references(() => properties.id),
@@ -79,13 +83,14 @@ export const transactions = sqliteTable('transactions', {
   subcategory: text('subcategory'), // For detailed breakdown
   
   // Financial data
-  amount: real('amount').notNull(),
+  amount: decimal('amount').notNull(),
   currency: text('currency').notNull().default('BRL'),
-  exchangeRate: real('exchange_rate').default(1),
+  exchangeRate: decimal('exchange_rate').default('1'),
   
   // Dates
-  transactionDate: integer('transaction_date', { mode: 'timestamp' }).notNull(), // Cash flow date
-  competenceDate: integer('competence_date', { mode: 'timestamp' }), // Competence date (for taxes)
+  date: timestamp('date').notNull(), // Cash flow date - main date field for compatibility
+  transactionDate: timestamp('transaction_date').notNull(), // Cash flow date
+  competenceDate: timestamp('competence_date'), // Competence date (for taxes)
   
   // Description and details
   description: text('description').notNull(),
@@ -95,144 +100,73 @@ export const transactions = sqliteTable('transactions', {
   source: text('source').notNull().default('manual'), // 'manual', 'airbnb_actual', 'airbnb_pending', 'csv_import'
   externalId: text('external_id'), // For Airbnb integration
   
-  // Supplier/Client info (for expenses)
+  // Supplier/Client info (for expenses) - compatibility names
+  supplier: text('supplier'),
   supplierName: text('supplier_name'),
+  cpfCnpj: text('cpf_cnpj'),
   supplierDocument: text('supplier_document'), // CPF/CNPJ
   supplierType: text('supplier_type'), // 'individual' or 'company'
   
+  // Composite transactions
+  parentTransactionId: text('parent_transaction_id'),
+  isCompositeParent: boolean('is_composite_parent').default(false),
+  
   // Recurring transactions
-  isRecurring: integer('is_recurring', { mode: 'boolean' }).default(false),
+  isRecurring: boolean('is_recurring').default(false),
   recurringParentId: text('recurring_parent_id'),
-  recurringEndDate: integer('recurring_end_date', { mode: 'timestamp' }),
+  recurringEndDate: timestamp('recurring_end_date'),
   
   // Pro-rata distribution
-  isProRata: integer('is_pro_rata', { mode: 'boolean' }).default(false),
+  isProRata: boolean('is_pro_rata').default(false),
   proRataGroupId: text('pro_rata_group_id'),
-  originalAmount: real('original_amount'), // Original amount before pro-rata
-  proRataPercentage: real('pro_rata_percentage'), // Percentage of original amount
+  originalAmount: decimal('original_amount'), // Original amount before pro-rata
+  proRataPercentage: decimal('pro_rata_percentage'), // Percentage of original amount
   
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
-});
-
-// Expense components for detailed breakdown (condominium, etc.)
-export const expenseComponents = sqliteTable('expense_components', {
-  id: text('id').primaryKey(),
-  transactionId: text('transaction_id').notNull().references(() => transactions.id),
-  
-  componentType: text('component_type').notNull(), // 'condominium_fee', 'electricity', 'gas', 'water', etc.
-  amount: real('amount').notNull(),
-  description: text('description'),
-  
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-});
-
-// Pro-rata distribution groups
-export const proRataGroups = sqliteTable('pro_rata_groups', {
-  id: text('id').primaryKey(),
-  userId: text('user_id').notNull().references(() => users.id),
-  
-  groupType: text('group_type').notNull(), // 'management', 'taxes', 'cleaning', etc.
-  totalAmount: real('total_amount').notNull(),
-  transactionDate: integer('transaction_date', { mode: 'timestamp' }).notNull(),
-  description: text('description').notNull(),
-  
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-});
-
-// Pro-rata distribution details
-export const proRataDistributions = sqliteTable('pro_rata_distributions', {
-  id: text('id').primaryKey(),
-  groupId: text('group_id').notNull().references(() => proRataGroups.id),
-  propertyId: text('property_id').notNull().references(() => properties.id),
-  transactionId: text('transaction_id').notNull().references(() => transactions.id),
-  
-  percentage: real('percentage').notNull(),
-  amount: real('amount').notNull(),
-  
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 // Cash flow settings
-export const cashFlowSettings = sqliteTable('cash_flow_settings', {
+export const cashFlowSettings = pgTable('cash_flow_settings', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id),
   
-  initialBalance: real('initial_balance').notNull().default(0),
-  initialBalanceDate: integer('initial_balance_date', { mode: 'timestamp' }).notNull(),
+  initialBalance: decimal('initial_balance').notNull().default('0'),
+  initialBalanceDate: timestamp('initial_balance_date').notNull(),
   
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-// Exchange rates for currency conversion
-export const exchangeRates = sqliteTable('exchange_rates', {
-  id: text('id').primaryKey(),
-  
-  fromCurrency: text('from_currency').notNull(),
-  toCurrency: text('to_currency').notNull(),
-  rate: real('rate').notNull(),
-  date: integer('date', { mode: 'timestamp' }).notNull(),
-  source: text('source').notNull().default('bcb'), // Banco Central do Brasil
-  
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-});
-
-// IPCA rates for inflation adjustment
-export const ipcaRates = sqliteTable('ipca_rates', {
-  id: text('id').primaryKey(),
-  
-  year: integer('year').notNull(),
-  month: integer('month').notNull(),
-  rate: real('rate').notNull(), // Monthly rate
-  accumulatedRate: real('accumulated_rate').notNull(), // Accumulated from base date
-  source: text('source').notNull().default('ibge'),
-  
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-});
-
-// Airbnb import logs
-export const airbnbImports = sqliteTable('airbnb_imports', {
+// Tax payments table
+export const taxPayments = pgTable('tax_payments', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id),
   
-  importType: text('import_type').notNull(), // 'actual' or 'pending'
-  fileName: text('file_name'),
-  recordsImported: integer('records_imported').notNull(),
-  dateRange: text('date_range'), // JSON string with start/end dates
+  taxType: text('tax_type').notNull(), // 'pis', 'cofins', 'csll', 'irpj', 'iptu'
+  referenceMonth: integer('reference_month').notNull(),
+  referenceYear: integer('reference_year').notNull(),
   
-  status: text('status').notNull().default('completed'), // 'completed', 'failed', 'processing'
-  errorMessage: text('error_message'),
+  totalAmount: decimal('total_amount').notNull(),
+  installments: integer('installments').notNull().default(1),
+  status: text('status').notNull().default('pending'), // 'pending', 'paid', 'partial'
   
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 // Cleaning service details
-export const cleaningServices = sqliteTable('cleaning_services', {
+export const cleaningServiceDetails = pgTable('cleaning_service_details', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id),
   
-  serviceDate: integer('service_date', { mode: 'timestamp' }).notNull(),
-  paymentDate: integer('payment_date', { mode: 'timestamp' }).notNull(),
+  serviceDate: timestamp('service_date').notNull(),
+  paymentDate: timestamp('payment_date').notNull(),
   
-  totalAmount: real('total_amount').notNull(),
+  totalAmount: decimal('total_amount').notNull(),
   notes: text('notes'),
   
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-});
-
-// Cleaning service items (per property)
-export const cleaningServiceItems = sqliteTable('cleaning_service_items', {
-  id: text('id').primaryKey(),
-  serviceId: text('service_id').notNull().references(() => cleaningServices.id),
-  propertyId: text('property_id').notNull().references(() => properties.id),
-  transactionId: text('transaction_id').notNull().references(() => transactions.id),
-  
-  quantity: integer('quantity').notNull(),
-  unitPrice: real('unit_price').notNull(),
-  totalAmount: real('total_amount').notNull(),
-  
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
 // ============================================================================
@@ -243,9 +177,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   properties: many(properties),
   transactions: many(transactions),
   cashFlowSettings: many(cashFlowSettings),
-  proRataGroups: many(proRataGroups),
-  airbnbImports: many(airbnbImports),
-  cleaningServices: many(cleaningServices),
+  taxPayments: many(taxPayments),
+  cleaningServiceDetails: many(cleaningServiceDetails),
 }));
 
 export const propertiesRelations = relations(properties, ({ one, many }) => ({
@@ -254,11 +187,9 @@ export const propertiesRelations = relations(properties, ({ one, many }) => ({
     references: [users.id],
   }),
   transactions: many(transactions),
-  proRataDistributions: many(proRataDistributions),
-  cleaningServiceItems: many(cleaningServiceItems),
 }));
 
-export const transactionsRelations = relations(transactions, ({ one, many }) => ({
+export const transactionsRelations = relations(transactions, ({ one }) => ({
   user: one(users, {
     fields: [transactions.userId],
     references: [users.id],
@@ -267,61 +198,26 @@ export const transactionsRelations = relations(transactions, ({ one, many }) => 
     fields: [transactions.propertyId],
     references: [properties.id],
   }),
-  expenseComponents: many(expenseComponents),
-  proRataDistribution: one(proRataDistributions),
-  cleaningServiceItem: one(cleaningServiceItems),
 }));
 
-export const expenseComponentsRelations = relations(expenseComponents, ({ one }) => ({
-  transaction: one(transactions, {
-    fields: [expenseComponents.transactionId],
-    references: [transactions.id],
-  }),
-}));
-
-export const proRataGroupsRelations = relations(proRataGroups, ({ one, many }) => ({
+export const cashFlowSettingsRelations = relations(cashFlowSettings, ({ one }) => ({
   user: one(users, {
-    fields: [proRataGroups.userId],
+    fields: [cashFlowSettings.userId],
     references: [users.id],
   }),
-  distributions: many(proRataDistributions),
 }));
 
-export const proRataDistributionsRelations = relations(proRataDistributions, ({ one }) => ({
-  group: one(proRataGroups, {
-    fields: [proRataDistributions.groupId],
-    references: [proRataGroups.id],
-  }),
-  property: one(properties, {
-    fields: [proRataDistributions.propertyId],
-    references: [properties.id],
-  }),
-  transaction: one(transactions, {
-    fields: [proRataDistributions.transactionId],
-    references: [transactions.id],
-  }),
-}));
-
-export const cleaningServicesRelations = relations(cleaningServices, ({ one, many }) => ({
+export const taxPaymentsRelations = relations(taxPayments, ({ one }) => ({
   user: one(users, {
-    fields: [cleaningServices.userId],
+    fields: [taxPayments.userId],
     references: [users.id],
   }),
-  items: many(cleaningServiceItems),
 }));
 
-export const cleaningServiceItemsRelations = relations(cleaningServiceItems, ({ one }) => ({
-  service: one(cleaningServices, {
-    fields: [cleaningServiceItems.serviceId],
-    references: [cleaningServices.id],
-  }),
-  property: one(properties, {
-    fields: [cleaningServiceItems.propertyId],
-    references: [properties.id],
-  }),
-  transaction: one(transactions, {
-    fields: [cleaningServiceItems.transactionId],
-    references: [transactions.id],
+export const cleaningServiceDetailsRelations = relations(cleaningServiceDetails, ({ one }) => ({
+  user: one(users, {
+    fields: [cleaningServiceDetails.userId],
+    references: [users.id],
   }),
 }));
 
@@ -502,3 +398,84 @@ export const TAX_TYPES = ['pis', 'cofins', 'csll', 'irpj', 'iptu'] as const;
 
 export type ExpenseCategory = keyof typeof EXPENSE_CATEGORIES;
 export type TaxType = typeof TAX_TYPES[number];
+
+// ============================================================================
+// INSERT/SELECT SCHEMAS - Manual Zod schemas for API validation
+// ============================================================================
+
+// Insert schemas for creating records
+export const insertPropertySchema = z.object({
+  userId: z.string(),
+  nickname: z.string().min(1),
+  name: z.string().min(1),
+  condominiumName: z.string().optional(),
+  street: z.string().optional(),
+  number: z.string().optional(),
+  tower: z.string().optional(),
+  unit: z.string().optional(),
+  neighborhood: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  country: z.string().optional(),
+  zipCode: z.string().optional(),
+  registration: z.string().optional(),
+  iptuCode: z.string().optional(),
+  purchasePrice: z.string().optional(),
+  commissionValue: z.string().optional(),
+  taxesAndRegistration: z.string().optional(),
+  renovationAndDecoration: z.string().optional(),
+  otherInitialValues: z.string().optional(),
+  area: z.string().optional(),
+  bedrooms: z.number().optional(),
+  bathrooms: z.number().optional(),
+  marketValue: z.string().optional(),
+  purchaseDate: z.date().optional(),
+  marketValueDate: z.date().optional(),
+  status: z.enum(['active', 'construction', 'renovation', 'sold']).default('active'),
+  isFullyPaid: z.boolean().default(true),
+  financingAmount: z.string().optional(),
+  airbnbPropertyId: z.string().optional(),
+});
+
+export const insertTransactionSchema = z.object({
+  userId: z.string(),
+  propertyId: z.string().optional(),
+  type: z.enum(['income', 'expense']),
+  category: z.string().min(1),
+  subcategory: z.string().optional(),
+  amount: z.string(),
+  currency: z.string().default('BRL'),
+  exchangeRate: z.string().default('1'),
+  date: z.date(),
+  transactionDate: z.date(),
+  competenceDate: z.date().optional(),
+  description: z.string().min(1),
+  notes: z.string().optional(),
+  source: z.string().default('manual'),
+  externalId: z.string().optional(),
+  supplier: z.string().optional(),
+  supplierName: z.string().optional(),
+  cpfCnpj: z.string().optional(),
+  supplierDocument: z.string().optional(),
+  supplierType: z.string().optional(),
+  parentTransactionId: z.string().optional(),
+  isCompositeParent: z.boolean().default(false),
+  isRecurring: z.boolean().default(false),
+  recurringParentId: z.string().optional(),
+  recurringEndDate: z.date().optional(),
+  isProRata: z.boolean().default(false),
+  proRataGroupId: z.string().optional(),
+  originalAmount: z.string().optional(),
+  proRataPercentage: z.string().optional(),
+});
+
+// TypeScript types for the actual database types
+export type InsertProperty = z.infer<typeof insertPropertySchema>;
+export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
+
+export type SelectProperty = typeof properties.$inferSelect;
+export type SelectTransaction = typeof transactions.$inferSelect;
+export type SelectUser = typeof users.$inferSelect;
+export type SelectCashFlowSettings = typeof cashFlowSettings.$inferSelect;
+export type SelectTaxPayment = typeof taxPayments.$inferSelect;
+export type SelectCleaningServiceDetails = typeof cleaningServiceDetails.$inferSelect;
