@@ -101,6 +101,62 @@ function getUserId(req: any): string {
   throw new Error("No user found in request");
 }
 
+// Helper function to build Airbnb property mapping
+async function buildAirbnbPropertyMapping(userId: string): Promise<Record<string, string>> {
+  // Get existing properties to build dynamic mapping
+  const existingProps = await storage.getProperties(userId);
+  
+  // Build dynamic Airbnb property mapping based on airbnb_name field
+  const dynamicMapping: Record<string, string> = {};
+  for (const prop of existingProps) {
+    if (prop.airbnbName && prop.airbnbName.trim()) {
+      // Use the property's nickname if available, otherwise use the name
+      const targetName = prop.nickname && prop.nickname.trim() ? prop.nickname : prop.name;
+      dynamicMapping[prop.airbnbName] = targetName;
+    }
+  }
+  
+  // Add any manual mappings that might not have airbnb_name set
+  const manualMappings: Record<string, string> = {
+    "1 Suíte + Quintal privativo": "Sevilha G07",
+    "1 Suíte Wonderful Einstein Morumbi": "Sevilha 307", 
+    "2 Quartos + Quintal Privativo": "Málaga M07",
+    "2 quartos, maravilhoso, na Avenida Berrini": "MaxHaus Berrini",
+    "Sesimbra SeaView Studio 502: Sol, Luxo e Mar": "Sesimbra ap 505- Portugal",
+    "Studio Premium - Haddock Lobo.": "Next Haddock Lobo",
+    "Studio Premium - Haddock Lobo": "Next Haddock Lobo",
+    "Studio Premium - Thera by Yoo": "Thera by Yoo",
+    "Wonderful EINSTEIN Morumbi": "IGNORE",
+    "Ganhos não relacionados a anúncios Créditos, resoluções e outros tipos de renda": "OTHER_INCOME"
+  };
+  
+  // Merge manual mappings (they override automatic ones if there's a conflict)
+  return { ...dynamicMapping, ...manualMappings };
+}
+
+// Helper function to build property ID map considering all name fields
+async function buildPropertyIdMap(userId: string): Promise<Map<string, number>> {
+  const existingProps = await storage.getProperties(userId);
+  const propertyMap = new Map<string, number>();
+  
+  for (const prop of existingProps) {
+    // Map by original name
+    propertyMap.set(prop.name, prop.id);
+    
+    // Map by nickname if exists
+    if (prop.nickname && prop.nickname.trim()) {
+      propertyMap.set(prop.nickname, prop.id);
+    }
+    
+    // Map by Airbnb name if exists  
+    if (prop.airbnbName && prop.airbnbName.trim()) {
+      propertyMap.set(prop.airbnbName, prop.id);
+    }
+  }
+  
+  return propertyMap;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
@@ -1352,14 +1408,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const headers = parseCSVLine(lines[0]);
         console.log('🔮 Headers encontrados:', headers);
 
-        // Airbnb property mapping for pending reservations
-        const AIRBNB_PROPERTY_MAPPING: Record<string, string> = {
-          "1 Suíte + Quintal privativo": "Sevilha G07",
-          "1 Suíte Wonderful Einstein Morumbi": "Sevilha 307", 
-          "2 Quartos + Quintal Privativo": "Málaga M07",
-          "2 quartos, maravilhoso, na Avenida Berrini": "MaxHaus 43R",
-          "Studio Premium - Haddock Lobo.": "Next Haddock Lobo ap 33"
-        };
+        // Use the centralized Airbnb property mapping
+        const AIRBNB_PROPERTY_MAPPING = await buildAirbnbPropertyMapping(userId);
 
         const properties = new Set<string>();
         const periods = new Set<string>();
@@ -2462,21 +2512,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const headers = parseCSVLineImport(lines[0]);
       console.log('🔮 Headers:', headers);
 
-      // Airbnb property mapping for future reservations
-      const AIRBNB_PROPERTY_MAPPING: Record<string, string> = {
-        "1 Suíte + Quintal privativo": "Sevilha G07",
-        "1 Suíte Wonderful Einstein Morumbi": "Sevilha 307", 
-        "2 Quartos + Quintal Privativo": "Málaga M07",
-        "2 quartos, maravilhoso, na Avenida Berrini": "MaxHaus 43R",
-        "Studio Premium - Haddock Lobo.": "Next Haddock Lobo ap 33"
-      };
-
-      // Get existing properties to match IDs
-      const existingProperties = await storage.getProperties(userId);
-      const propertyMap = new Map<string, number>();
-      for (const prop of existingProperties) {
-        propertyMap.set(prop.name, prop.id);
-      }
+      // Use the centralized mapping functions
+      const AIRBNB_PROPERTY_MAPPING = await buildAirbnbPropertyMapping(userId);
+      console.log('🔮 Airbnb property mapping:', AIRBNB_PROPERTY_MAPPING);
+      
+      const propertyMap = await buildPropertyIdMap(userId);
+      console.log('🔮 Property ID mapping created:', Array.from(propertyMap.entries()));
 
       let importedCount = 0;
       let totalPlannedRevenue = 0;
