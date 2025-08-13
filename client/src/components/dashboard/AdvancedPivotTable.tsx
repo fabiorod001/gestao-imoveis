@@ -268,8 +268,10 @@ export default function AdvancedPivotTable() {
           transactionAmount = -transactionAmount;
         }
         
-        propertyMap.get(transaction.propertyName)![monthKey] = currentAmount + transactionAmount;
-        columnTotals[monthKey] = (columnTotals[monthKey] || 0) + transactionAmount;
+        // Round to 2 decimal places to avoid floating point errors
+        const newAmount = Math.round((currentAmount + transactionAmount) * 100) / 100;
+        propertyMap.get(transaction.propertyName)![monthKey] = newAmount;
+        columnTotals[monthKey] = Math.round(((columnTotals[monthKey] || 0) + transactionAmount) * 100) / 100;
       }
     });
 
@@ -280,12 +282,14 @@ export default function AdvancedPivotTable() {
         const numAmount = Number(amount) || 0;
         return sum + numAmount;
       }, 0);
-      const monthlyAverage = numberOfMonths > 0 ? total / numberOfMonths : 0;
+      // Round to 2 decimal places to avoid floating point errors
+      const roundedTotal = Math.round(total * 100) / 100;
+      const monthlyAverage = numberOfMonths > 0 ? Math.round((roundedTotal / numberOfMonths) * 100) / 100 : 0;
       
       return {
         propertyName,
         monthlyData,
-        total,
+        total: roundedTotal,
         monthlyAverage
       };
     });
@@ -343,12 +347,15 @@ export default function AdvancedPivotTable() {
       const numAmount = Number(amount) || 0;
       return sum + numAmount;
     }, 0);
+    
+    // Round the grand total to 2 decimal places
+    const roundedGrandTotal = Math.round(grandTotal * 100) / 100;
 
     return {
       rows,
       monthHeaders,
       columnTotals,
-      grandTotal
+      grandTotal: roundedGrandTotal
     };
   };
 
