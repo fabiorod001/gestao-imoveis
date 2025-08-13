@@ -1646,17 +1646,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isFutureImport = req.body.importType === 'future';
       console.log(`🔄 Iniciando importação Airbnb CSV - Tipo: ${isFutureImport ? 'Reservas Futuras' : 'Dados Históricos'}`);
 
-      // Airbnb property name mapping
-      const AIRBNB_PROPERTY_MAPPING: Record<string, string> = {
-        "1 Suíte + Quintal privativo": "Sevilha G07",
-        "1 Suíte Wonderful Einstein Morumbi": "Sevilha 307", 
-        "2 Quartos + Quintal Privativo": "Málaga M07",
-        "2 quartos, maravilhoso, na Avenida Berrini": "MaxHaus 43R",
-        "Sesimbra SeaView Studio 502: Sol, Luxo e Mar": "Sesimbra ap 505- Portugal",
-        "Studio Premium - Haddock Lobo.": "Next Haddock Lobo ap 33",
-        "Wonderful EINSTEIN Morumbi": "IGNORE",
-        "Ganhos não relacionados a anúncios Créditos, resoluções e outros tipos de renda": "OTHER_INCOME"
-      };
+      // Build dynamic Airbnb property name mapping
+      const AIRBNB_PROPERTY_MAPPING = await buildAirbnbPropertyMapping(userId);
+      console.log('📊 Mapeamento dinâmico carregado (linha 1650):', Object.keys(AIRBNB_PROPERTY_MAPPING).length, 'mapeamentos');
 
       const csvContent = req.file.buffer.toString('utf-8').replace(/^\uFEFF/, ''); // Remove BOM
       const lines = csvContent.split('\n').filter((line: string) => line.trim());
@@ -1811,27 +1803,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         console.log(`🗓️  Data processada: ${date} -> ${transactionDate.toISOString().split('T')[0]}`);
         
-        // Find all reservations for this payout date
+        // Find all reservations between this payout and the next one
+        // The Airbnb CSV format shows reservations right after their corresponding payout
         const reservationsForPayout = [];
+        console.log(`🔍 Procurando reservas após linha ${i} para payout de ${date}`);
+        
         for (let j = i + 1; j < lines.length; j++) {
           const nextRow = parseCSVLine(lines[j]);
           
           // Stop if we hit another payout or end of relevant data
           if (nextRow.length >= 3 && nextRow[2] === 'Payout') {
+            console.log(`🛑 Parou na linha ${j}: encontrou próximo payout`);
             break;
           }
           
-          // Check if this is a reservation with the same date
-          if (nextRow.length >= 10 && nextRow[2] === 'Reserva' && nextRow[0] === date) {
-            const anuncio = nextRow[9];
-            const mappedPropertyName = AIRBNB_PROPERTY_MAPPING[anuncio];
+          // Check if this is a reservation (any date) or adjustment
+          if (nextRow.length >= 10 && (nextRow[2] === 'Reserva' || nextRow[2] === 'Ajuste' || nextRow[2] === 'Ajuste de Resolução')) {
+            console.log(`📝 Linha ${j}: Tipo="${nextRow[2]}", Data="${nextRow[0]}", Anúncio="${nextRow[9]}", Valor="${nextRow[13]}"`);
             
-            if (mappedPropertyName && mappedPropertyName !== 'IGNORE' && mappedPropertyName !== 'OTHER_INCOME') {
-              reservationsForPayout.push({
-                propertyName: mappedPropertyName,
-                anuncio: anuncio,
-                value: parseFloat(nextRow[13]) || 0
-              });
+            // For reservations and adjustments, the date in column 0 is the payout date
+            // We should process it if it matches the current payout date
+            if (nextRow[0] === date) {
+              const anuncio = nextRow[9];
+              const mappedPropertyName = AIRBNB_PROPERTY_MAPPING[anuncio];
+              console.log(`   → Anúncio "${anuncio}" mapeado para "${mappedPropertyName}"`);
+              
+              if (mappedPropertyName && mappedPropertyName !== 'IGNORE' && mappedPropertyName !== 'OTHER_INCOME') {
+                const value = parseFloat(nextRow[13]) || 0;
+                // Only add if value is not zero (skip adjustments with no value)
+                if (value !== 0) {
+                  console.log(`   ✓ Adicionando reserva: ${mappedPropertyName} = R$ ${value}`);
+                  reservationsForPayout.push({
+                    propertyName: mappedPropertyName,
+                    anuncio: anuncio,
+                    value: value
+                  });
+                } else {
+                  console.log(`   ✗ Valor zero, ignorando`);
+                }
+              } else {
+                console.log(`   ✗ Propriedade ignorada ou não mapeada`);
+              }
+            } else {
+              console.log(`   ✗ Data não corresponde ao payout (${nextRow[0]} != ${date})`);
             }
           }
         }
@@ -1854,12 +1868,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           console.log(`📊 ${reservation.propertyName}: R$ ${reservation.value.toFixed(2)} (${(proportion * 100).toFixed(1)}%) = R$ ${distributedAmount.toFixed(2)}`);
           
-          // Find property in database
-          const allProperties = await storage.getProperties(userId);
-          const property = allProperties.find(p => p.name === reservation.propertyName);
+          // Find property in database using the property map that considers all name fields
+          const propertyMap = await buildPropertyIdMap(userId);
+          const propertyId = propertyMap.get(reservation.propertyName);
+          
+          if (!propertyId) {
+            errors.push(`Propriedade não encontrada: ${reservation.propertyName}`);
+            console.log(`❌ Propriedade não encontrada no mapa: ${reservation.propertyName}`);
+            continue;
+          }
+          
+          const property = await storage.getProperty(propertyId, userId);
           
           if (!property) {
-            errors.push(`Propriedade não encontrada: ${reservation.propertyName}`);
+            errors.push(`Propriedade ID ${propertyId} não encontrada no banco`);
             continue;
           }
           
