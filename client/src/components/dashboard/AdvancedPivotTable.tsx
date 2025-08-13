@@ -208,7 +208,18 @@ export default function AdvancedPivotTable() {
   // Process data into pivot table structure
   const processPivotData = (): PivotTableData => {
     const propertyMap = new Map<string, { [monthKey: string]: number }>();
-    const monthHeaders = selectedMonths.sort();
+    // Sort months chronologically (MM/YYYY format)
+    const monthHeaders = selectedMonths.sort((a, b) => {
+      const [monthA, yearA] = a.split('/').map(Number);
+      const [monthB, yearB] = b.split('/').map(Number);
+      
+      // First compare years
+      if (yearA !== yearB) {
+        return yearA - yearB;
+      }
+      // Then compare months
+      return monthA - monthB;
+    });
     const columnTotals: { [monthKey: string]: number } = {};
     
     // Initialize column totals
@@ -363,11 +374,22 @@ export default function AdvancedPivotTable() {
 
   // Filter management functions
   const toggleMonth = (monthKey: string) => {
-    setSelectedMonths(prev => 
-      prev.includes(monthKey) 
+    setSelectedMonths(prev => {
+      const newMonths = prev.includes(monthKey) 
         ? prev.filter(m => m !== monthKey)
-        : [...prev, monthKey].sort()
-    );
+        : [...prev, monthKey];
+      
+      // Sort chronologically
+      return newMonths.sort((a, b) => {
+        const [monthA, yearA] = a.split('/').map(Number);
+        const [monthB, yearB] = b.split('/').map(Number);
+        
+        if (yearA !== yearB) {
+          return yearA - yearB;
+        }
+        return monthA - monthB;
+      });
+    });
   };
 
   const toggleProperty = (propertyId: number) => {
