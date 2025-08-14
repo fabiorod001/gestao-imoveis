@@ -227,8 +227,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const propertyId = parseInt(req.params.id);
+      
+      console.log("Received data for update:", JSON.stringify(req.body, null, 2));
+      
       const cleanedData = cleanPropertyData(req.body);
+      
+      console.log("Cleaned data:", JSON.stringify(cleanedData, null, 2));
+      
       const validatedData = insertPropertySchema.partial().parse(cleanedData);
+      
+      console.log("Validated data:", JSON.stringify(validatedData, null, 2));
       
       const property = await storage.updateProperty(propertyId, validatedData, userId);
       
@@ -236,10 +244,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Property not found" });
       }
       
+      console.log("Updated property:", JSON.stringify(property, null, 2));
+      
       res.json(property);
     } catch (error) {
       console.error("Error updating property:", error);
       if (error instanceof z.ZodError) {
+        console.error("Validation errors:", JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to update property" });
