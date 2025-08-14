@@ -5,8 +5,7 @@ import {
   BarChart3, 
   TrendingUp, 
   TrendingDown, 
-  FileText, 
-  RefreshCw,
+  FileText,
   Upload,
   Users,
   Settings,
@@ -22,7 +21,6 @@ const navigation = [
   { name: 'Receitas', href: '/revenues', icon: TrendingUp },
   { name: 'Despesas', href: '/expenses', icon: TrendingDown },
   { name: 'Relatórios', href: '/reports', icon: FileText },
-  { name: 'Conversão', href: '/conversion', icon: RefreshCw },
   { name: 'Importar Dados', href: '/import', icon: Upload },
 ];
 

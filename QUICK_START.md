@@ -36,12 +36,13 @@
 - **Importar dados:** Usar interface em `/import`
 
 ## Funcionalidades Principais
-1. **Dashboard** - Visão geral financeira com valores corretos
-2. **Propriedades** - Gestão de 10 imóveis
-3. **Transações** - 1100+ lançamentos cadastrados
-4. **Importação** - CSV Airbnb (histórico e futuro)
-5. **Relatórios** - Analytics e exportação Excel/PDF
-6. **Tabela Pivot** - Análise com datas cronológicas
+1. **Fluxo de Caixa** - Controle completo de entradas e saídas
+2. **Dashboard** - Visão geral financeira com valores corretos
+3. **Propriedades** - Gestão de 10 imóveis
+4. **Transações** - 1100+ lançamentos cadastrados (apenas em BRL)
+5. **Importação** - CSV Airbnb (histórico e futuro)
+6. **Relatórios** - Analytics e exportação Excel/PDF
+7. **Tabela Pivot** - Análise com datas cronológicas
 
 ## Arquivos Importantes
 - `replit.md` - Arquitetura e preferências do usuário

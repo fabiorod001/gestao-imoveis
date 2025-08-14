@@ -558,52 +558,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });;
 
-  // Currency conversion routes
-  app.get('/api/exchange-rates/:from/:to', async (req, res) => {
-    try {
-      const { from, to } = req.params;
-      
-      // Try to get from database first
-      let rate = await storage.getLatestExchangeRate(from, to);
-      
-      // If not found or older than 1 day, fetch from Banco Central API
-      if (!rate || new Date(rate.date).getTime() < Date.now() - 24 * 60 * 60 * 1000) {
-        try {
-          // Fetch from Banco Central API (if BRL is involved)
-          if (from === 'BRL' || to === 'BRL') {
-            const response = await fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.v2/1/dados?formato=json&dataInicial=${new Date().toISOString().split('T')[0]}&dataFinal=${new Date().toISOString().split('T')[0]}`);
-            
-            if (response.ok) {
-              const data = await response.json();
-              if (data.length > 0) {
-                const exchangeRate = from === 'BRL' ? 1 / parseFloat(data[0].valor) : parseFloat(data[0].valor);
-                
-                rate = await storage.createExchangeRate({
-                  fromCurrency: from,
-                  toCurrency: to,
-                  rate: exchangeRate.toString(),
-                  date: new Date().toISOString().split('T')[0],
-                  source: 'banco_central'
-                });
-              }
-            }
-          }
-        } catch (apiError) {
-          console.error("Error fetching exchange rate from API:", apiError);
-        }
-      }
-      
-      if (!rate) {
-        return res.status(404).json({ message: "Exchange rate not found" });
-      }
-      
-      res.json(rate);
-    } catch (error) {
-      console.error("Error fetching exchange rate:", error);
-      res.status(500).json({ message: "Failed to fetch exchange rate" });
-    }
-  });
-
   // Historical Data Import Route
   app.post('/api/import/historical', isAuthenticated, upload.single('excel'), async (req: any, res) => {
     try {

@@ -40,7 +40,7 @@ The application features a monorepo structure separating client and server code.
 ### Key Features & Design Patterns
 - **Authentication System**: Replit OAuth integration with OpenID Connect and a platform-independent simple session-based authentication for local development.
 - **Property Management**: CRUD operations for rental properties, categorization, status tracking, and rental type classification. Includes detailed address management and additional identification fields.
-- **Financial Transaction System**: Revenue and expense tracking, multi-currency support, and categorized transaction types. Features comprehensive composite expense management with property-specific configurable categories and inline editing.
+- **Financial Transaction System**: Revenue and expense tracking with categorized transaction types. Features comprehensive composite expense management with property-specific configurable categories and inline editing. All transactions in BRL (Brazilian Real) only.
 - **Analytics & Reporting**: Financial summaries, monthly data aggregation, interactive charts, and pivot tables with advanced filtering, column resizing, sorting, and Excel/PDF export capabilities. Includes IPCA integration for margin calculations.
 - **Data Import Systems**: Robust parsers for Excel (.xlsx) historical data and Airbnb CSV reports (both historical payouts and future reservations) with intelligent data cleaning and proportional distribution.
 - **Tax Management System**: Comprehensive tax calculation and proportional distribution based on gross revenue, including PIS, COFINS, CSLL, IRPJ.

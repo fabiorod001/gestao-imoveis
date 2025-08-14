@@ -134,17 +134,6 @@ export const expenseComponents = pgTable("expense_components", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Currency exchange rates
-export const exchangeRates = pgTable("exchange_rates", {
-  id: serial("id").primaryKey(),
-  fromCurrency: varchar("from_currency").notNull(),
-  toCurrency: varchar("to_currency").notNull(),
-  rate: decimal("rate", { precision: 10, scale: 6 }).notNull(),
-  date: date("date").notNull(),
-  source: varchar("source").default("banco_central"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
 // Cash flow settings
 export const cashFlowSettings = pgTable("cash_flow_settings", {
   id: serial("id").primaryKey(),
@@ -230,9 +219,6 @@ export type Property = typeof properties.$inferSelect;
 export type InsertTransaction = typeof transactions.$inferInsert;
 export type Transaction = typeof transactions.$inferSelect;
 
-export type InsertExchangeRate = typeof exchangeRates.$inferInsert;
-export type ExchangeRate = typeof exchangeRates.$inferSelect;
-
 export type InsertTaxPayment = typeof taxPayments.$inferInsert;
 export type TaxPayment = typeof taxPayments.$inferSelect;
 
@@ -249,11 +235,6 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({
   userId: true,
   createdAt: true,
   updatedAt: true,
-});
-
-export const insertExchangeRateSchema = createInsertSchema(exchangeRates).omit({
-  id: true,
-  createdAt: true,
 });
 
 export const insertTaxPaymentSchema = createInsertSchema(taxPayments).omit({

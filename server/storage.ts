@@ -2,7 +2,6 @@ import {
   users,
   properties,
   transactions,
-  exchangeRates,
   expenseComponents,
   type User,
   type UpsertUser,
@@ -10,8 +9,6 @@ import {
   type InsertProperty,
   type Transaction,
   type InsertTransaction,
-  type ExchangeRate,
-  type InsertExchangeRate,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sum, sql, gte, lte, or, inArray, exists } from "drizzle-orm";
@@ -54,9 +51,7 @@ export interface IStorage {
     count: number;
   }[]>;
 
-  // Exchange rate operations
-  getLatestExchangeRate(fromCurrency: string, toCurrency: string): Promise<ExchangeRate | undefined>;
-  createExchangeRate(rate: InsertExchangeRate): Promise<ExchangeRate>;
+
 
   // Pivot table data
   getPivotTableData(userId: string, month: number, year: number): Promise<{
@@ -340,24 +335,7 @@ export class DatabaseStorage implements IStorage {
       .groupBy(properties.status);
   }
 
-  // Exchange rate operations
-  async getLatestExchangeRate(fromCurrency: string, toCurrency: string): Promise<ExchangeRate | undefined> {
-    const [rate] = await db
-      .select()
-      .from(exchangeRates)
-      .where(and(
-        eq(exchangeRates.fromCurrency, fromCurrency),
-        eq(exchangeRates.toCurrency, toCurrency)
-      ))
-      .orderBy(desc(exchangeRates.date))
-      .limit(1);
-    return rate;
-  }
 
-  async createExchangeRate(rate: InsertExchangeRate): Promise<ExchangeRate> {
-    const [newRate] = await db.insert(exchangeRates).values(rate).returning();
-    return newRate;
-  }
   async getPivotTableData(userId: string, month: number, year: number): Promise<{
     propertyName: string;
     revenue: number;

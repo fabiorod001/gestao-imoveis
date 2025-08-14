@@ -14,7 +14,6 @@ import EditProperty from "@/pages/edit-property";
 import Revenues from "@/pages/revenues";
 import Expenses from "@/pages/expenses";
 import Reports from "@/pages/reports";
-import Conversion from "@/pages/conversion";
 import Import from "@/pages/import";
 import Taxes from "@/pages/taxes";
 import ManagementExpenses from "@/pages/expenses/management";
@@ -59,7 +58,6 @@ function Router() {
           <Route path="/revenues" component={Revenues} />
           <Route path="/expenses" component={Expenses} />
           <Route path="/reports" component={Reports} />
-          <Route path="/conversion" component={Conversion} />
           <Route path="/import" component={Import} />
           <Route path="/taxes" component={Taxes} />
           <Route path="/expenses/management" component={ManagementExpenses} />
