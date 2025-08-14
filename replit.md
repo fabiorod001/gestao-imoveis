@@ -29,6 +29,7 @@ The application features a monorepo structure separating client and server code.
 - **Database**: PostgreSQL with Drizzle ORM
 - **Authentication**: Replit Auth with OpenID Connect (for Replit environment) or Simple Session-based Auth (for local/portable environment)
 - **Session Management**: Express sessions with PostgreSQL storage
+- **Environment Variables**: dotenv-safe for robust environment variable loading with validation against .env.example
 
 ### Database Architecture
 - **ORM**: Drizzle ORM with code-first schema definition

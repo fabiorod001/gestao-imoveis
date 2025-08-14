@@ -1,7 +1,13 @@
-import "dotenv/config";
+import dotenv from "dotenv-safe";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+
+// Load and validate environment variables
+dotenv.config({
+  allowEmptyValues: true,
+  example: "./.env.example",
+});
 
 const app = express();
 // Increase payload limits for large CSV files (histórico Airbnb)
