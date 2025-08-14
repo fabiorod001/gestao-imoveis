@@ -325,6 +325,8 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
       renovationAndDecoration: parseBrazilianCurrency(data.renovationAndDecoration || ''),
       otherInitialValues: parseBrazilianCurrency(data.otherInitialValues || ''),
       marketValue: parseBrazilianCurrency(data.marketValue || ''),
+      // Convert area field - it might have comma as decimal separator
+      area: data.area ? data.area.replace(',', '.') : '',
       // Date fields remain as strings
       purchaseDate: data.purchaseDate || undefined,
       marketValueDate: data.marketValueDate || undefined,
