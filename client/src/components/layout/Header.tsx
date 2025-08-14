@@ -1,8 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Menu, DollarSign } from "lucide-react";
-import { useState } from "react";
+import { Menu } from "lucide-react";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -10,7 +8,6 @@ interface HeaderProps {
 
 export default function Header({ onMenuClick }: HeaderProps) {
   const { user } = useAuth();
-  const [currency, setCurrency] = useState("BRL");
 
   const handleLogout = () => {
     window.location.href = '/api/logout';
@@ -42,21 +39,6 @@ export default function Header({ onMenuClick }: HeaderProps) {
         </div>
         
         <div className="flex items-center space-x-4">
-          {/* Currency Selector */}
-          <div className="flex items-center space-x-2 bg-gray-50 rounded-lg px-3 py-2">
-            <DollarSign className="h-4 w-4 text-gray-400" />
-            <Select value={currency} onValueChange={setCurrency}>
-              <SelectTrigger className="border-none bg-transparent focus:ring-0 w-20">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="BRL">BRL</SelectItem>
-                <SelectItem value="USD">USD</SelectItem>
-                <SelectItem value="EUR">EUR</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
           {/* User Profile */}
           <div className="flex items-center space-x-3">
             <div className="text-right">
