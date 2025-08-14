@@ -30,6 +30,33 @@ const parseBrazilianCurrency = (value: string): string => {
   return isNaN(numValue) ? '' : numValue.toString();
 };
 
+// Format currency input as user types
+const formatCurrencyInput = (value: string): string => {
+  if (!value) return '';
+  
+  // Remove all non-numeric characters except comma
+  const cleaned = value.replace(/[^\d,]/g, '');
+  
+  // Split by comma to handle decimal part
+  const parts = cleaned.split(',');
+  
+  // Format the integer part with thousand separators
+  if (parts[0]) {
+    // Remove leading zeros
+    parts[0] = parts[0].replace(/^0+/, '') || '0';
+    // Add thousand separators
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  
+  // Limit decimal places to 2
+  if (parts.length > 1) {
+    parts[1] = parts[1].substring(0, 2);
+    return parts.join(',');
+  }
+  
+  return parts[0] || '';
+};
+
 // IPCA correction utilities
 const getCurrentPreviousMonth = (): { month: number, year: number, formatted: string } => {
   const now = new Date();
@@ -573,7 +600,27 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
                   <FormItem>
                     <FormLabel>Valor de Compra</FormLabel>
                     <FormControl>
-                      <Input placeholder="850.000,00" {...field} value={field.value || ""} />
+                      <Input 
+                        placeholder="850.000,00" 
+                        {...field} 
+                        value={field.value || ""}
+                        onChange={(e) => {
+                          const formatted = formatCurrencyInput(e.target.value);
+                          field.onChange(formatted);
+                        }}
+                        onBlur={(e) => {
+                          // Add decimal places on blur if not present
+                          const value = e.target.value;
+                          if (value && !value.includes(',')) {
+                            field.onChange(value + ',00');
+                          } else if (value && value.endsWith(',')) {
+                            field.onChange(value + '00');
+                          } else if (value && value.split(',')[1]?.length === 1) {
+                            field.onChange(value + '0');
+                          }
+                          field.onBlur();
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -587,7 +634,26 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
                   <FormItem>
                     <FormLabel>Valor de Comissão</FormLabel>
                     <FormControl>
-                      <Input placeholder="25.500,00" {...field} value={field.value || ""} />
+                      <Input 
+                        placeholder="25.500,00" 
+                        {...field} 
+                        value={field.value || ""}
+                        onChange={(e) => {
+                          const formatted = formatCurrencyInput(e.target.value);
+                          field.onChange(formatted);
+                        }}
+                        onBlur={(e) => {
+                          const value = e.target.value;
+                          if (value && !value.includes(',')) {
+                            field.onChange(value + ',00');
+                          } else if (value && value.endsWith(',')) {
+                            field.onChange(value + '00');
+                          } else if (value && value.split(',')[1]?.length === 1) {
+                            field.onChange(value + '0');
+                          }
+                          field.onBlur();
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -601,7 +667,26 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
                   <FormItem>
                     <FormLabel>Taxas e Registros</FormLabel>
                     <FormControl>
-                      <Input placeholder="15.000,00" {...field} value={field.value || ""} />
+                      <Input 
+                        placeholder="15.000,00" 
+                        {...field} 
+                        value={field.value || ""}
+                        onChange={(e) => {
+                          const formatted = formatCurrencyInput(e.target.value);
+                          field.onChange(formatted);
+                        }}
+                        onBlur={(e) => {
+                          const value = e.target.value;
+                          if (value && !value.includes(',')) {
+                            field.onChange(value + ',00');
+                          } else if (value && value.endsWith(',')) {
+                            field.onChange(value + '00');
+                          } else if (value && value.split(',')[1]?.length === 1) {
+                            field.onChange(value + '0');
+                          }
+                          field.onBlur();
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -643,7 +728,22 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
                             <Input 
                               placeholder="220.000,00" 
                               {...field} 
-                              value={field.value || ""} 
+                              value={field.value || ""}
+                              onChange={(e) => {
+                                const formatted = formatCurrencyInput(e.target.value);
+                                field.onChange(formatted);
+                              }}
+                              onBlur={(e) => {
+                                const value = e.target.value;
+                                if (value && !value.includes(',')) {
+                                  field.onChange(value + ',00');
+                                } else if (value && value.endsWith(',')) {
+                                  field.onChange(value + '00');
+                                } else if (value && value.split(',')[1]?.length === 1) {
+                                  field.onChange(value + '0');
+                                }
+                                field.onBlur();
+                              }}
                             />
                           </FormControl>
                           <FormMessage />
@@ -661,7 +761,26 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
                   <FormItem>
                     <FormLabel>Reformas e Decoração</FormLabel>
                     <FormControl>
-                      <Input placeholder="50.000,00" {...field} value={field.value || ""} />
+                      <Input 
+                        placeholder="50.000,00" 
+                        {...field} 
+                        value={field.value || ""}
+                        onChange={(e) => {
+                          const formatted = formatCurrencyInput(e.target.value);
+                          field.onChange(formatted);
+                        }}
+                        onBlur={(e) => {
+                          const value = e.target.value;
+                          if (value && !value.includes(',')) {
+                            field.onChange(value + ',00');
+                          } else if (value && value.endsWith(',')) {
+                            field.onChange(value + '00');
+                          } else if (value && value.split(',')[1]?.length === 1) {
+                            field.onChange(value + '0');
+                          }
+                          field.onBlur();
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -675,7 +794,26 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
                   <FormItem>
                     <FormLabel>Outros Valores Iniciais</FormLabel>
                     <FormControl>
-                      <Input placeholder="5.000,00" {...field} value={field.value || ""} />
+                      <Input 
+                        placeholder="5.000,00" 
+                        {...field} 
+                        value={field.value || ""}
+                        onChange={(e) => {
+                          const formatted = formatCurrencyInput(e.target.value);
+                          field.onChange(formatted);
+                        }}
+                        onBlur={(e) => {
+                          const value = e.target.value;
+                          if (value && !value.includes(',')) {
+                            field.onChange(value + ',00');
+                          } else if (value && value.endsWith(',')) {
+                            field.onChange(value + '00');
+                          } else if (value && value.split(',')[1]?.length === 1) {
+                            field.onChange(value + '0');
+                          }
+                          field.onBlur();
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -754,7 +892,26 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
                   <FormItem>
                     <FormLabel>Valor de Mercado</FormLabel>
                     <FormControl>
-                      <Input placeholder="1.200.000,00" {...field} value={field.value || ""} />
+                      <Input 
+                        placeholder="1.200.000,00" 
+                        {...field} 
+                        value={field.value || ""}
+                        onChange={(e) => {
+                          const formatted = formatCurrencyInput(e.target.value);
+                          field.onChange(formatted);
+                        }}
+                        onBlur={(e) => {
+                          const value = e.target.value;
+                          if (value && !value.includes(',')) {
+                            field.onChange(value + ',00');
+                          } else if (value && value.endsWith(',')) {
+                            field.onChange(value + '00');
+                          } else if (value && value.split(',')[1]?.length === 1) {
+                            field.onChange(value + '0');
+                          }
+                          field.onBlur();
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -13,6 +13,42 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { z } from "zod";
 import AddressForm from "./AddressForm";
 
+// Format currency input as user types
+const formatCurrencyInput = (value: string): string => {
+  if (!value) return '';
+  
+  // Remove all non-numeric characters except comma
+  const cleaned = value.replace(/[^\d,]/g, '');
+  
+  // Split by comma to handle decimal part
+  const parts = cleaned.split(',');
+  
+  // Format the integer part with thousand separators
+  if (parts[0]) {
+    // Remove leading zeros
+    parts[0] = parts[0].replace(/^0+/, '') || '0';
+    // Add thousand separators
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  
+  // Limit decimal places to 2
+  if (parts.length > 1) {
+    parts[1] = parts[1].substring(0, 2);
+    return parts.join(',');
+  }
+  
+  return parts[0] || '';
+};
+
+// Parse Brazilian currency format to database format
+const parseBrazilianCurrency = (value: string): string => {
+  if (!value) return '';
+  // Remove todos os pontos e substitui vírgula por ponto para conversão
+  const cleaned = value.replace(/\./g, '').replace(',', '.');
+  const numValue = parseFloat(cleaned);
+  return isNaN(numValue) ? '' : numValue.toString();
+};
+
 const formSchema = insertPropertySchema.extend({
   purchasePrice: z.string().optional(),
   commissionValue: z.string().optional(),
@@ -81,12 +117,12 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
     mutationFn: async (data: FormData) => {
       const payload = {
         ...data,
-        purchasePrice: data.purchasePrice ? data.purchasePrice : null,
-        commissionValue: data.commissionValue ? data.commissionValue : null,
-        taxesAndRegistration: data.taxesAndRegistration ? data.taxesAndRegistration : null,
-        renovationAndDecoration: data.renovationAndDecoration ? data.renovationAndDecoration : null,
-        otherInitialValues: data.otherInitialValues ? data.otherInitialValues : null,
-        area: data.area ? data.area : null,
+        purchasePrice: data.purchasePrice ? parseBrazilianCurrency(data.purchasePrice) : null,
+        commissionValue: data.commissionValue ? parseBrazilianCurrency(data.commissionValue) : null,
+        taxesAndRegistration: data.taxesAndRegistration ? parseBrazilianCurrency(data.taxesAndRegistration) : null,
+        renovationAndDecoration: data.renovationAndDecoration ? parseBrazilianCurrency(data.renovationAndDecoration) : null,
+        otherInitialValues: data.otherInitialValues ? parseBrazilianCurrency(data.otherInitialValues) : null,
+        area: data.area ? data.area.replace(',', '.') : null,
         bedrooms: data.bedrooms ? parseInt(data.bedrooms) : null,
         bathrooms: data.bathrooms ? parseInt(data.bathrooms) : null,
       };
@@ -251,7 +287,26 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
                 <FormItem>
                   <FormLabel>Valor de Compra</FormLabel>
                   <FormControl>
-                    <Input type="number" step="0.01" placeholder="0,00" {...field} />
+                    <Input 
+                      placeholder="850.000,00" 
+                      {...field} 
+                      value={field.value || ""}
+                      onChange={(e) => {
+                        const formatted = formatCurrencyInput(e.target.value);
+                        field.onChange(formatted);
+                      }}
+                      onBlur={(e) => {
+                        const value = e.target.value;
+                        if (value && !value.includes(',')) {
+                          field.onChange(value + ',00');
+                        } else if (value && value.endsWith(',')) {
+                          field.onChange(value + '00');
+                        } else if (value && value.split(',')[1]?.length === 1) {
+                          field.onChange(value + '0');
+                        }
+                        field.onBlur();
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -265,7 +320,26 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
                 <FormItem>
                   <FormLabel>Valor de Comissão</FormLabel>
                   <FormControl>
-                    <Input type="number" step="0.01" placeholder="0,00" {...field} />
+                    <Input 
+                      placeholder="25.500,00" 
+                      {...field} 
+                      value={field.value || ""}
+                      onChange={(e) => {
+                        const formatted = formatCurrencyInput(e.target.value);
+                        field.onChange(formatted);
+                      }}
+                      onBlur={(e) => {
+                        const value = e.target.value;
+                        if (value && !value.includes(',')) {
+                          field.onChange(value + ',00');
+                        } else if (value && value.endsWith(',')) {
+                          field.onChange(value + '00');
+                        } else if (value && value.split(',')[1]?.length === 1) {
+                          field.onChange(value + '0');
+                        }
+                        field.onBlur();
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -279,7 +353,26 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
                 <FormItem>
                   <FormLabel>Taxas e Registros</FormLabel>
                   <FormControl>
-                    <Input type="number" step="0.01" placeholder="0,00" {...field} />
+                    <Input 
+                      placeholder="15.000,00" 
+                      {...field} 
+                      value={field.value || ""}
+                      onChange={(e) => {
+                        const formatted = formatCurrencyInput(e.target.value);
+                        field.onChange(formatted);
+                      }}
+                      onBlur={(e) => {
+                        const value = e.target.value;
+                        if (value && !value.includes(',')) {
+                          field.onChange(value + ',00');
+                        } else if (value && value.endsWith(',')) {
+                          field.onChange(value + '00');
+                        } else if (value && value.split(',')[1]?.length === 1) {
+                          field.onChange(value + '0');
+                        }
+                        field.onBlur();
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -293,7 +386,26 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
                 <FormItem>
                   <FormLabel>Reformas e Decoração</FormLabel>
                   <FormControl>
-                    <Input type="number" step="0.01" placeholder="0,00" {...field} />
+                    <Input 
+                      placeholder="50.000,00" 
+                      {...field} 
+                      value={field.value || ""}
+                      onChange={(e) => {
+                        const formatted = formatCurrencyInput(e.target.value);
+                        field.onChange(formatted);
+                      }}
+                      onBlur={(e) => {
+                        const value = e.target.value;
+                        if (value && !value.includes(',')) {
+                          field.onChange(value + ',00');
+                        } else if (value && value.endsWith(',')) {
+                          field.onChange(value + '00');
+                        } else if (value && value.split(',')[1]?.length === 1) {
+                          field.onChange(value + '0');
+                        }
+                        field.onBlur();
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -307,7 +419,26 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
                 <FormItem>
                   <FormLabel>Outros Valores Iniciais</FormLabel>
                   <FormControl>
-                    <Input type="number" step="0.01" placeholder="0,00" {...field} />
+                    <Input 
+                      placeholder="5.000,00" 
+                      {...field} 
+                      value={field.value || ""}
+                      onChange={(e) => {
+                        const formatted = formatCurrencyInput(e.target.value);
+                        field.onChange(formatted);
+                      }}
+                      onBlur={(e) => {
+                        const value = e.target.value;
+                        if (value && !value.includes(',')) {
+                          field.onChange(value + ',00');
+                        } else if (value && value.endsWith(',')) {
+                          field.onChange(value + '00');
+                        } else if (value && value.split(',')[1]?.length === 1) {
+                          field.onChange(value + '0');
+                        }
+                        field.onBlur();
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
