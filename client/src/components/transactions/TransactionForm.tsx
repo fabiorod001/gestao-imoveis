@@ -118,6 +118,8 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
 
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
+      console.log('Form data before processing:', data);
+      
       const payload = {
         ...data,
         amount: parseFloat(data.amount), // Convertendo string para número
@@ -137,6 +139,8 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
         pixKey: data.pixKey || null,
       };
       
+      console.log('Payload to be sent:', payload);
+      
       await apiRequest('POST', '/api/transactions', payload);
     },
     onSuccess: () => {
@@ -151,6 +155,8 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
       onSuccess?.();
     },
     onError: (error) => {
+      console.error('Error details:', error);
+      
       if (isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
@@ -162,9 +168,11 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
         }, 500);
         return;
       }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
       toast({
         title: "Erro",
-        description: `Erro ao registrar ${type === 'revenue' ? 'receita' : 'despesa'}`,
+        description: `Erro ao registrar ${type === 'revenue' ? 'receita' : 'despesa'}: ${errorMessage}`,
         variant: "destructive",
       });
     },
