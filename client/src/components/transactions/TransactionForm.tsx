@@ -122,7 +122,7 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
       
       const payload = {
         ...data,
-        amount: parseFloat(data.amount), // Convertendo string para número
+        amount: data.amount, // Mantendo como string, que é o esperado pelo schema
         propertyId: data.propertyId ? parseInt(data.propertyId) : null,
         description: data.description || null,
         accommodationStartDate: data.accommodationStartDate || null,
