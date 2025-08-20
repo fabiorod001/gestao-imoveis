@@ -389,7 +389,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/transactions', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
+      
+      // Log the incoming data for debugging
+      console.log("Received transaction data:", req.body);
+      
+      // Parse and validate the data
       const validatedData = insertTransactionSchema.parse(req.body);
+      
+      console.log("Validated data:", validatedData);
       
       const transaction = await storage.createTransaction({
         ...validatedData,
@@ -399,7 +406,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(transaction);
     } catch (error) {
       console.error("Error creating transaction:", error);
+      console.error("Request body was:", req.body);
+      
       if (error instanceof z.ZodError) {
+        console.error("Validation errors:", error.errors);
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to create transaction" });
