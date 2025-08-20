@@ -141,7 +141,7 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
       
       console.log('Payload to be sent:', payload);
       
-      await apiRequest('POST', '/api/transactions', payload);
+      await apiRequest('/api/transactions', 'POST', payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
