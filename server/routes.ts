@@ -1796,11 +1796,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 const value = parseFloat(nextRow[13]) || 0;
                 // Only add if value is not zero (skip adjustments with no value)
                 if (value !== 0) {
-                  console.log(`   ✓ Adicionando reserva: ${mappedPropertyName} = R$ ${value}`);
+                  // Capturar datas de hospedagem (colunas 5 e 6)
+                  const startDateStr = nextRow[5]; // Data de início
+                  const endDateStr = nextRow[6];   // Data de término
+                  
+                  console.log(`   ✓ Adicionando reserva: ${mappedPropertyName} = R$ ${value} (${startDateStr} a ${endDateStr})`);
                   reservationsForPayout.push({
                     propertyName: mappedPropertyName,
                     anuncio: anuncio,
-                    value: value
+                    value: value,
+                    accommodationStartDate: startDateStr,
+                    accommodationEndDate: endDateStr
                   });
                 } else {
                   console.log(`   ✗ Valor zero, ignorando`);
@@ -1849,15 +1855,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
           
+          // Parse accommodation dates if available
+          let accommodationStartDate = null;
+          let accommodationEndDate = null;
+          
+          if (reservation.accommodationStartDate && reservation.accommodationEndDate) {
+            // Parse dates in MM/DD/YYYY format
+            const [startMonth, startDay, startYear] = reservation.accommodationStartDate.split('/');
+            const [endMonth, endDay, endYear] = reservation.accommodationEndDate.split('/');
+            
+            if (startMonth && startDay && startYear) {
+              const startDate = new Date(parseInt(startYear), parseInt(startMonth) - 1, parseInt(startDay));
+              accommodationStartDate = startDate.toISOString().split('T')[0];
+            }
+            
+            if (endMonth && endDay && endYear) {
+              const endDate = new Date(parseInt(endYear), parseInt(endMonth) - 1, parseInt(endDay));
+              accommodationEndDate = endDate.toISOString().split('T')[0];
+            }
+          }
+          
           // Create transaction for this property
           const transactionData = {
             userId,
             propertyId: property.id,
             type: 'revenue' as const,
-            category: 'rent',
+            category: 'airbnb', // Changed from 'rent' to 'airbnb'
             description: `Airbnb - Payout (${reservation.anuncio})`,
             amount: distributedAmount.toString(),
             date: transactionDate.toISOString().split('T')[0],
+            accommodationStartDate,
+            accommodationEndDate,
             currency: 'BRL'
           };
           
