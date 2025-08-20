@@ -13,17 +13,31 @@ import { insertTransactionSchema, type Property } from "@shared/schema";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { z } from "zod";
 
-const formSchema = insertTransactionSchema.extend({
+// Schema específico para o formulário com validações personalizadas
+const formSchema = z.object({
+  type: z.enum(['revenue', 'expense']),
+  category: z.string().min(1, "Categoria é obrigatória"),
+  description: z.string().optional(),
   amount: z.string().min(1, "Valor é obrigatório"),
+  currency: z.literal('BRL'),
+  date: z.string().min(1, "Data é obrigatória"),
   propertyId: z.string().optional(),
-  description: z.string().optional(), // Agora opcional
+  // Campos para receitas
   accommodationStartDate: z.string().optional(),
   accommodationEndDate: z.string().optional(),
+  payerName: z.string().optional(),
+  // Campos para despesas
   supplier: z.string().optional(),
   cpfCnpj: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email("Email inválido").optional().or(z.literal("")),
+  // Campos comuns
+  paymentMethod: z.string().optional(),
   pixKey: z.string().optional(),
+  isRecurring: z.boolean(),
+  recurringPeriod: z.string().optional(),
+  recurringEndDate: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -106,7 +120,7 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
     mutationFn: async (data: FormData) => {
       const payload = {
         ...data,
-        amount: data.amount,
+        amount: parseFloat(data.amount), // Convertendo string para número
         propertyId: data.propertyId ? parseInt(data.propertyId) : null,
         description: data.description || null,
         accommodationStartDate: data.accommodationStartDate || null,
@@ -116,6 +130,11 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
         payerName: data.payerName || null,
         paymentMethod: data.paymentMethod || null,
         notes: data.notes || null,
+        supplier: data.supplier || null,
+        cpfCnpj: data.cpfCnpj || null,
+        phone: data.phone || null,
+        email: data.email || null,
+        pixKey: data.pixKey || null,
       };
       
       await apiRequest('POST', '/api/transactions', payload);
