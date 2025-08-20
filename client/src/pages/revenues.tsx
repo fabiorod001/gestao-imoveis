@@ -5,13 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, TrendingUp } from "lucide-react";
 import TransactionForm from "@/components/transactions/TransactionForm";
-import type { Transaction } from "@shared/schema";
+import type { Transaction, Property } from "@shared/schema";
 
 export default function Revenues() {
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   const { data: transactions = [], isLoading } = useQuery<Transaction[]>({
     queryKey: ['/api/transactions'],
+  });
+
+  const { data: properties = [] } = useQuery<Property[]>({
+    queryKey: ['/api/properties'],
   });
 
   const revenues = transactions.filter(t => t.type === 'revenue');
@@ -81,27 +85,57 @@ export default function Revenues() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data Recebimento</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoria</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Imóvel</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Período Hospedagem</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {revenues.map((revenue) => (
-                    <tr key={revenue.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(revenue.date).toLocaleDateString('pt-BR')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {revenue.category}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{revenue.description}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600 text-right">
-                        R$ {Number(revenue.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))}
+                  {revenues.map((revenue) => {
+                    const property = properties.find(p => p.id === revenue.propertyId);
+                    const categoryLabels = {
+                      'airbnb': 'Airbnb',
+                      'booking': 'Booking',
+                      'recorrente': 'Recorrente',
+                      'outros': 'Outros',
+                      // Legacy categories
+                      'rent': 'Aluguel',
+                      'deposit': 'Depósito',
+                      'late_fee': 'Taxa de Atraso',
+                      'other': 'Outros'
+                    };
+                    
+                    return (
+                      <tr key={revenue.id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {new Date(revenue.date).toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {categoryLabels[revenue.category] || revenue.category}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {property?.name || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {revenue.accommodationStartDate && revenue.accommodationEndDate ? (
+                            <>
+                              {new Date(revenue.accommodationStartDate).toLocaleDateString('pt-BR')} - {' '}
+                              {new Date(revenue.accommodationEndDate).toLocaleDateString('pt-BR')}
+                            </>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          {revenue.description || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600 text-right">
+                          R$ {Number(revenue.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -16,6 +16,9 @@ import { z } from "zod";
 const formSchema = insertTransactionSchema.extend({
   amount: z.string().min(1, "Valor é obrigatório"),
   propertyId: z.string().optional(),
+  description: z.string().optional(), // Agora opcional
+  accommodationStartDate: z.string().optional(),
+  accommodationEndDate: z.string().optional(),
   supplier: z.string().optional(),
   cpfCnpj: z.string().optional(),
   phone: z.string().optional(),
@@ -31,10 +34,10 @@ interface TransactionFormProps {
 }
 
 const revenueCategories = [
-  { value: 'rent', label: 'Aluguel' },
-  { value: 'deposit', label: 'Depósito' },
-  { value: 'late_fee', label: 'Taxa de Atraso' },
-  { value: 'other', label: 'Outros' },
+  { value: 'airbnb', label: 'Airbnb' },
+  { value: 'booking', label: 'Booking' },
+  { value: 'recorrente', label: 'Recorrente' },
+  { value: 'outros', label: 'Outros' },
 ];
 
 const expenseCategories = [
@@ -79,6 +82,8 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
       amount: '',
       currency: 'BRL',
       date: new Date().toISOString().split('T')[0],
+      accommodationStartDate: '',
+      accommodationEndDate: '',
       isRecurring: false,
       recurringPeriod: '',
       recurringEndDate: '',
@@ -103,6 +108,9 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
         ...data,
         amount: data.amount,
         propertyId: data.propertyId ? parseInt(data.propertyId) : null,
+        description: data.description || null,
+        accommodationStartDate: data.accommodationStartDate || null,
+        accommodationEndDate: data.accommodationEndDate || null,
         recurringPeriod: data.isRecurring ? data.recurringPeriod : null,
         recurringEndDate: data.isRecurring && data.recurringEndDate ? data.recurringEndDate : null,
         payerName: data.payerName || null,
@@ -207,10 +215,12 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
           name="description"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Descrição</FormLabel>
+              <FormLabel>Descrição (Opcional)</FormLabel>
               <FormControl>
-                <Input 
-                  placeholder={`Descreva a ${type === 'revenue' ? 'receita' : 'despesa'}...`}
+                <Textarea 
+                  placeholder={`Descreva a ${type === 'revenue' ? 'receita' : 'despesa'} (opcional)...`}
+                  className="resize-none"
+                  rows={2}
                   {...field} 
                 />
               </FormControl>
@@ -244,7 +254,7 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
             name="date"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Data</FormLabel>
+                <FormLabel>Data de Recebimento {type === 'revenue' && '(Payout)'}</FormLabel>
                 <FormControl>
                   <Input type="date" {...field} />
                 </FormControl>
@@ -252,6 +262,39 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
               </FormItem>
             )}
           />
+
+          {/* Campos de data de hospedagem apenas para receitas */}
+          {type === 'revenue' && (
+            <>
+              <FormField
+                control={form.control}
+                name="accommodationStartDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Início da Hospedagem</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="accommodationEndDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fim da Hospedagem</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </>
+          )}
 
           {/* Campos de Fornecedor */}
           {type === 'expense' && (

@@ -99,11 +99,14 @@ export const transactions: any = pgTable("transactions", {
   userId: varchar("user_id").notNull().references(() => users.id),
   propertyId: integer("property_id").references(() => properties.id),
   type: varchar("type").notNull(), // revenue, expense
-  category: varchar("category").notNull(), // rent, maintenance, utilities, taxes, etc.
-  description: text("description").notNull(),
+  category: varchar("category").notNull(), // Airbnb, Booking, Recorrente, Outros (for revenues)
+  description: text("description"), // Now optional
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
   currency: varchar("currency").default("BRL"),
-  date: date("date").notNull(),
+  date: date("date").notNull(), // Data de recebimento (payout) - usado no fluxo de caixa
+  // New fields for accommodation dates
+  accommodationStartDate: date("accommodation_start_date"), // Data início da hospedagem
+  accommodationEndDate: date("accommodation_end_date"), // Data fim da hospedagem
   isRecurring: boolean("is_recurring").default(false),
   recurringPeriod: varchar("recurring_period"), // monthly, quarterly, yearly
   recurringEndDate: date("recurring_end_date"),
