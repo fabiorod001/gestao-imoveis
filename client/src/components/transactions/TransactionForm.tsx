@@ -229,13 +229,14 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
           )}
         />
 
+        {/* Linha 1: Valor, Data de Recebimento e Método de Pagamento */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <FormField
             control={form.control}
             name="amount"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Valor (R$)</FormLabel>
+                <FormLabel>Valor da Hospedagem (R$)</FormLabel>
                 <FormControl>
                   <Input 
                     type="number" 
@@ -263,55 +264,81 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
             )}
           />
 
-          {/* Campos de data de hospedagem apenas para receitas */}
-          {type === 'revenue' && (
-            <>
-              <FormField
-                control={form.control}
-                name="accommodationStartDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Início da Hospedagem</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="paymentMethod"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Método de Pagamento</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {paymentMethods.map(method => (
+                      <SelectItem key={method.value} value={method.value}>
+                        {method.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
-              <FormField
-                control={form.control}
-                name="accommodationEndDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fim da Hospedagem</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </>
-          )}
+        {/* Linha 2: Datas de hospedagem lado a lado (apenas para receitas) */}
+        {type === 'revenue' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="accommodationStartDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Início da Hospedagem</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          {/* Campos de Fornecedor */}
-          {type === 'expense' && (
-            <>
-              <FormField
-                control={form.control}
-                name="supplier"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fornecedor</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Nome do fornecedor" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <FormField
+              control={form.control}
+              name="accommodationEndDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Fim da Hospedagem</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
+
+        {/* Campos de Fornecedor para despesas */}
+        {type === 'expense' && (
+          <div className="space-y-4">
+            <FormField
+              control={form.control}
+              name="supplier"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Fornecedor</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Nome do fornecedor" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField
@@ -343,64 +370,38 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
                 />
               </div>
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="fornecedor@exemplo.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </>
-          )}
-
-          <FormField
-            control={form.control}
-            name="paymentMethod"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Método de Pagamento</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {paymentMethods.map(method => (
-                      <SelectItem key={method.value} value={method.value}>
-                        {method.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Campo condicional da Chave PIX */}
-          {form.watch('paymentMethod') === 'pix' && (
             <FormField
               control={form.control}
-              name="pixKey"
+              name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Chave PIX</FormLabel>
+                  <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="Digite a chave PIX do fornecedor" {...field} />
+                    <Input type="email" placeholder="fornecedor@exemplo.com" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Campo condicional da Chave PIX */}
+        {form.watch('paymentMethod') === 'pix' && (
+          <FormField
+            control={form.control}
+            name="pixKey"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Chave PIX</FormLabel>
+                <FormControl>
+                  <Input placeholder="Digite a chave PIX" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         {type === 'revenue' && (
           <FormField

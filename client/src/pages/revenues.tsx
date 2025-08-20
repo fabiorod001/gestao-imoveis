@@ -44,7 +44,7 @@ export default function Revenues() {
               Nova Receita
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Registrar Nova Receita</DialogTitle>
             </DialogHeader>
@@ -96,7 +96,7 @@ export default function Revenues() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {revenues.map((revenue) => {
                     const property = properties.find(p => p.id === revenue.propertyId);
-                    const categoryLabels = {
+                    const categoryLabels: Record<string, string> = {
                       'airbnb': 'Airbnb',
                       'booking': 'Booking',
                       'recorrente': 'Recorrente',
