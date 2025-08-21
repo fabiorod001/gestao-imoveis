@@ -3002,7 +3002,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parentId = mainTransaction[0].id;
       
       // Create child transactions for each property
-      const transactions = [];
+      const childTransactions = [];
       for (const item of distribution) {
         const childTransaction = await db.insert(transactions).values({
           userId,
@@ -3018,13 +3018,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           notes: `Parte do pagamento consolidado de ${format(new Date(paymentDate), 'dd/MM/yyyy')}`
         }).returning();
         
-        transactions.push(childTransaction[0]);
+        childTransactions.push(childTransaction[0]);
       }
       
       res.json({ 
         success: true, 
         mainTransaction: mainTransaction[0],
-        transactions,
+        transactions: childTransactions,
         message: 'Despesa de gestão cadastrada com sucesso!' 
       });
     } catch (error) {
