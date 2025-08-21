@@ -1,66 +1,136 @@
-# 🚀 QUICK START - LEIA PRIMEIRO
+# QUICK START - RentManager
 
-## Estado Atual do Sistema (13/08/2025 - 11:07)
-✅ Sistema 100% funcional com 10 propriedades cadastradas
-✅ Todos os dados históricos Airbnb importados (2014-2024)
-✅ Reservas futuras importadas (Agosto-Novembro 2025)
-✅ Valores de agosto/2025 100% corretos (R$ 32.429,73)
-✅ Última sincronização GitHub: 13/08/2025 10:57 (commit c667498)
+## 🎯 O que é este projeto?
+Sistema completo de gestão financeira para imóveis de aluguel com:
+- Controle de múltiplas propriedades
+- Importação automática de dados do Airbnb
+- Gestão de receitas e despesas  
+- Relatórios e análises financeiras
+- Cálculo de impostos e distribuição proporcional
+- Rastreamento de datas de hospedagem para cálculo de diárias
 
-## 🔍 CONTINUE DO - ÚLTIMA SESSÃO
-**Última atividade realizada:** Correção da ordenação cronológica das datas na tabela pivot
-- ✅ Datas agora em ordem cronológica (set/2023 → ago/2025)
-- ✅ Não mais agrupadas por mês (jan/2024, jan/2025...)
-- ✅ Sistema estável e pronto para uso
+## 🚀 Como acessar?
+1. **URL Local**: http://localhost:5000
+2. **Login**: Automático no ambiente de desenvolvimento
+3. **Navegação**: Menu lateral com todas as funcionalidades
 
-**Próximos passos sugeridos:**
-- Sistema completo e funcional
-- Pode adicionar novas funcionalidades conforme necessidade
-- Importar novos dados do Airbnb quando disponíveis
+## 📊 Principais Funcionalidades
 
-## 💰 VALORES CORRETOS AGOSTO/2025
-- **Actual**: R$ 8.598,76
-- **Pending**: R$ 23.830,97
-- **TOTAL**: R$ 32.429,73
+### 1. Gestão de Propriedades
+- Cadastro completo com endereço e identificadores
+- Status (ativo/inativo) e tipo de aluguel
+- Visualização individual com análise financeira detalhada
+- Cálculo de taxa de ocupação e valor médio de diária
 
-## Estrutura Principal
+### 2. Receitas
+- **Categorias**: Airbnb, Booking, Recorrente, Outros
+- **Datas duplas**: Data de pagamento (fluxo de caixa) + Datas de hospedagem (ocupação)
+- Importação automática de CSVs do Airbnb com captura de datas de acomodação
+- Distribuição proporcional entre propriedades
+- Tracking de reservas futuras (pending)
+
+### 3. Despesas
+- Sistema de categorias configuráveis por propriedade
+- Despesas compostas com múltiplos itens
+- Edição inline direta na tabela
+- Distribuição entre propriedades
+
+### 4. Importação Airbnb
+- **Histórico**: Relatórios de pagamentos realizados
+- **Futuro**: Reservas pendentes
+- **Datas de hospedagem**: Captura automática das colunas 5 (início) e 6 (fim)
+- Detecção automática de período
+- Substituição inteligente (preserva Booking, Recorrente e outras fontes)
+- Preserva receitas Airbnb fora do período do relatório
+
+### 5. Relatórios
+- Dashboard com visão geral
+- Análise por propriedade individual
+- Fluxo de caixa detalhado
+- Cálculo de ocupação e diária média (quando há datas de hospedagem)
+- Exportação para Excel/PDF
+
+## 🔧 Configurações Importantes
+
+### Mapeamento Airbnb
+Arquivo: `server/routes.ts` (linha ~1450)
+```javascript
+const AIRBNB_PROPERTY_MAPPING = {
+  '1 Suíte Wonderful Einstein Morumbi': 'Living Einstein 708',
+  '2 quartos, maravilhoso, na Avenida Berrini': 'Living Berrini 429',
+  // ... adicione seus mapeamentos aqui
+}
 ```
-/client         → Frontend React + TypeScript
-/server         → Backend Express + PostgreSQL
-/shared         → Schemas compartilhados (Drizzle ORM)
-```
 
-## Comandos Essenciais
-- **Iniciar sistema:** `npm run dev` (já configurado no workflow)
-- **Push GitHub:** `./PUSH_COMPLETO.sh` ou `./push-checkpoint-dates.sh`
-- **Importar dados:** Usar interface em `/import`
+### Categorias de Receitas
+- **Airbnb**: Importação automática com datas de hospedagem
+- **Booking**: Outras plataformas de reserva
+- **Recorrente**: Aluguéis mensais fixos
+- **Outros**: Receitas diversas
 
-## Funcionalidades Principais
-1. **Fluxo de Caixa** - Controle completo de entradas e saídas
-2. **Dashboard** - Visão geral financeira com valores corretos
-3. **Propriedades** - Gestão de 10 imóveis
-4. **Transações** - 1100+ lançamentos cadastrados (apenas em BRL)
-5. **Importação** - CSV Airbnb (histórico e futuro)
-6. **Relatórios** - Analytics e exportação Excel/PDF
-7. **Tabela Pivot** - Análise com datas cronológicas
+### Categorias de Despesas
+- Configuráveis por propriedade
+- Editáveis diretamente na interface
+- Suportam reordenação drag-and-drop
 
-## Arquivos Importantes
-- `replit.md` - Arquitetura e preferências do usuário
-- `client/src/components/dashboard/AdvancedPivotTable.tsx` - Tabela pivot corrigida
-- `server/routes.ts` - API endpoints
-- `shared/schema.ts` - Modelos de dados
+## 📝 Fluxo de Trabalho Recomendado
 
-## Correções Aplicadas Recentemente
-- ✅ Floating-point precision em JavaScript (Math.round)
-- ✅ Ordenação cronológica de datas (comparação ano/mês)
-- ✅ Valores de agosto 100% batendo com oficial
-- ✅ Dashboard totalmente funcional
+1. **Cadastre suas propriedades** com nomes exatos
+2. **Configure o mapeamento** Airbnb no código
+3. **Importe dados históricos** via Excel ou CSV
+4. **Importe relatórios Airbnb** mensalmente (sobrescreve apenas período do relatório)
+5. **Registre despesas** conforme ocorrem
+6. **Analise relatórios** para tomada de decisão
 
-## Para Continuar Trabalhando
-1. Sistema já está rodando no workflow "Start application"
-2. Acesse qualquer página diretamente
-3. Todos os dados estão no PostgreSQL
-4. Não precisa reinstalar nada
+## ⚠️ Pontos de Atenção
 
----
-**NOTA PARA O AGENTE:** Este arquivo contém o contexto essencial. Leia primeiro antes de analisar outros arquivos. Sistema está 100% funcional e estável.
+- **Moeda**: Sistema trabalha exclusivamente em BRL
+- **Datas**: Formato brasileiro (DD/MM/AAAA)
+- **Importação Airbnb**: 
+  - Remove apenas transações Airbnb do período do relatório
+  - Preserva Booking e outras fontes sempre
+  - Preserva Airbnb de outros períodos
+- **Datas de Hospedagem**: Essenciais para cálculo de ocupação e diária média
+- **Backup**: Sistema cria checkpoints automáticos
+
+## 🆘 Problemas Comuns
+
+### Importação não funciona?
+- Verifique o mapeamento de propriedades
+- Confirme formato do CSV (deve ser o relatório oficial Airbnb)
+- Certifique que o CSV tem as colunas de data de início e fim
+
+### Propriedade não aparece?
+- Certifique que está ativa
+- Verifique o nome exato no mapeamento
+
+### Valores incorretos?
+- Reimporte o relatório atualizado
+- Sistema preserva dados de outras fontes automaticamente
+
+### Datas de hospedagem não aparecem?
+- Reimporte o CSV do Airbnb
+- Novas importações capturam automaticamente as datas das colunas 5 e 6
+
+## 💡 Dicas Rápidas
+
+- Use **Ctrl+Click** para editar valores inline
+- **Arraste** para reordenar categorias
+- **Reimporte** CSVs do Airbnb para atualizar com datas de hospedagem
+- **Checkpoints** salvam automaticamente
+- **Categorias de receita**: Use "Airbnb" para importações, "Booking" para outras plataformas
+
+## 📌 Status Atual (20/08/2025)
+- ✅ Sistema 100% funcional
+- ✅ Importação com detecção de período e datas de hospedagem
+- ✅ Preservação inteligente (só sobrescreve Airbnb do período)
+- ✅ Interface responsiva e intuitiva
+- ✅ Cálculo de ocupação e diária média
+- ✅ Categorias específicas: Airbnb, Booking, Recorrente, Outros
+- ✅ Formulário de receitas com datas de acomodação funcionando
+
+## 🔄 Última Atualização
+- Adicionado suporte completo para datas de hospedagem
+- Importação do Airbnb captura automaticamente colunas 5 e 6
+- Categoria 'rent' atualizada para 'airbnb' nas importações
+- Sistema preserva dados de outras fontes (Booking, etc)
