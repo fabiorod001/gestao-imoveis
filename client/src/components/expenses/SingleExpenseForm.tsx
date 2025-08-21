@@ -97,10 +97,7 @@ export default function SingleExpenseForm({
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest('/api/transactions', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      return apiRequest('/api/transactions', 'POST', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
@@ -129,7 +126,7 @@ export default function SingleExpenseForm({
       type: 'expense',
       category: config.category,
       description: data.description,
-      amount: parseFloat(data.amount),
+      amount: data.amount, // Keep as string, backend expects string
       date: data.date,
       currency: 'BRL',
       supplier: includeSupplier ? data.supplier : undefined,
