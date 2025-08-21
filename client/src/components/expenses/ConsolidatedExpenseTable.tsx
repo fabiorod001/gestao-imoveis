@@ -320,27 +320,37 @@ export default function ConsolidatedExpenseTable({
                         // Find the transactions for this date
                         const transactionsForDate = dateGroup.transactions;
                         if (transactionsForDate && transactionsForDate.length > 0) {
-                          // For management expenses, we need to find the parent transaction
-                          const parentTransaction = transactionsForDate.find((t: any) => 
-                            !t.metadata?.parentTransactionId && 
-                            dateGroup.transactions.some((child: any) => child.metadata?.parentTransactionId === t.id)
-                          );
+                          // Group transactions by parentTransactionId to find parent-child relationships
+                          const parentIds = new Set<number>();
+                          const childrenByParent = new Map<number, any[]>();
                           
-                          console.log('Parent transaction found:', parentTransaction);
+                          transactionsForDate.forEach((t: any) => {
+                            if (t.parentTransactionId) {
+                              parentIds.add(t.parentTransactionId);
+                              if (!childrenByParent.has(t.parentTransactionId)) {
+                                childrenByParent.set(t.parentTransactionId, []);
+                              }
+                              childrenByParent.get(t.parentTransactionId)!.push(t);
+                            }
+                          });
                           
-                          if (parentTransaction) {
-                            // Navigate to edit management expense with this transaction data
-                            const searchParams = new URLSearchParams();
-                            searchParams.set('editId', parentTransaction.id.toString());
-                            searchParams.set('date', parentTransaction.date);
-                            searchParams.set('amount', Math.abs(parentTransaction.amount).toString());
+                          console.log('Parent IDs found:', Array.from(parentIds));
+                          console.log('Children by parent:', childrenByParent);
+                          
+                          // If we have parent IDs, use the first one for editing
+                          if (parentIds.size > 0) {
+                            const parentId = Array.from(parentIds)[0];
+                            const childTransactions = childrenByParent.get(parentId) || [];
                             
-                            // Find all child transactions to get property distribution
-                            const childTransactions = dateGroup.transactions.filter((t: any) => 
-                              t.metadata?.parentTransactionId === parentTransaction.id
+                            // Calculate total from children
+                            const totalAmount = childTransactions.reduce((sum: number, child: any) => 
+                              sum + Math.abs(parseFloat(child.amount)), 0
                             );
                             
-                            console.log('Child transactions:', childTransactions);
+                            const searchParams = new URLSearchParams();
+                            searchParams.set('editId', parentId.toString());
+                            searchParams.set('date', childTransactions[0].date);
+                            searchParams.set('amount', totalAmount.toString());
                             
                             if (childTransactions.length > 0) {
                               const propertyIds = childTransactions.map((t: any) => t.propertyId).join(',');
@@ -348,27 +358,10 @@ export default function ConsolidatedExpenseTable({
                             }
                             
                             const url = `/expenses/management?${searchParams.toString()}`;
-                            console.log('Navigating to:', url);
+                            console.log('Navigating to edit parent transaction:', url);
                             setLocation(url);
                           } else {
-                            console.log('No parent transaction found, checking for standalone transactions');
-                            // If no parent, might be a standalone transaction
-                            const standaloneTransaction = transactionsForDate.find((t: any) => 
-                              !t.metadata?.parentTransactionId
-                            );
-                            
-                            if (standaloneTransaction) {
-                              console.log('Standalone transaction found:', standaloneTransaction);
-                              const searchParams = new URLSearchParams();
-                              searchParams.set('editId', standaloneTransaction.id.toString());
-                              searchParams.set('date', standaloneTransaction.date);
-                              searchParams.set('amount', Math.abs(standaloneTransaction.amount).toString());
-                              searchParams.set('properties', standaloneTransaction.propertyId.toString());
-                              
-                              const url = `/expenses/management?${searchParams.toString()}`;
-                              console.log('Navigating to:', url);
-                              setLocation(url);
-                            }
+                            console.log('No parent-child relationships found, this might be a different type of expense');
                           }
                         } else {
                           console.log('No transactions found for this date');
