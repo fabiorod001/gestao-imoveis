@@ -133,7 +133,7 @@ export default function RecurringExpenseForm({
         type: 'expense',
         category: config.category,
         description,
-        amount,
+        amount: amount.toString(), // Convert to string
         date: installmentDate.toISOString().split('T')[0],
         currency: 'BRL',
         metadata: {

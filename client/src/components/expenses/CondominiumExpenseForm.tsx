@@ -116,7 +116,7 @@ export default function CondominiumExpenseForm({
       type: 'expense',
       category: 'condominium',
       description: `${data.description} - ${selectedProperty?.name}`,
-      amount: totalAmount,
+      amount: totalAmount.toString(), // Convert to string
       date: data.date,
       currency: 'BRL',
       // Salvar detalhamento dos campos no metadata

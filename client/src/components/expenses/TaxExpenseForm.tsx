@@ -163,7 +163,7 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
       category: 'taxes',
       subcategory: data.taxType.toLowerCase(),
       description: `${data.taxType} ${data.competencyMonth} - ${calc.propertyName} (${calc.percentage.toFixed(2)}%)`,
-      amount: calc.allocatedAmount,
+      amount: calc.allocatedAmount.toString(), // Convert to string
       date: data.paymentDate,
       currency: 'BRL',
       metadata: {
