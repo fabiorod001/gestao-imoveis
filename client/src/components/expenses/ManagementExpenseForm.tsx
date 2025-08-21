@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -48,7 +48,16 @@ interface ManagementPreview {
   amount: number;
 }
 
-export default function ManagementExpenseForm() {
+interface ManagementExpenseFormProps {
+  editData?: {
+    editId: number;
+    date: string;
+    amount: string;
+    properties: number[];
+  };
+}
+
+export default function ManagementExpenseForm({ editData }: ManagementExpenseFormProps) {
   const { toast } = useToast();
   const [preview, setPreview] = useState<ManagementPreview[]>([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -73,6 +82,23 @@ export default function ManagementExpenseForm() {
       propertyPercentages: {}
     }
   });
+
+  // Load edit data when provided
+  React.useEffect(() => {
+    if (editData && properties.length > 0) {
+      form.setValue('totalAmount', editData.amount);
+      form.setValue('paymentDate', new Date(editData.date));
+      form.setValue('selectedProperties', editData.properties);
+      
+      // Calculate equal distribution for properties
+      const equalPercent = 100 / editData.properties.length;
+      const percentages: Record<string, string> = {};
+      editData.properties.forEach(propId => {
+        percentages[propId.toString()] = equalPercent.toFixed(2).replace('.', ',');
+      });
+      form.setValue('propertyPercentages', percentages);
+    }
+  }, [editData, properties, form]);
 
   const selectedProperties = form.watch("selectedProperties");
   const propertyPercentages = form.watch("propertyPercentages");
@@ -165,6 +191,19 @@ export default function ManagementExpenseForm() {
         percentage: item.percentage
       }));
 
+      // If we're editing, use PUT method
+      if (editData) {
+        return apiRequest(`/api/expenses/management/${editData.editId}`, 'PUT', {
+          totalAmount,
+          paymentDate: data.paymentDate.toISOString(),
+          description: data.description || `Gestão (${data.supplier})`,
+          supplier: data.supplier,
+          cpfCnpj: data.cpfCnpj,
+          distribution
+        });
+      }
+      
+      // Otherwise, create new
       return apiRequest('/api/expenses/management', 'POST', {
         totalAmount,
         paymentDate: data.paymentDate.toISOString(),
@@ -178,22 +217,29 @@ export default function ManagementExpenseForm() {
       queryClient.invalidateQueries({ queryKey: ['/api/expenses/dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
       toast({
-        title: "Despesa de gestão cadastrada",
-        description: "A despesa foi distribuída entre as propriedades selecionadas.",
+        title: editData ? "Despesa de gestão atualizada" : "Despesa de gestão cadastrada",
+        description: editData 
+          ? "A despesa foi atualizada com sucesso."
+          : "A despesa foi distribuída entre as propriedades selecionadas.",
       });
       form.reset();
       setShowPreview(false);
       setPreview([]);
       // Trigger table update
       setDataUpdateTrigger(prev => prev + 1);
+      
+      // If editing, redirect back to expenses page
+      if (editData) {
+        window.location.href = '/expenses';
+      }
     },
     onError: (error) => {
       toast({
-        title: "Erro ao cadastrar despesa",
-        description: "Não foi possível cadastrar a despesa. Tente novamente.",
+        title: editData ? "Erro ao atualizar despesa" : "Erro ao cadastrar despesa",
+        description: "Não foi possível processar a despesa. Tente novamente.",
         variant: "destructive",
       });
-      console.error('Error creating management expense:', error);
+      console.error('Error processing management expense:', error);
     },
   });
 
@@ -211,7 +257,7 @@ export default function ManagementExpenseForm() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Cadastrar Despesa de Gestão</CardTitle>
+              <CardTitle>{editData ? 'Editar Despesa de Gestão' : 'Cadastrar Despesa de Gestão'}</CardTitle>
               <CardDescription>
                 Insira o valor total e selecione as propriedades para rateio proporcional ou com percentuais customizados
               </CardDescription>

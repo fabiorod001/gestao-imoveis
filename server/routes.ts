@@ -2969,7 +2969,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Management expense endpoint
+  // Management expense endpoint - Update existing expense
+  app.put('/api/expenses/management/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const transactionId = parseInt(req.params.id);
+      const { totalAmount, paymentDate, description, supplier, cpfCnpj, distribution } = req.body;
+      
+      if (!totalAmount || !paymentDate || !supplier || !distribution || distribution.length === 0) {
+        return res.status(400).json({ message: "Dados obrigatórios faltando" });
+      }
+      
+      // Parse total amount
+      const parsedTotalAmount = typeof totalAmount === 'string' 
+        ? parseFloat(totalAmount.replace(/\./g, '').replace(',', '.'))
+        : totalAmount;
+
+      // Delete existing child transactions
+      await db.delete(transactions)
+        .where(eq(transactions.parentTransactionId, transactionId));
+      
+      // Update the main transaction
+      await db.update(transactions)
+        .set({
+          amount: parsedTotalAmount,
+          description: description || `Gestão - ${supplier}`,
+          date: new Date(paymentDate),
+          supplier,
+          cpfCnpj: cpfCnpj || null,
+          notes: `Pagamento consolidado de gestão para ${distribution.length} propriedades`
+        })
+        .where(and(
+          eq(transactions.id, transactionId),
+          eq(transactions.userId, userId)
+        ));
+      
+      // Create new child transactions for each property
+      const childTransactions = [];
+      for (const item of distribution) {
+        const childTransaction = await db.insert(transactions).values({
+          userId,
+          propertyId: item.propertyId,
+          type: 'expense',
+          category: 'management',
+          amount: item.amount,
+          description: `${description || `Gestão - ${supplier}`} - ${item.percentage.toFixed(1)}%`,
+          date: new Date(paymentDate),
+          supplier,
+          cpfCnpj: cpfCnpj || null,
+          parentTransactionId: transactionId,
+          notes: `Parte do pagamento consolidado de ${format(new Date(paymentDate), 'dd/MM/yyyy')}`
+        }).returning();
+        
+        childTransactions.push(childTransaction[0]);
+      }
+      
+      res.json({ 
+        success: true, 
+        transactions: childTransactions,
+        message: 'Despesa de gestão atualizada com sucesso!' 
+      });
+    } catch (error) {
+      console.error("Error updating management expense:", error);
+      res.status(500).json({ message: "Failed to update management expense" });
+    }
+  });
+
+  // Management expense endpoint - Create new expense
   app.post('/api/expenses/management', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);

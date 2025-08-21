@@ -137,7 +137,7 @@ export default function ConsolidatedExpenseTable({
   });
 
   // For management expenses, group by unique payment (parent transactions only)
-  let dateGroups: Record<string, { date: string; total: number; transactionCount: number }> = {};
+  let dateGroups: Record<string, { date: string; total: number; transactionCount: number; transactions: Transaction[] }> = {};
   
   if (category === 'management') {
     // Group management expenses by date and parent transaction
@@ -174,17 +174,50 @@ export default function ConsolidatedExpenseTable({
       }
     });
     
-    // Group by date
-    parentTransactions.forEach((value) => {
-      if (!dateGroups[value.date]) {
-        dateGroups[value.date] = {
-          date: value.date,
+    // Group by date and collect transactions
+    filteredTransactions.forEach(transaction => {
+      const dateKey = format(new Date(transaction.date), 'dd/MM');
+      
+      if (!dateGroups[dateKey]) {
+        dateGroups[dateKey] = {
+          date: dateKey,
           total: 0,
-          transactionCount: 0
+          transactionCount: 0,
+          transactions: []
         };
       }
-      dateGroups[value.date].total += value.amount;
-      dateGroups[value.date].transactionCount += 1;
+      
+      // Add transaction to the group
+      dateGroups[dateKey].transactions.push(transaction);
+    });
+    
+    // Calculate totals based on parent transactions
+    Object.values(dateGroups).forEach(group => {
+      const parentTotal = group.transactions
+        .filter(t => !t.metadata?.parentTransactionId)
+        .filter(t => {
+          // Check if this is a parent transaction (has children)
+          const hasChildren = group.transactions.some(child => 
+            child.metadata?.parentTransactionId === t.id
+          );
+          return hasChildren || !t.metadata?.parentTransactionId;
+        })
+        .reduce((sum, t) => {
+          // If it has children, sum the children, otherwise use the transaction amount
+          const hasChildren = group.transactions.some(child => 
+            child.metadata?.parentTransactionId === t.id
+          );
+          if (hasChildren) {
+            const childrenTotal = group.transactions
+              .filter(child => child.metadata?.parentTransactionId === t.id)
+              .reduce((childSum, child) => childSum + Math.abs(child.amount), 0);
+            return sum + childrenTotal;
+          }
+          return sum + Math.abs(t.amount);
+        }, 0);
+      
+      group.total = parentTotal;
+      group.transactionCount = group.transactions.filter(t => !t.metadata?.parentTransactionId).length;
     });
   } else {
     // For other categories, simple grouping by date
@@ -194,13 +227,15 @@ export default function ConsolidatedExpenseTable({
         acc[dateKey] = {
           date: dateKey,
           total: 0,
-          transactionCount: 0
+          transactionCount: 0,
+          transactions: []
         };
       }
       acc[dateKey].total += Math.abs(transaction.amount);
       acc[dateKey].transactionCount += 1;
+      acc[dateKey].transactions.push(transaction);
       return acc;
-    }, {} as Record<string, { date: string; total: number; transactionCount: number }>);
+    }, {} as Record<string, { date: string; total: number; transactionCount: number; transactions: Transaction[] }>);
   }
 
   // Sort by date
@@ -276,9 +311,42 @@ export default function ConsolidatedExpenseTable({
                 <TableCell />
                 {sortedDates.map((dateGroup) => (
                   <TableCell key={dateGroup.date} className="text-center">
-                    <span className="text-red-600 font-medium">
+                    <button
+                      className="text-red-600 font-medium hover:text-red-800 hover:underline transition-colors"
+                      onClick={() => {
+                        // Find the transactions for this date
+                        const transactionsForDate = dateGroup.transactions;
+                        if (transactionsForDate && transactionsForDate.length > 0) {
+                          // For management expenses, we need to find the parent transaction
+                          const parentTransaction = transactionsForDate.find(t => 
+                            t.parentTransactionId === null && 
+                            dateGroup.transactions.some(child => child.parentTransactionId === t.id)
+                          );
+                          
+                          if (parentTransaction) {
+                            // Navigate to edit management expense with this transaction data
+                            const searchParams = new URLSearchParams();
+                            searchParams.set('editId', parentTransaction.id.toString());
+                            searchParams.set('date', parentTransaction.date);
+                            searchParams.set('amount', Math.abs(parentTransaction.amount).toString());
+                            
+                            // Find all child transactions to get property distribution
+                            const childTransactions = dateGroup.transactions.filter(t => 
+                              t.parentTransactionId === parentTransaction.id
+                            );
+                            
+                            if (childTransactions.length > 0) {
+                              const propertyIds = childTransactions.map(t => t.propertyId).join(',');
+                              searchParams.set('properties', propertyIds);
+                            }
+                            
+                            setLocation(`/expenses/management?${searchParams.toString()}`);
+                          }
+                        }
+                      }}
+                    >
                       {dateGroup.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
+                    </button>
                   </TableCell>
                 ))}
                 <TableCell className="text-center">
