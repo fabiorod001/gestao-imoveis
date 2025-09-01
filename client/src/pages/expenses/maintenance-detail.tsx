@@ -13,6 +13,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import TransactionDetailModal from '@/components/expenses/TransactionDetailModal';
+import EditTransactionDialog from '@/components/EditTransactionDialog';
 import type { Property } from '@/types';
 
 const MAINTENANCE_SUBCATEGORIES = [
@@ -61,6 +62,10 @@ export default function MaintenanceDetailPage() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailModalTitle, setDetailModalTitle] = useState('');
   const [detailModalTransactions, setDetailModalTransactions] = useState<Transaction[]>([]);
+  
+  // Edit transaction state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<any>(null);
 
   const { data: allTransactions = [], isLoading: isLoadingTransactions } = useQuery<Transaction[]>({
     queryKey: ['/api/expenses/dashboard'],
@@ -274,12 +279,23 @@ export default function MaintenanceDetailPage() {
   };
 
   const handleCellClick = (propertyName: string, monthKey: string) => {
-    const cellKey = `${propertyName}-${monthKey}`;
     const monthData = maintenanceDetailData.rows.find(r => r.propertyName === propertyName)?.monthlyData[monthKey];
     
     if (monthData && monthData.transactions.length > 0) {
-      setEditingCell(cellKey);
-      setEditValue(monthData.amount.toString());
+      // Get the first transaction for editing
+      const transaction = monthData.transactions[0];
+      
+      // Convert to the format expected by EditTransactionDialog
+      const formattedTransaction = {
+        ...transaction,
+        type: 'expense' as const,
+        supplier: transaction.supplier || '',
+        cpfCnpj: transaction.cpfCnpj || '',
+      };
+      
+      console.log('Opening edit dialog for maintenance transaction:', formattedTransaction);
+      setEditingTransaction(formattedTransaction);
+      setEditDialogOpen(true);
     }
   };
 
@@ -755,6 +771,13 @@ export default function MaintenanceDetailPage() {
         title={detailModalTitle}
         transactions={detailModalTransactions}
         showPropertyColumn={false}
+      />
+      
+      {/* Edit Transaction Dialog */}
+      <EditTransactionDialog
+        transaction={editingTransaction}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
       />
     </div>
   );
