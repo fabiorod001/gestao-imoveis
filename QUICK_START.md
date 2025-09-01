@@ -1,4 +1,5 @@
 # QUICK START - RentManager
+**Última atualização: 01/02/2025**
 
 ## 🎯 O que é este projeto?
 Sistema completo de gestão financeira para imóveis de aluguel com:
@@ -32,7 +33,9 @@ Sistema completo de gestão financeira para imóveis de aluguel com:
 ### 3. Despesas
 - Sistema de categorias configuráveis por propriedade
 - Despesas compostas com múltiplos itens
-- Edição inline direta na tabela
+- **Editor Universal**: Formulário completo para editar qualquer transação
+- Clique em valores para abrir formulário de edição
+- Botão "Eliminar entrada" para excluir registros
 - Distribuição entre propriedades
 
 ### 4. Importação Airbnb
@@ -120,7 +123,7 @@ const AIRBNB_PROPERTY_MAPPING = {
 - **Checkpoints** salvam automaticamente
 - **Categorias de receita**: Use "Airbnb" para importações, "Booking" para outras plataformas
 
-## 📌 Status Atual (20/08/2025)
+## 📌 Status Atual (01/02/2025)
 - ✅ Sistema 100% funcional
 - ✅ Importação com detecção de período e datas de hospedagem
 - ✅ Preservação inteligente (só sobrescreve Airbnb do período)
@@ -128,9 +131,13 @@ const AIRBNB_PROPERTY_MAPPING = {
 - ✅ Cálculo de ocupação e diária média
 - ✅ Categorias específicas: Airbnb, Booking, Recorrente, Outros
 - ✅ Formulário de receitas com datas de acomodação funcionando
+- ✅ **Editor Universal de Transações** implementado
 
-## 🔄 Última Atualização
-- Adicionado suporte completo para datas de hospedagem
-- Importação do Airbnb captura automaticamente colunas 5 e 6
-- Categoria 'rent' atualizada para 'airbnb' nas importações
-- Sistema preserva dados de outras fontes (Booking, etc)
+## 🔄 Última Atualização (01/02/2025)
+- **NOVO**: Editor Universal de Transações (`EditTransactionDialog`)
+  - Formulário unificado para editar qualquer transação no sistema
+  - Clique em valores de despesas/receitas abre formulário completo
+  - Todos os campos editáveis: propriedade, valor, data, categoria, descrição, fornecedor, CPF/CNPJ
+  - Botão "Eliminar entrada" para excluir registros
+  - Funciona em todas as páginas: Despesas, Manutenção, Receitas
+  - Salvamento sem duplicação de dados
