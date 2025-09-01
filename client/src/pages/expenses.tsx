@@ -886,11 +886,20 @@ export default function ExpensesPage() {
                         <td className="p-2">{EXPENSE_CATEGORY_LABELS[expense.category] || expense.category}</td>
                         <td className="p-2">{expense.description}</td>
                         <td className="p-2">{expense.supplier || '-'}</td>
-                        <td className="text-right p-2 text-red-600">
-                          -{Math.abs(expense.amount).toLocaleString('pt-BR', { 
-                            style: 'currency', 
-                            currency: 'BRL' 
-                          })}
+                        <td className="text-right p-2">
+                          <button
+                            className="text-red-600 hover:text-red-800 hover:underline transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTransaction(expense);
+                              setIsEditDialogOpen(true);
+                            }}
+                          >
+                            -{Math.abs(expense.amount).toLocaleString('pt-BR', { 
+                              style: 'currency', 
+                              currency: 'BRL' 
+                            })}
+                          </button>
                         </td>
                         <td className="text-center p-2">
                           <Button

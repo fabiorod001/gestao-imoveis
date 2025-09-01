@@ -36,8 +36,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const formSchema = z.object({
   propertyId: z.number(),
@@ -71,6 +81,7 @@ export default function EditExpenseDialog({
 }: EditExpenseDialogProps) {
   const { toast } = useToast();
   const [dateOpen, setDateOpen] = React.useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
 
   // Fetch properties
   const { data: properties = [] } = useQuery({
@@ -153,6 +164,31 @@ export default function EditExpenseDialog({
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest(`/api/transactions/${transaction.id}`, 'DELETE');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/expenses/dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
+      toast({
+        title: "Despesa excluída",
+        description: "A despesa foi excluída com sucesso.",
+      });
+      setShowDeleteDialog(false);
+      onOpenChange(false);
+      form.reset();
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao excluir",
+        description: "Não foi possível excluir a despesa. Tente novamente.",
+        variant: "destructive",
+      });
+      console.error('Error deleting expense:', error);
+    },
+  });
+
   const onSubmit = (data: FormData) => {
     updateMutation.mutate(data);
   };
@@ -171,7 +207,8 @@ export default function EditExpenseDialog({
   ];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Editar Despesa</DialogTitle>
@@ -338,21 +375,53 @@ export default function EditExpenseDialog({
               )}
             />
 
-            <div className="flex justify-end gap-2 pt-4">
+            <div className="flex justify-between pt-4">
               <Button
                 type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
+                variant="destructive"
+                onClick={() => setShowDeleteDialog(true)}
               >
-                Cancelar
+                <Trash2 className="h-4 w-4 mr-2" />
+                Excluir
               </Button>
-              <Button type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? "Salvando..." : "Salvar"}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={updateMutation.isPending}>
+                  {updateMutation.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
             </div>
           </form>
         </Form>
       </DialogContent>
     </Dialog>
+
+    {/* Delete Confirmation Dialog */}
+    <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+          <AlertDialogDescription>
+            Tem certeza que deseja excluir esta despesa? Esta ação não pode ser desfeita.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => deleteMutation.mutate()}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
