@@ -888,9 +888,10 @@ export default function ExpensesPage() {
                         <td className="p-2">{expense.supplier || '-'}</td>
                         <td className="text-right p-2">
                           <button
-                            className="text-red-600 hover:text-red-800 hover:underline transition-colors"
+                            className="text-red-600 hover:text-red-800 hover:underline transition-colors cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation();
+                              console.log('Clicou no valor da despesa:', expense);
                               setEditingTransaction(expense);
                               setIsEditDialogOpen(true);
                             }}
