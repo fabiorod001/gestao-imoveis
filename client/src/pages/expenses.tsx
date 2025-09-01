@@ -8,7 +8,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Calendar, Filter, Download, ChevronDown, X, TrendingUp, TrendingDown, Check, ArrowUpDown, ArrowUp, ArrowDown, FileSpreadsheet, FileText, Plus } from "lucide-react";
+import { Calendar, Filter, Download, ChevronDown, X, TrendingUp, TrendingDown, Check, ArrowUpDown, ArrowUp, ArrowDown, FileSpreadsheet, FileText, Plus, Edit } from "lucide-react";
+import EditExpenseDialog from "@/components/expenses/EditExpenseDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
@@ -112,6 +113,10 @@ export default function ExpensesPage() {
 
   // Expense form state
   const [isAddingExpense, setIsAddingExpense] = useState(false);
+  
+  // Edit expense state
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Handle category click navigation
   const handleCategoryClick = (categoryName: string) => {
@@ -866,6 +871,7 @@ export default function ExpensesPage() {
                     <th className="text-left p-2 font-medium">Descrição</th>
                     <th className="text-left p-2 font-medium">Fornecedor</th>
                     <th className="text-right p-2 font-medium">Valor</th>
+                    <th className="text-center p-2 font-medium">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -886,6 +892,19 @@ export default function ExpensesPage() {
                             currency: 'BRL' 
                           })}
                         </td>
+                        <td className="text-center p-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTransaction(expense);
+                              setIsEditDialogOpen(true);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -901,6 +920,7 @@ export default function ExpensesPage() {
                         currency: 'BRL' 
                       })}
                     </td>
+                    <td></td>
                   </tr>
                 </tfoot>
               </table>
@@ -908,6 +928,13 @@ export default function ExpensesPage() {
           </CardContent>
         </Card>
       )}
+      
+      {/* Edit Expense Dialog */}
+      <EditExpenseDialog
+        transaction={editingTransaction}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+      />
     </div>
   );
 }
