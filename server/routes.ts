@@ -2969,6 +2969,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get management expense for editing
+  app.get('/api/expenses/management/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const transactionId = parseInt(req.params.id);
+      
+      // Get the parent transaction
+      const parentTransaction = await db.select()
+        .from(transactions)
+        .where(and(
+          eq(transactions.id, transactionId),
+          eq(transactions.userId, userId),
+          eq(transactions.isCompositeParent, true)
+        ))
+        .limit(1);
+      
+      if (parentTransaction.length === 0) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+      
+      // Get child transactions
+      const childTransactions = await db.select()
+        .from(transactions)
+        .where(eq(transactions.parentTransactionId, transactionId));
+      
+      // Calculate distribution
+      const distribution = childTransactions.map(child => ({
+        propertyId: child.propertyId,
+        amount: Math.abs(child.amount),
+        percentage: (Math.abs(child.amount) / Math.abs(parentTransaction[0].amount)) * 100
+      }));
+      
+      res.json({
+        id: parentTransaction[0].id,
+        totalAmount: Math.abs(parentTransaction[0].amount),
+        paymentDate: parentTransaction[0].date,
+        description: parentTransaction[0].description,
+        supplier: parentTransaction[0].supplier,
+        cpfCnpj: parentTransaction[0].cpfCnpj,
+        distribution
+      });
+    } catch (error) {
+      console.error("Error fetching management expense:", error);
+      res.status(500).json({ message: "Failed to fetch management expense" });
+    }
+  });
+
   // Management expense endpoint - Update existing expense
   app.put('/api/expenses/management/:id', isAuthenticated, async (req: any, res) => {
     try {

@@ -85,18 +85,44 @@ export default function ManagementExpenseForm({ editData }: ManagementExpenseFor
 
   // Load edit data when provided
   React.useEffect(() => {
-    if (editData && properties.length > 0) {
-      form.setValue('totalAmount', editData.amount);
-      form.setValue('paymentDate', new Date(editData.date));
-      form.setValue('selectedProperties', editData.properties);
-      
-      // Calculate equal distribution for properties
-      const equalPercent = 100 / editData.properties.length;
-      const percentages: Record<string, string> = {};
-      editData.properties.forEach(propId => {
-        percentages[propId.toString()] = equalPercent.toFixed(2).replace('.', ',');
-      });
-      form.setValue('propertyPercentages', percentages);
+    if (editData?.editId && properties.length > 0) {
+      // Fetch the complete transaction data
+      fetch(`/api/expenses/management/${editData.editId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && !data.message) {
+            // Set form values
+            form.setValue('totalAmount', data.totalAmount.toFixed(2).replace('.', ','));
+            form.setValue('paymentDate', new Date(data.paymentDate));
+            form.setValue('supplier', data.supplier || 'Maurício');
+            form.setValue('cpfCnpj', data.cpfCnpj || '');
+            form.setValue('description', data.description || '');
+            
+            // Set selected properties and percentages
+            const selectedProps = data.distribution.map((d: any) => d.propertyId);
+            form.setValue('selectedProperties', selectedProps);
+            
+            const percentages: Record<string, string> = {};
+            data.distribution.forEach((d: any) => {
+              percentages[d.propertyId.toString()] = d.percentage.toFixed(2).replace('.', ',');
+            });
+            form.setValue('propertyPercentages', percentages);
+            
+            // Calculate preview
+            const previewData: ManagementPreview[] = data.distribution.map((d: any) => {
+              const property = properties.find(p => p.id === d.propertyId)!;
+              return {
+                property,
+                percentage: d.percentage,
+                amount: d.amount
+              };
+            });
+            setPreview(previewData);
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching transaction data:', error);
+        });
     }
   }, [editData, properties, form]);
 

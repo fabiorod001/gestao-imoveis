@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 import {
   Table,
   TableBody,
@@ -97,6 +98,7 @@ export default function ConsolidatedExpenseTable({
   onDataUpdate 
 }: ConsolidatedExpenseTableProps) {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [monthKey, setMonthKey] = useState<string>('');
 
   // Set current month
@@ -319,49 +321,36 @@ export default function ConsolidatedExpenseTable({
                         
                         // Find the transactions for this date
                         const transactionsForDate = dateGroup.transactions;
+                        console.log('Transactions for date:', transactionsForDate);
+                        
                         if (transactionsForDate && transactionsForDate.length > 0) {
-                          // Group transactions by parentTransactionId to find parent-child relationships
+                          // Find unique parent IDs from child transactions
                           const parentIds = new Set<number>();
-                          const childrenByParent = new Map<number, any[]>();
                           
                           transactionsForDate.forEach((t: any) => {
-                            if (t.parentTransactionId) {
+                            // Check if transaction has parentTransactionId field
+                            if (t.parentTransactionId && typeof t.parentTransactionId === 'number') {
                               parentIds.add(t.parentTransactionId);
-                              if (!childrenByParent.has(t.parentTransactionId)) {
-                                childrenByParent.set(t.parentTransactionId, []);
-                              }
-                              childrenByParent.get(t.parentTransactionId)!.push(t);
                             }
                           });
                           
                           console.log('Parent IDs found:', Array.from(parentIds));
-                          console.log('Children by parent:', childrenByParent);
                           
-                          // If we have parent IDs, use the first one for editing
+                          // If we found parent IDs, use the first one for editing
                           if (parentIds.size > 0) {
                             const parentId = Array.from(parentIds)[0];
-                            const childTransactions = childrenByParent.get(parentId) || [];
                             
-                            // Calculate total from children
-                            const totalAmount = childTransactions.reduce((sum: number, child: any) => 
-                              sum + Math.abs(parseFloat(child.amount)), 0
-                            );
-                            
-                            const searchParams = new URLSearchParams();
-                            searchParams.set('editId', parentId.toString());
-                            searchParams.set('date', childTransactions[0].date);
-                            searchParams.set('amount', totalAmount.toString());
-                            
-                            if (childTransactions.length > 0) {
-                              const propertyIds = childTransactions.map((t: any) => t.propertyId).join(',');
-                              searchParams.set('properties', propertyIds);
-                            }
-                            
-                            const url = `/expenses/management?${searchParams.toString()}`;
-                            console.log('Navigating to edit parent transaction:', url);
+                            // Navigate to management page with edit ID
+                            const url = `/expenses/management?editId=${parentId}`;
+                            console.log('Navigating to edit parent transaction:', parentId, url);
                             setLocation(url);
                           } else {
-                            console.log('No parent-child relationships found, this might be a different type of expense');
+                            console.log('No parent transactions found for this date');
+                            toast({
+                              title: "Não é possível editar",
+                              description: "Esta despesa não é uma despesa de gestão editável.",
+                              variant: "destructive"
+                            });
                           }
                         } else {
                           console.log('No transactions found for this date');
