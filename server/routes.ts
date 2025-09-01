@@ -2969,6 +2969,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get management expense for editing
+  app.get('/api/expenses/management/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const transactionId = parseInt(req.params.id);
+      
+      // Get the parent transaction
+      const parentTransaction = await db.select()
+        .from(transactions)
+        .where(and(
+          eq(transactions.id, transactionId),
+          eq(transactions.userId, userId),
+          eq(transactions.isCompositeParent, true)
+        ))
+        .limit(1);
+      
+      if (parentTransaction.length === 0) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+      
+      // Get all child transactions
+      const childTransactions = await db.select()
+        .from(transactions)
+        .where(and(
+          eq(transactions.parentTransactionId, transactionId),
+          eq(transactions.userId, userId)
+        ));
+      
+      res.json({
+        parent: parentTransaction[0],
+        children: childTransactions
+      });
+    } catch (error) {
+      console.error("Error fetching management expense:", error);
+      res.status(500).json({ message: "Failed to fetch management expense" });
+    }
+  });
+
   // Management expense endpoint - Update existing expense
   app.put('/api/expenses/management/:id', isAuthenticated, async (req: any, res) => {
     try {
