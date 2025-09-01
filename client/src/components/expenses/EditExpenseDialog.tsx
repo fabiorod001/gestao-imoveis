@@ -104,12 +104,17 @@ export default function EditExpenseDialog({
   // Load transaction data when dialog opens
   useEffect(() => {
     if (transaction && open) {
+      console.log('Loading transaction data:', transaction);
+      
+      // Format the amount properly
+      const formattedAmount = Math.abs(transaction.amount).toFixed(2).replace('.', ',');
+      
       form.reset({
         propertyId: transaction.propertyId,
-        category: transaction.category,
-        amount: Math.abs(transaction.amount).toFixed(2).replace('.', ','),
+        category: transaction.category || '',
+        amount: formattedAmount,
         date: new Date(transaction.date),
-        description: transaction.description,
+        description: transaction.description || '',
         supplier: transaction.supplier || '',
         cpfCnpj: transaction.cpfCnpj || '',
       });
@@ -190,6 +195,7 @@ export default function EditExpenseDialog({
   });
 
   const onSubmit = (data: FormData) => {
+    console.log('Submitting form data:', data);
     updateMutation.mutate(data);
   };
 
@@ -431,7 +437,7 @@ export default function EditExpenseDialog({
                 disabled={updateMutation.isPending}
                 className="px-6 bg-blue-600 hover:bg-blue-700"
               >
-                {updateMutation.isPending ? "Salvando..." : "Cadastrar"}
+                {updateMutation.isPending ? "Salvando..." : "Salvar"}
               </Button>
             </div>
           </form>
