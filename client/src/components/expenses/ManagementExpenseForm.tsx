@@ -83,39 +83,22 @@ export default function ManagementExpenseForm({ editData }: ManagementExpenseFor
     }
   });
 
-  // Fetch complete transaction data when editing
-  const { data: transactionData } = useQuery({
-    queryKey: [`/api/expenses/management/${editData?.editId}`],
-    enabled: !!editData?.editId,
-  });
-
   // Load edit data when provided
   React.useEffect(() => {
-    if (transactionData && properties.length > 0) {
-      const { parent, children } = transactionData as any;
+    if (editData && properties.length > 0) {
+      form.setValue('totalAmount', editData.amount);
+      form.setValue('paymentDate', new Date(editData.date));
+      form.setValue('selectedProperties', editData.properties);
       
-      // Set form values from parent transaction
-      form.setValue('totalAmount', Math.abs(parent.amount).toFixed(2).replace('.', ','));
-      form.setValue('paymentDate', new Date(parent.date));
-      form.setValue('description', parent.description || '');
-      form.setValue('supplier', parent.supplier || 'Maurício');
-      form.setValue('cpfCnpj', parent.cpfCnpj || '');
-      
-      // Extract property IDs and calculate percentages from children
-      const propertyIds = children.map((child: any) => child.propertyId);
-      form.setValue('selectedProperties', propertyIds);
-      
-      // Calculate percentages based on actual child transaction amounts
-      const totalAmount = Math.abs(parent.amount);
+      // Calculate equal distribution for properties
+      const equalPercent = 100 / editData.properties.length;
       const percentages: Record<string, string> = {};
-      children.forEach((child: any) => {
-        const childAmount = Math.abs(child.amount);
-        const percentage = (childAmount / totalAmount) * 100;
-        percentages[child.propertyId.toString()] = percentage.toFixed(2).replace('.', ',');
+      editData.properties.forEach(propId => {
+        percentages[propId.toString()] = equalPercent.toFixed(2).replace('.', ',');
       });
       form.setValue('propertyPercentages', percentages);
     }
-  }, [transactionData, properties, form]);
+  }, [editData, properties, form]);
 
   const selectedProperties = form.watch("selectedProperties");
   const propertyPercentages = form.watch("propertyPercentages");
