@@ -1724,7 +1724,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Buscar TODAS as transações Airbnb no intervalo de datas
       const allTransactions = await storage.getTransactions(userId);
       const airbnbTransactionsInRange = allTransactions.filter(t => {
-        if (!t.description.includes('Airbnb')) return false;
+        // Verificar se description existe e inclui 'Airbnb'
+        if (!t.description || !t.description.includes('Airbnb')) return false;
         
         const transactionDate = new Date(t.date);
         return transactionDate >= startDate && transactionDate <= endDate;
