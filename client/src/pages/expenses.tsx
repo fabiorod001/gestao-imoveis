@@ -579,6 +579,68 @@ export default function ExpensesPage() {
           <div className="flex items-center justify-between">
             <CardTitle>Tabela Dinâmica de Despesas</CardTitle>
             <div className="flex items-center gap-2">
+              {/* Quick Period Selection Buttons */}
+              <div className="flex gap-1">
+                <Button
+                  variant={selectedMonths.length === 1 && selectedMonths[0] === getCurrentMonth() ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedMonths([getCurrentMonth()])}
+                  className="h-8 px-3 text-xs"
+                >
+                  Mês Atual
+                </Button>
+                <Button
+                  variant={selectedMonths.length === 3 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    // Select last 3 months
+                    const months = [];
+                    const now = new Date();
+                    for (let i = 0; i < 3; i++) {
+                      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                      months.push(`${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`);
+                    }
+                    setSelectedMonths(months);
+                  }}
+                  className="h-8 px-3 text-xs"
+                >
+                  3 meses
+                </Button>
+                <Button
+                  variant={selectedMonths.length === 5 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    // Select last 5 months
+                    const months = [];
+                    const now = new Date();
+                    for (let i = 0; i < 5; i++) {
+                      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                      months.push(`${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`);
+                    }
+                    setSelectedMonths(months);
+                  }}
+                  className="h-8 px-3 text-xs"
+                >
+                  5 meses
+                </Button>
+                <Button
+                  variant={selectedMonths.length === 12 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    // Select last 12 months
+                    const months = [];
+                    const now = new Date();
+                    for (let i = 0; i < 12; i++) {
+                      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                      months.push(`${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`);
+                    }
+                    setSelectedMonths(months);
+                  }}
+                  className="h-8 px-3 text-xs"
+                >
+                  12 meses
+                </Button>
+              </div>
               <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
                 <CollapsibleTrigger asChild>
                   <Button variant="outline" size="sm">
