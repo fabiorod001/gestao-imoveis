@@ -1911,7 +1911,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get all current Airbnb transactions after import
       const currentTransactions = await storage.getTransactions(userId);
-      const currentAirbnbTransactions = currentTransactions.filter(t => t.description.includes('Airbnb'));
+      const currentAirbnbTransactions = currentTransactions.filter(t => t.description && t.description.includes('Airbnb'));
       
       // Group current transactions by property and date
       const currentByProperty = new Map();
