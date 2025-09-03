@@ -103,16 +103,17 @@ export default function AdvancedPivotTable() {
     queryKey: ['/api/properties'],
   });
 
-  // Fetch available months from database
+  // Fetch available months from database - ALL months with any transaction
   const { data: availableMonths = [], refetch: refetchMonths } = useQuery<{ key: string; label: string }[]>({
     queryKey: ['/api/analytics/available-months'],
     queryFn: async () => {
       const response = await fetch('/api/analytics/available-months');
       if (!response.ok) throw new Error('Failed to fetch available months');
-      return response.json();
+      const data = await response.json();
+      console.log(`API returned ${data.length} months with transactions`);
+      return data;
     },
-    refetchInterval: 5000, // Refetch every 5 seconds to get updates
-    staleTime: 0, // Always consider data stale
+    staleTime: 60000, // Cache for 1 minute
   });
 
   // Generate month options (all months from database + future 12 months)
@@ -150,12 +151,31 @@ export default function AdvancedPivotTable() {
     });
     
     // Debug: log how many months we have
-    console.log('Generated month options:', options.length, 'unique months from', uniqueMonths.size, 'total');
+    console.log(`Generated ${options.length} month options: ${availableMonths.length} from API + future months`);
+    
+    // Sort options by year and month (newest first)
+    options.sort((a, b) => {
+      const [monthA, yearA] = a.key.split('/');
+      const [monthB, yearB] = b.key.split('/');
+      const dateA = new Date(parseInt(yearA), parseInt(monthA) - 1);
+      const dateB = new Date(parseInt(yearB), parseInt(monthB) - 1);
+      return dateB.getTime() - dateA.getTime();
+    });
     
     return options;
   };
 
   const monthOptions = generateMonthOptions();
+  
+  // Log para verificar se todos os meses estão disponíveis
+  useEffect(() => {
+    if (availableMonths.length > 0) {
+      console.log(`✅ Filtro de meses: ${monthOptions.length} meses disponíveis no total`);
+      console.log(`   - ${availableMonths.length} meses com transações do banco`);
+      console.log(`   - Primeiro mês:`, monthOptions[monthOptions.length - 1]);
+      console.log(`   - Último mês:`, monthOptions[0]);
+    }
+  }, [availableMonths, monthOptions.length]);
 
 
 
