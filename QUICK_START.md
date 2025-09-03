@@ -1,5 +1,5 @@
 # QUICK START - RentManager
-**Última atualização: 01/02/2025**
+**Última atualização: 03/09/2025**
 
 ## 🎯 O que é este projeto?
 Sistema completo de gestão financeira para imóveis de aluguel com:
@@ -123,18 +123,36 @@ const AIRBNB_PROPERTY_MAPPING = {
 - **Checkpoints** salvam automaticamente
 - **Categorias de receita**: Use "Airbnb" para importações, "Booking" para outras plataformas
 
-## 📌 Status Atual (01/02/2025)
+## 📌 Status Atual (03/09/2025)
 - ✅ Sistema 100% funcional
 - ✅ Importação com detecção de período e datas de hospedagem
 - ✅ Preservação inteligente (só sobrescreve Airbnb do período)
 - ✅ Interface responsiva e intuitiva
-- ✅ Cálculo de ocupação e diária média
+- ✅ Cálculo de ocupação e diária média corrigido (soma noites do CSV)
 - ✅ Categorias específicas: Airbnb, Booking, Recorrente, Outros
 - ✅ Formulário de receitas com datas de acomodação funcionando
 - ✅ **Editor Universal de Transações** implementado
+- ✅ **Sistema de notificações permanentes** com botão OK obrigatório
 
-## 🔄 Última Atualização (01/02/2025)
-- **NOVO**: Editor Universal de Transações (`EditTransactionDialog`)
+## 🔄 Última Atualização (03/09/2025)
+
+### Melhorias Recentes:
+- **Sistema de Notificações Permanentes**
+  - Avisos não desaparecem automaticamente
+  - Botão OK obrigatório para confirmar leitura
+  - Garante que mensagens importantes sejam vistas
+
+- **Correção do Cálculo de Diárias do Airbnb**
+  - Sistema agora soma corretamente as noites de cada reserva
+  - Valor médio da diária = Receita total ÷ Total de noites ocupadas
+  - Importação captura campo "Noites" do CSV do Airbnb
+
+- **Melhorias no Dashboard**
+  - Filtro de mês mostra todos os 108+ meses com transações (2014-2025)
+  - Seleção dinâmica baseada em dados reais do sistema
+
+### Funcionalidades Anteriores:
+- **Editor Universal de Transações** (`EditTransactionDialog`)
   - Formulário unificado para editar qualquer transação no sistema
   - Clique em valores de despesas/receitas abre formulário completo
   - Todos os campos editáveis: propriedade, valor, data, categoria, descrição, fornecedor, CPF/CNPJ
