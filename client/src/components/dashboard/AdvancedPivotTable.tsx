@@ -147,6 +147,9 @@ export default function AdvancedPivotTable() {
       }
     });
     
+    // Debug: log how many months we have
+    console.log('Generated month options:', options.length, 'unique months from', uniqueMonths.size, 'total');
+    
     return options;
   };
 
@@ -877,7 +880,7 @@ export default function AdvancedPivotTable() {
                     <Command>
                       <CommandInput placeholder="Buscar mês..." />
                       <CommandEmpty>Nenhum mês encontrado.</CommandEmpty>
-                      <CommandGroup className="max-h-64 overflow-auto">
+                      <CommandGroup className="max-h-96 overflow-auto">
                         {monthOptions.map(({ key, label }) => (
                           <CommandItem
                             key={key}
@@ -916,7 +919,7 @@ export default function AdvancedPivotTable() {
                     <Command>
                       <CommandInput placeholder="Buscar propriedade..." />
                       <CommandEmpty>Nenhuma propriedade encontrada.</CommandEmpty>
-                      <CommandGroup className="max-h-64 overflow-auto">
+                      <CommandGroup className="max-h-96 overflow-auto">
                         {allProperties.map(property => (
                           <CommandItem
                             key={property.id}
@@ -983,7 +986,7 @@ export default function AdvancedPivotTable() {
                       <Command>
                         <CommandInput placeholder="Buscar categoria..." />
                         <CommandEmpty>Nenhuma categoria encontrada.</CommandEmpty>
-                        <CommandGroup className="max-h-64 overflow-auto">
+                        <CommandGroup className="max-h-96 overflow-auto">
                           {getFilteredCategories().map(category => (
                             <CommandItem
                               key={category}
