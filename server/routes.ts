@@ -2315,8 +2315,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         importedCount,
         summary: {
           properties: Array.from(summary.properties).length,
-          totalRevenue: summary.revenues,
+          revenues: summary.revenues, // Changed from totalRevenue to revenues
           reservations: summary.reservations,
+          occupiedNights: 0, // Future reservations don't have occupied nights yet
+          averageDailyRate: summary.reservations > 0 ? summary.revenues / summary.reservations : 0,
           deletedConflicts: deletedCount
         },
         errors: errors.length > 0 ? errors : undefined,
