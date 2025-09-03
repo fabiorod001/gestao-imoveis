@@ -56,11 +56,24 @@ export default function CashFlowPage() {
   });
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
+    if (isNaN(value) || value === null || value === undefined) {
+      return 'R$ 0,00';
+    }
+    
+    const isNegative = value < 0;
+    const absValue = Math.abs(value);
+    
+    const formatted = new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
       minimumFractionDigits: 2
-    }).format(value);
+    }).format(absValue);
+    
+    // For negative values, place the minus sign between R$ and the number
+    if (isNegative) {
+      return formatted.replace('R$', 'R$ -');
+    }
+    return formatted;
   };
 
   const formatDate = (dateStr: string) => {
@@ -140,7 +153,7 @@ export default function CashFlowPage() {
                   <DollarSign className="w-6 h-6" />
                   <span className="text-lg font-medium opacity-90">Saldo Hoje</span>
                 </div>
-                <div className="text-3xl font-bold">
+                <div className={`text-3xl font-bold ${todayData.balance < 0 ? 'text-red-300' : ''}`}>
                   {formatCurrency(todayData.balance)}
                 </div>
               </div>
@@ -158,7 +171,7 @@ export default function CashFlowPage() {
                   <div className="text-center">
                     <div className="text-yellow-200 text-sm">Resultado</div>
                     <div className={`font-semibold ${todayData.netFlow >= 0 ? 'text-green-200' : 'text-red-200'}`}>
-                      {formatCurrency(todayData.netFlow)}
+                      {formatCurrency(todayData.revenue - Math.abs(todayData.expenses))}
                     </div>
                   </div>
                 </div>
@@ -333,21 +346,28 @@ export default function CashFlowPage() {
                   rowsToShow.push(
                     <tr key="saldo" className="bg-gray-50 dark:bg-gray-800">
                       <td className={`font-bold text-gray-900 dark:text-gray-100 ${selectedPeriod === '1m' || selectedPeriod === '2m' ? 'py-2 px-2 text-base' : 'py-4 px-4 text-lg'}`}>Saldo</td>
-                      {displayData.map((item: CashFlowData) => (
-                        <td 
-                          key={`balance-${item.date}`} 
-                          className={`text-center font-bold ${
-                            item.isToday 
-                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700' 
-                              : 'text-gray-900 dark:text-gray-100'
-                          } ${selectedPeriod === '1m' || selectedPeriod === '2m' ? 'py-2 px-1 text-sm' : 'py-4 px-4 text-lg'}`}
-                        >
-                          {selectedPeriod === '1m' || selectedPeriod === '2m' ? 
-                            `R$ ${(item.balance / 1000).toFixed(0)}k` : 
-                            formatCurrency(item.balance)
-                          }
-                        </td>
-                      ))}
+                      {displayData.map((item: CashFlowData) => {
+                        const isNegative = item.balance < 0;
+                        return (
+                          <td 
+                            key={`balance-${item.date}`} 
+                            className={`text-center font-bold ${
+                              item.isToday 
+                                ? isNegative 
+                                  ? 'bg-red-100 dark:bg-red-900/30 text-red-700' 
+                                  : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700'
+                                : isNegative
+                                  ? 'text-red-600 dark:text-red-400'
+                                  : 'text-gray-900 dark:text-gray-100'
+                            } ${selectedPeriod === '1m' || selectedPeriod === '2m' ? 'py-2 px-1 text-sm' : 'py-4 px-4 text-lg'}`}
+                          >
+                            {selectedPeriod === '1m' || selectedPeriod === '2m' ? 
+                              `R$ ${isNegative ? '-' : ''}${(Math.abs(item.balance) / 1000).toFixed(0)}k` : 
+                              formatCurrency(item.balance)
+                            }
+                          </td>
+                        );
+                      })}
                     </tr>
                   );
                   
@@ -386,8 +406,12 @@ export default function CashFlowPage() {
                   dataKey="balance" 
                   stroke="#2563eb" 
                   strokeWidth={3}
-                  dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, stroke: '#2563eb', strokeWidth: 2 }}
+                  dot={(props) => {
+                    const value = props.payload.balance;
+                    const fill = value < 0 ? '#dc2626' : '#2563eb';
+                    return <circle cx={props.cx} cy={props.cy} r={4} fill={fill} strokeWidth={2} stroke={fill} />;
+                  }}
+                  activeDot={{ r: 6, strokeWidth: 2 }}
                 />
               </LineChart>
             </ResponsiveContainer>
