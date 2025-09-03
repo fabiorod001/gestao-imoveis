@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, DollarSign, Calendar, Filter } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Calendar, Filter, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface CashFlowData {
@@ -29,9 +29,10 @@ export default function CashFlowPage() {
   const [showEntradas, setShowEntradas] = useState(false);
   const [showSaidas, setShowSaidas] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Fetch cash flow data
-  const { data: cashFlowData = [], isLoading: isLoadingCashFlow } = useQuery({
+  const { data: cashFlowData = [], isLoading: isLoadingCashFlow, refetch: refetchCashFlow } = useQuery({
     queryKey: ['/api/analytics/cash-flow', selectedPeriod],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -44,7 +45,7 @@ export default function CashFlowPage() {
   });
 
   // Fetch cash flow statistics
-  const { data: cashFlowStats, isLoading: isLoadingStats } = useQuery({
+  const { data: cashFlowStats, isLoading: isLoadingStats, refetch: refetchStats } = useQuery({
     queryKey: ['/api/analytics/cash-flow-stats', selectedPeriod],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -121,6 +122,18 @@ export default function CashFlowPage() {
     return cashFlowData.find((item: CashFlowData) => item.isToday);
   }, [cashFlowData]);
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refetchCashFlow(),
+        refetchStats()
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   if (isLoadingCashFlow || isLoadingStats) {
     return (
       <div className="p-6">
@@ -136,11 +149,23 @@ export default function CashFlowPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Fluxo de Caixa</h1>
-        <p className="text-slate-600 dark:text-slate-400 mt-1">
-          Acompanhe seu saldo diário e projeções financeiras
-        </p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Fluxo de Caixa</h1>
+          <p className="text-slate-600 dark:text-slate-400 mt-1">
+            Acompanhe seu saldo diário e projeções financeiras
+          </p>
+        </div>
+        <Button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2"
+        >
+          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'Atualizando...' : 'Atualizar'}
+        </Button>
       </div>
 
       {/* Today's Balance - Highlighted */}
