@@ -2145,7 +2145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // STEP 2: Compare with existing future reservations and remove conflicting ones
       console.log('🔍 STEP 2: Comparando com reservas futuras existentes...');
       const allTransactions = await storage.getTransactions(userId);
-      const existingFutureReservations = allTransactions.filter(t => t.description.includes('Reserva futura'));
+      const existingFutureReservations = allTransactions.filter(t => t.description && t.description.includes('Reserva futura'));
       
       console.log(`🔍 Encontradas ${existingFutureReservations.length} reservas futuras existentes`);
       
