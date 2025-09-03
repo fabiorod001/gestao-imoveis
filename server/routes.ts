@@ -2243,7 +2243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get all current future reservations after import
       const currentTransactions = await storage.getTransactions(userId);
-      const currentFutureReservations = currentTransactions.filter(t => t.description.includes('Reserva futura'));
+      const currentFutureReservations = currentTransactions.filter(t => t.description && t.description.includes('Reserva futura'));
       
       // Group current future reservations by property and date
       const currentByProperty = new Map();
