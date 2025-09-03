@@ -104,13 +104,15 @@ export default function AdvancedPivotTable() {
   });
 
   // Fetch available months from database
-  const { data: availableMonths = [] } = useQuery<{ key: string; label: string }[]>({
+  const { data: availableMonths = [], refetch: refetchMonths } = useQuery<{ key: string; label: string }[]>({
     queryKey: ['/api/analytics/available-months'],
     queryFn: async () => {
       const response = await fetch('/api/analytics/available-months');
       if (!response.ok) throw new Error('Failed to fetch available months');
       return response.json();
     },
+    refetchInterval: 5000, // Refetch every 5 seconds to get updates
+    staleTime: 0, // Always consider data stale
   });
 
   // Generate month options (all months from database + future 12 months)
