@@ -2124,12 +2124,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             // Only include if it's truly a future reservation based on check-in date
             if (checkInDate > new Date()) {
+              // Captura o número de noites da coluna 'Noites'
+              const noitesStr = row['Noites'] || '0';
+              const nights = parseInt(noitesStr) || 0;
+              
               newReservations.push({
                 propertyName: mappedPropertyName,
                 date: checkInDate.toISOString().split('T')[0],
                 amount: valor,
                 anuncio: anuncio,
                 confirmationCode: row['Código de Confirmação'],
+                nights: nights,
                 csvLine: i
               });
             }
@@ -2198,7 +2203,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const summary = {
         properties: new Set<string>(),
         revenues: 0,
-        reservations: 0
+        reservations: 0,
+        occupiedNights: 0
       };
       
       for (const newReservation of newReservations) {
@@ -2227,6 +2233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           summary.properties.add(property.name);
           summary.revenues += newReservation.amount;
           summary.reservations++;
+          summary.occupiedNights += newReservation.nights || 0;
           
           importedCount++;
           console.log(`✅ Reserva futura importada: ${newReservation.propertyName} - ${newReservation.date} - R$ ${newReservation.amount.toFixed(2)}`);
@@ -2317,8 +2324,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           properties: Array.from(summary.properties).length,
           revenues: summary.revenues, // Changed from totalRevenue to revenues
           reservations: summary.reservations,
-          occupiedNights: 0, // Future reservations don't have occupied nights yet
-          averageDailyRate: summary.reservations > 0 ? summary.revenues / summary.reservations : 0,
+          occupiedNights: summary.occupiedNights,
+          averageDailyRate: summary.occupiedNights > 0 ? summary.revenues / summary.occupiedNights : 0,
           deletedConflicts: deletedCount
         },
         errors: errors.length > 0 ? errors : undefined,
