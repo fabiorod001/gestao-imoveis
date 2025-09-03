@@ -9,7 +9,7 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import * as fs from "fs";
 import { db } from "./db";
-import { eq, and, gte, lte, lt, asc, desc, sql, inArray, or } from "drizzle-orm";
+import { eq, and, gte, lte, lt, asc, desc, sql, inArray, or, isNull } from "drizzle-orm";
 import { parseAirbnbCSV, mapListingToProperty } from "./csvParser";
 import { format } from "date-fns";
 
@@ -3604,6 +3604,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching cash flow stats:', error);
       res.status(500).json({ error: 'Failed to fetch cash flow statistics' });
+    }
+  });
+
+  // Get available months from transactions
+  app.get('/api/analytics/available-months', isAuthenticated, async (req, res) => {
+    const userId = getUserId(req);
+    
+    try {
+      // Get all distinct months from transactions
+      const result = await db
+        .selectDistinct({
+          monthYear: sql<string>`TO_CHAR(${transactions.date}, 'MM/YYYY')`
+        })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            or(
+              eq(transactions.isCompositeParent, false),
+              isNull(transactions.isCompositeParent)
+            )
+          )
+        );
+      
+      // Sort and format months for frontend
+      const sortedMonths = result.sort((a, b) => {
+        const [monthA, yearA] = a.monthYear.split('/');
+        const [monthB, yearB] = b.monthYear.split('/');
+        const dateA = new Date(parseInt(yearA), parseInt(monthA) - 1);
+        const dateB = new Date(parseInt(yearB), parseInt(monthB) - 1);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      const months = sortedMonths.map(row => {
+        const [month, year] = row.monthYear.split('/');
+        const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+        const monthName = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+        return {
+          key: row.monthYear,
+          label: monthName
+        };
+      });
+      
+      res.json(months);
+    } catch (error) {
+      console.error('Error fetching available months:', error);
+      res.status(500).json({ error: 'Failed to fetch available months' });
     }
   });
 

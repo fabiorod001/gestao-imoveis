@@ -103,26 +103,49 @@ export default function AdvancedPivotTable() {
     queryKey: ['/api/properties'],
   });
 
-  // Generate month options (future 12 months + current + past 24 months, ordered newest first)
+  // Fetch available months from database
+  const { data: availableMonths = [] } = useQuery<{ key: string; label: string }[]>({
+    queryKey: ['/api/analytics/available-months'],
+    queryFn: async () => {
+      const response = await fetch('/api/analytics/available-months');
+      if (!response.ok) throw new Error('Failed to fetch available months');
+      return response.json();
+    },
+  });
+
+  // Generate month options (all months from database + future 12 months)
   const generateMonthOptions = () => {
     const options = [];
     const now = new Date();
+    const uniqueMonths = new Set<string>();
     
-    // Future 12 months (newest first)
+    // Add future 12 months (newest first)
     for (let i = 12; i >= 1; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
       const monthKey = `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
       const monthName = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-      options.push({ key: monthKey, label: monthName });
+      if (!uniqueMonths.has(monthKey)) {
+        options.push({ key: monthKey, label: monthName });
+        uniqueMonths.add(monthKey);
+      }
     }
     
-    // Past 24 months (newest first - current month down to oldest)
-    for (let i = 0; i <= 23; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthKey = `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-      const monthName = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-      options.push({ key: monthKey, label: monthName });
+    // Add current month
+    const currentDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    const currentKey = `${String(currentDate.getMonth() + 1).padStart(2, '0')}/${currentDate.getFullYear()}`;
+    const currentName = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+    if (!uniqueMonths.has(currentKey)) {
+      options.push({ key: currentKey, label: currentName });
+      uniqueMonths.add(currentKey);
     }
+    
+    // Add all months from database (already sorted newest first from API)
+    availableMonths.forEach(month => {
+      if (!uniqueMonths.has(month.key)) {
+        options.push(month);
+        uniqueMonths.add(month.key);
+      }
+    });
     
     return options;
   };
