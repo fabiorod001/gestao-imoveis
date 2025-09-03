@@ -1795,19 +1795,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               if (mappedPropertyName && mappedPropertyName !== 'IGNORE' && mappedPropertyName !== 'OTHER_INCOME') {
                 const value = parseFloat(nextRow[13]) || 0;
-                // Only add if value is not zero (skip adjustments with no value)
+                // Process ALL values including negative adjustments (important for cash flow)
                 if (value !== 0) {
                   // Capturar datas de hospedagem (colunas 5 e 6)
                   const startDateStr = nextRow[5]; // Data de início
                   const endDateStr = nextRow[6];   // Data de término
                   
-                  console.log(`   ✓ Adicionando reserva: ${mappedPropertyName} = R$ ${value} (${startDateStr} a ${endDateStr})`);
+                  const tipo = nextRow[2];
+                  const isAdjustment = tipo.includes('Ajuste');
+                  
+                  console.log(`   ✓ Adicionando ${isAdjustment ? 'ajuste' : 'reserva'}: ${mappedPropertyName} = R$ ${value} (${startDateStr} a ${endDateStr})`);
                   reservationsForPayout.push({
                     propertyName: mappedPropertyName,
                     anuncio: anuncio,
-                    value: value,
+                    value: value,  // Include negative values for adjustments
                     accommodationStartDate: startDateStr,
-                    accommodationEndDate: endDateStr
+                    accommodationEndDate: endDateStr,
+                    isAdjustment: isAdjustment
                   });
                 } else {
                   console.log(`   ✗ Valor zero, ignorando`);
@@ -1877,13 +1881,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           // Create transaction for this property
+          // Handle negative adjustments properly
+          const isNegativeAdjustment = reservation.isAdjustment && reservation.value < 0;
+          const transactionDescription = isNegativeAdjustment 
+            ? `Airbnb - Ajuste/Devolução (${reservation.anuncio})`
+            : `Airbnb - Payout (${reservation.anuncio})`;
+          
           const transactionData = {
             userId,
             propertyId: property.id,
             type: 'revenue' as const,
             category: 'airbnb', // Changed from 'rent' to 'airbnb'
-            description: `Airbnb - Payout (${reservation.anuncio})`,
-            amount: distributedAmount.toString(),
+            description: transactionDescription,
+            amount: distributedAmount.toString(), // Can be negative for adjustments
             date: transactionDate.toISOString().split('T')[0],
             accommodationStartDate,
             accommodationEndDate,
