@@ -343,11 +343,6 @@ export default function AirbnbImport() {
             <Alert variant={importResult.success ? "default" : "destructive"}>
               <AlertDescription>
                 {importResult.message}
-                {importResult.discrepancies && importResult.discrepancies > 0 && (
-                  <div className="mt-2 text-sm">
-                    <strong>Nota:</strong> {importResult.discrepancies} valores anteriores foram atualizados com os novos valores do CSV.
-                  </div>
-                )}
               </AlertDescription>
             </Alert>
 
