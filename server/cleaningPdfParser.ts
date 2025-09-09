@@ -214,9 +214,14 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<ParsedPdfData> {
         if (dataMatch) {
           const [, dateStr, unit, valueStr] = dataMatch;
           
-          // Limpa e mapeia a unidade
-          const unitClean = unit.trim();
+          // Limpa a unidade removendo espaços extras e "R$"
+          let unitClean = unit.trim();
+          // Remove "R$" se estiver colado na unidade
+          unitClean = unitClean.replace(/\s*R\$\s*$/, '').trim();
           const unitUpper = unitClean.toUpperCase();
+          
+          // Debug temporário
+          console.log(`Processando unidade: "${unitClean}" (upper: "${unitUpper}")`);
           
           // Procura o mapeamento correto
           let mappedUnit = UNIT_MAPPING[unitUpper] || 
@@ -229,7 +234,10 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<ParsedPdfData> {
             const unitNoSpace = unitClean.replace(/\s+/g, '');
             mappedUnit = UNIT_MAPPING[unitNoSpace.toUpperCase()] || 
                         UNIT_MAPPING[unitNoSpace] ||
-                        unitClean;
+                        null;
+            console.log(`Tentou sem espaços: "${unitNoSpace.toUpperCase()}" - Mapeado: ${mappedUnit}`);
+          } else {
+            console.log(`Mapeado diretamente para: ${mappedUnit}`);
           }
           
           const entry: CleaningEntry = {
