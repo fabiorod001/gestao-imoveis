@@ -119,49 +119,49 @@ export default function AdvancedExpenseManager() {
     {
       type: 'condominium' as ExpenseType,
       title: 'Condomínio',
-      description: 'Taxas condominiais e despesas específicas por propriedade',
+      description: 'Taxas condominiais e despesas por propriedade',
       icon: Building2,
       color: 'bg-blue-50 hover:bg-blue-100 border-blue-200'
     },
     {
       type: 'taxes' as ExpenseType,
       title: 'Impostos',
-      description: 'PIS, COFINS, CSLL, IRPJ, IPTU com rateio automático',
+      description: 'PIS, COFINS, CSLL, IRPJ e IPTU com rateio',
       icon: Calculator,
       color: 'bg-red-50 hover:bg-red-100 border-red-200'
     },
     {
       type: 'management' as ExpenseType,
       title: 'Gestão - Maurício',
-      description: 'Taxas de gestão com divisão entre propriedades',
+      description: 'Taxas de gestão divididas entre imóveis',
       icon: FileText,
       color: 'bg-green-50 hover:bg-green-100 border-green-200'
     },
     {
       type: 'maintenance' as ExpenseType,
       title: 'Manutenção',
-      description: 'Reparos e manutenções com fornecedor',
+      description: 'Reparos e manutenções com fornecedores',
       icon: Wrench,
       color: 'bg-orange-50 hover:bg-orange-100 border-orange-200'
     },
     {
       type: 'financing' as ExpenseType,
       title: 'Financiamento',
-      description: 'Parcelas de financiamento imobiliário',
+      description: 'Parcelas de financiamento de imóveis',
       icon: CreditCard,
       color: 'bg-gray-50 hover:bg-gray-100 border-gray-200'
     },
     {
       type: 'cleaning' as ExpenseType,
       title: 'Limpezas',
-      description: 'Serviços de limpeza por propriedade',
+      description: 'Serviços de limpeza dos imóveis',
       icon: Droplets,
       color: 'bg-purple-50 hover:bg-purple-100 border-purple-200'
     },
     {
       type: 'other' as ExpenseType,
       title: 'Despesas Gerais',
-      description: 'Outras despesas como luz, gás, água, TV, internet',
+      description: 'Luz, gás, água, TV, internet e outras',
       icon: Lightbulb,
       color: 'bg-yellow-50 hover:bg-yellow-100 border-yellow-200'
     }

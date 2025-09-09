@@ -26,27 +26,27 @@ export default function ExpenseTypeSelector({ expenseTypes, onSelect }: ExpenseT
         </p>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {expenseTypes.map((expenseType) => {
             const Icon = expenseType.icon;
             return (
               <Button
                 key={expenseType.type}
                 variant="outline"
-                className={`h-auto min-h-[120px] p-4 text-left flex flex-col items-start justify-start gap-3 overflow-hidden ${expenseType.color} transition-all duration-200 hover:scale-105`}
+                className={`h-auto min-h-[110px] p-3 text-left flex flex-col items-start justify-between ${expenseType.color} transition-all duration-200 hover:scale-[1.02] hover:shadow-md`}
                 onClick={() => onSelect(expenseType.type)}
               >
-                <div className="flex items-center gap-3 w-full">
-                  <div className="flex-shrink-0">
-                    <Icon className="h-5 w-5" />
+                <div className="w-full space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 flex-shrink-0" />
+                    <h3 className="font-semibold text-xs">
+                      {expenseType.title}
+                    </h3>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm truncate">{expenseType.title}</h3>
-                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-normal">
+                    {expenseType.description}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 w-full">
-                  {expenseType.description}
-                </p>
               </Button>
             );
           })}
