@@ -1,4 +1,3 @@
-import pdfParse from 'pdf-parse';
 
 interface CleaningEntry {
   date: string;
@@ -65,6 +64,9 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<CleaningPdfData>
   };
 
   try {
+    // Dynamically import pdf-parse
+    const pdfModule = await import('pdf-parse');
+    const pdfParse = pdfModule.default || pdfModule;
     const pdfData = await pdfParse(buffer);
     const text = pdfData.text;
     
