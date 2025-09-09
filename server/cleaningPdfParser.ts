@@ -180,44 +180,37 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<CleaningPdfData>
       
       // Processa linhas de dados
       if (isDataSection || line.match(/^\d{2}\/\d{2}\/\d{4}/)) {
-        // Múltiplos padrões de regex para maior flexibilidade
-        // Padrão 1: DD/MM/YYYY UNIDADE VALOR
-        let dataMatch = line.match(/^(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([0-9.,]+)$/);
+        // PADRÃO ESPECÍFICO PARA O PDF SEM ESPAÇOS
+        // Formato: DD/MM/YYYYUNIDADEVALOR
+        let dataMatch = null;
         
-        // Padrão 2: DD/MM/YYYY qualquer coisa VALOR no final
-        if (!dataMatch) {
-          dataMatch = line.match(/^(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+R?\$?\s*([0-9.,]+)$/);
-        }
+        // Estratégia: procura o padrão de valor no final (dígitos com vírgula)
+        // e separa tudo antes disso como unidade
+        const valuePattern = /\d+,\d{2}$/; // Procura por valor no formato brasileiro XXX,XX
+        const valueMatch = line.match(valuePattern);
         
-        // Padrão 3: Data e valor separados por tabs ou múltiplos espaços
-        if (!dataMatch) {
-          dataMatch = line.match(/^(\d{2}\/\d{2}\/\d{4})\s{2,}(.+?)\s{2,}([0-9.,]+)$/);
-        }
-        
-        // Padrão 4: Tenta com menos restrições
-        if (!dataMatch && line.match(/^\d{2}\/\d{2}\/\d{4}/)) {
-          const parts = line.split(/\s+/);
-          if (parts.length >= 3) {
-            const dateStr = parts[0];
-            const valueStr = parts[parts.length - 1];
-            const unit = parts.slice(1, -1).join(' ');
+        if (valueMatch) {
+          const valueStr = valueMatch[0];
+          const dateAndUnit = line.substring(0, line.length - valueStr.length);
+          
+          if (dateAndUnit.length >= 10) {
+            const dateStr = dateAndUnit.substring(0, 10); // Primeiros 10 chars são a data
+            const unit = dateAndUnit.substring(10); // Resto é a unidade
             
-            if (valueStr.match(/[0-9.,]+/)) {
-              dataMatch = ['', dateStr, unit, valueStr];
-              console.log(`Linha processada com split: ${line}`);
-            }
+            dataMatch = ['', dateStr, unit, valueStr];
           }
         }
         
         if (dataMatch) {
           const [, dateStr, unit, valueStr] = dataMatch;
           
-          console.log(`Entrada encontrada: Data=${dateStr}, Unidade=${unit}, Valor=${valueStr}`);
+          console.log(`Entrada encontrada: Data=${dateStr}, Unidade=${unit.trim()}, Valor=${valueStr}`);
           
           // Verifica se a unidade está mapeada
-          const mappedUnit = UNIT_MAPPING[unit.trim().toUpperCase()] || 
-                            UNIT_MAPPING[unit.trim()] || 
-                            unit.trim();
+          const unitClean = unit.trim();
+          const mappedUnit = UNIT_MAPPING[unitClean.toUpperCase()] || 
+                            UNIT_MAPPING[unitClean] || 
+                            unitClean;
           
           const entry: CleaningEntry = {
             date: parseDate(dateStr),
@@ -226,6 +219,7 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<CleaningPdfData>
           };
           
           data.entries.push(entry);
+          console.log(`Entrada adicionada: ${JSON.stringify(entry)}`);
         } else if (line.match(/^\d{2}\/\d{2}\/\d{4}/)) {
           // Se começa com data mas não conseguimos processar completamente
           console.log(`Linha com data não processada: ${line}`);
