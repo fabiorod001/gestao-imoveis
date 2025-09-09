@@ -4432,49 +4432,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       
       if (!req.file) {
-        console.error("Nenhum arquivo recebido no request");
         return res.status(400).json({ error: "Nenhum arquivo enviado" });
       }
-
-      console.log(`Processando PDF: ${req.file.originalname}, tamanho: ${req.file.size} bytes`);
 
       // Parse the PDF
       const pdfData = await parseCleaningPdf(req.file.buffer);
       
-      console.log(`Resultado do parser: ${pdfData.entries.length} entradas encontradas`);
-      console.log(`Erros do parser: ${pdfData.errors.length > 0 ? pdfData.errors.join(', ') : 'Nenhum'}`);
-      
       // Get user's properties for mapping
       const userProperties = await storage.getProperties(userId);
       
-      // Create a mapping of normalized property names
+      // Create a mapping of property names - parser already handles the mapping
       const propertyMap = new Map<string, Property>();
       for (const prop of userProperties) {
-        // Map by name
-        const normalizedName = prop.name.normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toUpperCase()
-          .trim();
-        propertyMap.set(normalizedName, prop);
-        
-        // Also map by nickname if available
-        if (prop.nickname) {
-          const normalizedNickname = prop.nickname.normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .toUpperCase()
-            .trim();
-          propertyMap.set(normalizedNickname, prop);
-        }
+        propertyMap.set(prop.name, prop);
       }
       
       // Process entries and find matching properties
       const processedEntries = pdfData.entries.map(entry => {
-        const normalizedUnit = entry.unit.normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toUpperCase()
-          .trim();
-        
-        const matchedProperty = propertyMap.get(normalizedUnit);
+        // The parser already mapped the unit names correctly
+        const matchedProperty = propertyMap.get(entry.unit);
         
         return {
           ...entry,
@@ -4495,7 +4471,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
     } catch (error) {
-      console.error("Error parsing cleaning PDF:", error);
       res.status(500).json({ error: "Erro ao processar PDF" });
     }
   });
