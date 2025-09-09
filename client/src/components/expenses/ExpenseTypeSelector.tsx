@@ -33,18 +33,18 @@ export default function ExpenseTypeSelector({ expenseTypes, onSelect }: ExpenseT
               <Button
                 key={expenseType.type}
                 variant="outline"
-                className={`h-auto p-6 text-left flex-col items-start space-y-3 ${expenseType.color} transition-all duration-200 hover:scale-105`}
+                className={`h-auto min-h-[120px] p-4 text-left flex flex-col items-start justify-start gap-3 overflow-hidden ${expenseType.color} transition-all duration-200 hover:scale-105`}
                 onClick={() => onSelect(expenseType.type)}
               >
-                <div className="flex items-center space-x-3 w-full">
+                <div className="flex items-center gap-3 w-full">
                   <div className="flex-shrink-0">
-                    <Icon className="h-6 w-6" />
+                    <Icon className="h-5 w-5" />
                   </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-sm">{expenseType.title}</h3>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-sm truncate">{expenseType.title}</h3>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 w-full">
                   {expenseType.description}
                 </p>
               </Button>
