@@ -265,7 +265,7 @@ export default function DistributedExpenseForm({ expenseType, title, description
               control={form.control}
               name="isHistorical"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-yellow-50 border-yellow-200">
+                <FormItem className="flex flex-row items-center space-x-2">
                   <FormControl>
                     <Checkbox
                       checked={field.value}
@@ -273,14 +273,9 @@ export default function DistributedExpenseForm({ expenseType, title, description
                       className="data-[state=checked]:bg-yellow-600 data-[state=checked]:border-yellow-600"
                     />
                   </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel className="text-sm font-medium cursor-pointer">
-                      Lançamento Histórico
-                    </FormLabel>
-                    <FormDescription className="text-xs text-gray-600">
-                      Marque esta opção se esta transação é histórica e não deve afetar o fluxo de caixa
-                    </FormDescription>
-                  </div>
+                  <FormLabel className="text-sm font-normal cursor-pointer">
+                    Lançamento Histórico
+                  </FormLabel>
                 </FormItem>
               )}
             />

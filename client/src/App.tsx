@@ -29,6 +29,7 @@ import MaintenanceDetailPage from "@/pages/expenses/maintenance-detail";
 import CleaningDetailPage from "@/pages/expenses/cleaning-detail";
 import FinancingDetailPage from "@/pages/expenses/financing-detail";
 import OtherDetailPage from "@/pages/expenses/other-detail";
+import Settings from "@/pages/settings";
 
 import Layout from "@/components/layout/Layout";
 
@@ -73,6 +74,7 @@ function Router() {
           <Route path="/expenses/cleaning-detail" component={CleaningDetailPage} />
           <Route path="/expenses/financing-detail" component={FinancingDetailPage} />
           <Route path="/expenses/other-detail" component={OtherDetailPage} />
+          <Route path="/settings" component={Settings} />
         </Layout>
       )}
       <Route component={NotFound} />
