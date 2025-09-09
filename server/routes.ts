@@ -4432,11 +4432,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       
       if (!req.file) {
+        console.error("Nenhum arquivo recebido no request");
         return res.status(400).json({ error: "Nenhum arquivo enviado" });
       }
 
+      console.log(`Processando PDF: ${req.file.originalname}, tamanho: ${req.file.size} bytes`);
+
       // Parse the PDF
       const pdfData = await parseCleaningPdf(req.file.buffer);
+      
+      console.log(`Resultado do parser: ${pdfData.entries.length} entradas encontradas`);
+      console.log(`Erros do parser: ${pdfData.errors.length > 0 ? pdfData.errors.join(', ') : 'Nenhum'}`);
       
       // Get user's properties for mapping
       const userProperties = await storage.getProperties(userId);

@@ -13,15 +13,54 @@ interface CleaningPdfData {
 }
 
 // Mapeamento de nomes de unidades do PDF para propriedades do sistema
+// Adicione todas as variações possíveis aqui
 const UNIT_MAPPING: Record<string, string> = {
-  'MAXHAUS': 'MAXHAUS',
-  'SEVILHA G07': 'SEVILHA G07',
-  'SEVILHA 307': 'SEVILHA 307',
-  'HADDOCK LOBO': 'HADDOCK LOBO',
-  'MÁLAGA M07': 'MÁLAGA M07',
-  'MALAGA M07': 'MÁLAGA M07', // Variação sem acento
-  'THERA': 'THERA',
-  // Adicione mais mapeamentos conforme necessário
+  // MaxHaus
+  'MAXHAUS': 'MaxHaus 43R',
+  'MAX HAUS': 'MaxHaus 43R',
+  'MAXHAUS 43R': 'MaxHaus 43R',
+  'MAXHAUS 43': 'MaxHaus 43R',
+  
+  // Sevilha
+  'SEVILHA G07': 'Sevilha G07',
+  'SEVILHA 307': 'Sevilha 307',
+  'SEVILHA': 'Sevilha',
+  
+  // Haddock Lobo
+  'HADDOCK LOBO': 'Next Haddock Lobo',
+  'HADDOCK': 'Next Haddock Lobo',
+  'NEXT HADDOCK': 'Next Haddock Lobo',
+  'NEXT HADDOCK LOBO': 'Next Haddock Lobo',
+  
+  // Málaga
+  'MÁLAGA M07': 'Málaga M07',
+  'MALAGA M07': 'Málaga M07', // Sem acento
+  'MÁLAGA': 'Málaga M07',
+  'MALAGA': 'Málaga M07',
+  
+  // Thera
+  'THERA': 'Thera by Yoo',
+  'THERA BY YOO': 'Thera by Yoo',
+  'THERA BY YOU': 'Thera by Yoo',
+  
+  // Living
+  'LIVING': 'Living Full Faria Lima',
+  'LIVING FULL': 'Living Full Faria Lima',
+  'LIVING FARIA LIMA': 'Living Full Faria Lima',
+  'LIVING FULL FARIA LIMA': 'Living Full Faria Lima',
+  
+  // Casa Ibirapuera
+  'CASA IBIRAPUERA': 'Casa Ibirapuera',
+  'IBIRAPUERA': 'Casa Ibirapuera',
+  
+  // Salas Brasal
+  'SALAS BRASAL': 'Salas Brasal',
+  'BRASAL': 'Salas Brasal',
+  
+  // Portugal
+  'SESIMBRA': 'Sesimbra ap 505- Portugal',
+  'SESIMBRA 505': 'Sesimbra ap 505- Portugal',
+  'SESIMBRA AP 505': 'Sesimbra ap 505- Portugal',
 };
 
 function parseDate(dateStr: string): string {
@@ -70,13 +109,31 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<CleaningPdfData>
     const pdfData = await pdfParse(buffer);
     const text = pdfData.text;
     
+    console.log('=== INÍCIO DO TEXTO EXTRAÍDO DO PDF ===');
+    console.log(text);
+    console.log('=== FIM DO TEXTO EXTRAÍDO DO PDF ===');
+    
     // Divide o texto em linhas
     const lines = text.split('\n').map(line => line.trim()).filter(line => line);
     
+    console.log(`Total de linhas no PDF: ${lines.length}`);
+    
+    // Debug: mostra as primeiras 20 linhas para análise
+    console.log('=== PRIMEIRAS 20 LINHAS DO PDF ===');
+    lines.slice(0, 20).forEach((line, i) => {
+      console.log(`Linha ${i}: ${line}`);
+    });
+    console.log('=== FIM DAS PRIMEIRAS LINHAS ===');
+    
     // Procura o cabeçalho para extrair o período
     const headerLine = lines.find(line => 
-      line.includes('CONTROLE DE LIMPEZA') && line.includes('FECHAMENTO')
+      line.toUpperCase().includes('CONTROLE') || 
+      line.toUpperCase().includes('LIMPEZA') ||
+      line.toUpperCase().includes('FECHAMENTO') ||
+      line.toUpperCase().includes('PERÍODO')
     );
+    
+    console.log('Header encontrado:', headerLine);
     
     if (headerLine) {
       data.period = extractPeriod(headerLine);
@@ -88,38 +145,79 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<CleaningPdfData>
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      const upperLine = line.toUpperCase();
       
-      // Detecta início da seção de dados
-      if (line.includes('DATA') && lines[i + 1]?.includes('UNIDADE')) {
-        isDataSection = true;
-        continue;
+      // Detecta início da seção de dados - mais flexível
+      if (upperLine.includes('DATA') || 
+          (i > 0 && lines[i-1].toUpperCase().includes('DATA')) ||
+          line.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+        
+        // Se encontrou uma linha com data, assume que está na seção de dados
+        if (line.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+          isDataSection = true;
+          console.log(`Seção de dados iniciada na linha ${i}: ${line}`);
+        } else if (upperLine.includes('DATA')) {
+          isDataSection = true;
+          console.log(`Seção de dados detectada pela palavra DATA na linha ${i}`);
+          continue;
+        }
       }
       
       // Detecta o total
-      if (line.includes('TOTAL')) {
+      if (upperLine.includes('TOTAL')) {
         totalFound = true;
-        // Tenta extrair o valor total
-        const totalMatch = line.match(/TOTAL\s+([0-9.,]+)/);
+        console.log(`Total encontrado na linha ${i}: ${line}`);
+        // Tenta extrair o valor total - mais padrões
+        const totalMatch = line.match(/TOTAL[\s:]*([0-9.,]+)/i) || 
+                          line.match(/([0-9.,]+)/) ||
+                          (i + 1 < lines.length && lines[i + 1].match(/([0-9.,]+)/));
         if (totalMatch) {
           data.total = parseValue(totalMatch[1]);
-        } else if (i + 1 < lines.length) {
-          // Às vezes o valor está na próxima linha
-          data.total = parseValue(lines[i + 1]);
+          console.log(`Valor total extraído: ${data.total}`);
         }
         break;
       }
       
       // Processa linhas de dados
-      if (isDataSection && !totalFound) {
-        // Padrão esperado: DD/MM/YYYY UNIDADE VALOR
-        // Regex para capturar: data, unidade (pode ter espaços), valor
-        const dataMatch = line.match(/^(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([0-9.,]+)$/);
+      if (isDataSection || line.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+        // Múltiplos padrões de regex para maior flexibilidade
+        // Padrão 1: DD/MM/YYYY UNIDADE VALOR
+        let dataMatch = line.match(/^(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([0-9.,]+)$/);
+        
+        // Padrão 2: DD/MM/YYYY qualquer coisa VALOR no final
+        if (!dataMatch) {
+          dataMatch = line.match(/^(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+R?\$?\s*([0-9.,]+)$/);
+        }
+        
+        // Padrão 3: Data e valor separados por tabs ou múltiplos espaços
+        if (!dataMatch) {
+          dataMatch = line.match(/^(\d{2}\/\d{2}\/\d{4})\s{2,}(.+?)\s{2,}([0-9.,]+)$/);
+        }
+        
+        // Padrão 4: Tenta com menos restrições
+        if (!dataMatch && line.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+          const parts = line.split(/\s+/);
+          if (parts.length >= 3) {
+            const dateStr = parts[0];
+            const valueStr = parts[parts.length - 1];
+            const unit = parts.slice(1, -1).join(' ');
+            
+            if (valueStr.match(/[0-9.,]+/)) {
+              dataMatch = ['', dateStr, unit, valueStr];
+              console.log(`Linha processada com split: ${line}`);
+            }
+          }
+        }
         
         if (dataMatch) {
           const [, dateStr, unit, valueStr] = dataMatch;
           
+          console.log(`Entrada encontrada: Data=${dateStr}, Unidade=${unit}, Valor=${valueStr}`);
+          
           // Verifica se a unidade está mapeada
-          const mappedUnit = UNIT_MAPPING[unit.trim()] || unit.trim();
+          const mappedUnit = UNIT_MAPPING[unit.trim().toUpperCase()] || 
+                            UNIT_MAPPING[unit.trim()] || 
+                            unit.trim();
           
           const entry: CleaningEntry = {
             date: parseDate(dateStr),
@@ -130,6 +228,7 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<CleaningPdfData>
           data.entries.push(entry);
         } else if (line.match(/^\d{2}\/\d{2}\/\d{4}/)) {
           // Se começa com data mas não conseguimos processar completamente
+          console.log(`Linha com data não processada: ${line}`);
           data.errors.push(`Linha não processada: ${line}`);
         }
       }
