@@ -11,7 +11,6 @@ import DistributedExpenseForm from '@/components/expenses/DistributedExpenseForm
 import { DetailedCleaningForm } from '@/components/expenses/DetailedCleaningForm';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -43,7 +42,6 @@ export default function CleaningExpensesPage() {
   // PDF Import State
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<ParsedPdfData | null>(null);
-  const [selectedEntries, setSelectedEntries] = useState<Set<number>>(new Set());
   const [supplier, setSupplier] = useState("Serviço de Limpeza");
   const [paymentDate, setPaymentDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
@@ -80,16 +78,11 @@ export default function CleaningExpensesPage() {
     },
     onSuccess: (data) => {
       setParsedData(data);
-      // Pre-select all matched entries
-      const matchedIndices = data.entries
-        .map((entry: CleaningEntry, index: number) => entry.matched ? index : null)
-        .filter((index: number | null) => index !== null) as number[];
-      setSelectedEntries(new Set(matchedIndices));
       
       if (data.unmatchedCount > 0) {
         toast({
           title: "Atenção",
-          description: `${data.unmatchedCount} propriedade(s) não foram reconhecidas. Verifique antes de importar.`,
+          description: `${data.unmatchedCount} propriedade(s) não foram reconhecidas.`,
           variant: "default",
         });
       }
@@ -120,7 +113,6 @@ export default function CleaningExpensesPage() {
       // Reset state
       setFile(null);
       setParsedData(null);
-      setSelectedEntries(new Set());
       // Invalidate expenses queries
       queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/analytics'] });
@@ -150,7 +142,6 @@ export default function CleaningExpensesPage() {
     if (selectedFile && selectedFile.type === "application/pdf") {
       setFile(selectedFile);
       setParsedData(null);
-      setSelectedEntries(new Set());
     } else {
       toast({
         title: "Arquivo inválido",
@@ -166,33 +157,17 @@ export default function CleaningExpensesPage() {
     }
   };
 
-  const toggleEntry = (index: number) => {
-    const newSelected = new Set(selectedEntries);
-    if (newSelected.has(index)) {
-      newSelected.delete(index);
-    } else {
-      newSelected.add(index);
-    }
-    setSelectedEntries(newSelected);
-  };
-
-  const toggleAll = () => {
-    if (selectedEntries.size === parsedData?.entries.length) {
-      setSelectedEntries(new Set());
-    } else {
-      setSelectedEntries(new Set(parsedData?.entries.map((_, i) => i)));
-    }
-  };
 
   const handleImport = () => {
     if (!parsedData) return;
     
-    const entriesToImport = parsedData.entries.filter((_, index) => selectedEntries.has(index));
+    // Importa apenas as entradas reconhecidas (matched)
+    const entriesToImport = parsedData.entries.filter(entry => entry.matched);
     
     if (entriesToImport.length === 0) {
       toast({
-        title: "Nenhuma entrada selecionada",
-        description: "Selecione ao menos uma entrada para importar",
+        title: "Nenhuma propriedade reconhecida",
+        description: "Verifique o mapeamento das propriedades",
         variant: "destructive",
       });
       return;
@@ -432,30 +407,13 @@ export default function CleaningExpensesPage() {
                   {/* Entries Table */}
                   <Card>
                     <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle>Despesas Identificadas</CardTitle>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={toggleAll}
-                        >
-                          {selectedEntries.size === parsedData.entries.length
-                            ? "Desmarcar Todas"
-                            : "Selecionar Todas"}
-                        </Button>
-                      </div>
+                      <CardTitle>Despesas Identificadas</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="rounded-md border">
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="w-12">
-                                <Checkbox
-                                  checked={selectedEntries.size === parsedData.entries.length}
-                                  onCheckedChange={() => toggleAll()}
-                                />
-                              </TableHead>
                               <TableHead>Data</TableHead>
                               <TableHead>Unidade (PDF)</TableHead>
                               <TableHead>Propriedade (Sistema)</TableHead>
@@ -469,13 +427,6 @@ export default function CleaningExpensesPage() {
                                 key={index}
                                 className={!entry.matched ? "bg-yellow-50 dark:bg-yellow-950/20" : ""}
                               >
-                                <TableCell>
-                                  <Checkbox
-                                    checked={selectedEntries.has(index)}
-                                    onCheckedChange={() => toggleEntry(index)}
-                                    disabled={!entry.matched}
-                                  />
-                                </TableCell>
                                 <TableCell>{format(new Date(entry.date), "dd/MM/yyyy")}</TableCell>
                                 <TableCell>{entry.unit}</TableCell>
                                 <TableCell>
@@ -505,15 +456,15 @@ export default function CleaningExpensesPage() {
                       
                       <div className="mt-4 flex items-center justify-between">
                         <div className="text-sm text-muted-foreground">
-                          {selectedEntries.size} de {parsedData.entries.length} entradas selecionadas
+                          {parsedData.entries.filter(e => e.matched).length} de {parsedData.entries.length} propriedades reconhecidas
                         </div>
                         <Button
                           onClick={handleImport}
-                          disabled={selectedEntries.size === 0 || importMutation.isPending}
+                          disabled={parsedData.entries.filter(e => e.matched).length === 0 || importMutation.isPending}
                         >
                           {importMutation.isPending
                             ? "Importando..."
-                            : `Importar ${selectedEntries.size} Despesa(s)`}
+                            : `Importar ${parsedData.entries.filter(e => e.matched).length} Despesa(s)`}
                         </Button>
                       </div>
                     </CardContent>
