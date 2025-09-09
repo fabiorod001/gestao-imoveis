@@ -168,6 +168,11 @@ export default function AdvancedExpenseManager() {
   ];
 
   const handleExpenseTypeSelect = (type: ExpenseType) => {
+    // Se selecionar limpezas, redireciona para a página específica
+    if (type === 'cleaning') {
+      window.location.href = '/expenses/cleaning';
+      return;
+    }
     setSelectedExpenseType(type);
     setCurrentStep('form');
   };
