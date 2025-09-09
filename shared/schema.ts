@@ -37,6 +37,24 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Accounts table for multiple bank accounts and investments
+export const accounts = pgTable("accounts", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  name: varchar("name").notNull(), // Nome da conta (Principal, Secundária, Investimentos, etc)
+  type: varchar("type").notNull(), // checking (conta corrente), investment (investimentos)
+  bankName: varchar("bank_name"), // Nome do banco
+  accountNumber: varchar("account_number"), // Número da conta
+  agency: varchar("agency"), // Agência
+  initialBalance: decimal("initial_balance", { precision: 12, scale: 2 }).default("0"), // Saldo inicial (marco zero)
+  currentBalance: decimal("current_balance", { precision: 12, scale: 2 }).default("0"), // Saldo atual calculado
+  isActive: boolean("is_active").default(true),
+  isDefault: boolean("is_default").default(false), // Conta padrão para transações
+  displayOrder: integer("display_order").default(0), // Ordem de exibição
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Properties table
 export const properties = pgTable("properties", {
   id: serial("id").primaryKey(),
@@ -121,6 +139,10 @@ export const transactions: any = pgTable("transactions", {
   phone: varchar("phone"), // Telefone do fornecedor
   email: varchar("email"), // Email do fornecedor
   pixKey: varchar("pix_key"), // Chave PIX do fornecedor
+  // Flag for historical transactions
+  isHistorical: boolean("is_historical").default(false), // Transações históricas não afetam fluxo de caixa
+  // Account reference for multiple accounts support  
+  accountId: integer("account_id").references(() => accounts.id), // Conta associada (Principal, Secundária, etc)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -180,11 +202,20 @@ export const cleaningServiceDetails = pgTable("cleaning_service_details", {
 export const usersRelations = relations(users, ({ many }) => ({
   properties: many(properties),
   transactions: many(transactions),
+  accounts: many(accounts),
 }));
 
 export const propertiesRelations = relations(properties, ({ one, many }) => ({
   user: one(users, {
     fields: [properties.userId],
+    references: [users.id],
+  }),
+  transactions: many(transactions),
+}));
+
+export const accountsRelations = relations(accounts, ({ one, many }) => ({
+  user: one(users, {
+    fields: [accounts.userId],
     references: [users.id],
   }),
   transactions: many(transactions),
@@ -198,6 +229,10 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
   property: one(properties, {
     fields: [transactions.propertyId],
     references: [properties.id],
+  }),
+  account: one(accounts, {
+    fields: [transactions.accountId],
+    references: [accounts.id],
   }),
 }));
 
@@ -216,6 +251,9 @@ export const taxPaymentsRelations = relations(taxPayments, ({ one }) => ({
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
+export type InsertAccount = typeof accounts.$inferInsert;
+export type Account = typeof accounts.$inferSelect;
+
 export type InsertProperty = typeof properties.$inferInsert;
 export type Property = typeof properties.$inferSelect;
 
@@ -226,6 +264,13 @@ export type InsertTaxPayment = typeof taxPayments.$inferInsert;
 export type TaxPayment = typeof taxPayments.$inferSelect;
 
 // Schemas
+export const insertAccountSchema = createInsertSchema(accounts).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertPropertySchema = createInsertSchema(properties).omit({
   id: true,
   userId: true,
