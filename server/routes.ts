@@ -2785,7 +2785,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Group transactions by property
       const propertyData = new Map();
       
-      periodTransactions.forEach(transaction => {
+      transactions.forEach(transaction => {
         if (!propertyData.has(transaction.propertyId)) {
           propertyData.set(transaction.propertyId, {
             propertyId: transaction.propertyId,
@@ -4035,7 +4035,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).returning();
 
       // Get gross revenue for selected properties in competency period
-      const transactions = await db.select({
+      const transactionData = await db.select({
         propertyId: transactions.propertyId,
         amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
         type: transactions.type
@@ -4097,7 +4097,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const competencyEnd = new Date(parseInt(year), parseInt(month), 0);
       
       // Get gross revenue for selected properties in competency period
-      const transactions = await db.select({
+      const transactionData = await db.select({
         propertyId: transactions.propertyId,
         amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
         type: transactions.type
@@ -4183,7 +4183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const competencyEnd = new Date(parseInt(year), parseInt(month), 0);
       
       // Get gross revenue for selected properties in competency period
-      const transactions = await db.select({
+      const transactionData = await db.select({
         propertyId: transactions.propertyId,
         amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
         type: transactions.type
