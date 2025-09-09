@@ -343,7 +343,7 @@ export default function CleaningExpensesPage() {
                       )}
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1">
                           <p className="text-sm text-muted-foreground">Total de Entradas</p>
                           <p className="text-2xl font-bold">{parsedData.entries.length}</p>
@@ -351,12 +351,6 @@ export default function CleaningExpensesPage() {
                         <div className="space-y-1">
                           <p className="text-sm text-muted-foreground">Valor Total</p>
                           <p className="text-2xl font-bold">{formatCurrency(parsedData.total)}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-sm text-muted-foreground">Propriedades Reconhecidas</p>
-                          <p className="text-2xl font-bold">
-                            {parsedData.entries.length - parsedData.unmatchedCount} / {parsedData.entries.length}
-                          </p>
                         </div>
                       </div>
                       
@@ -454,10 +448,7 @@ export default function CleaningExpensesPage() {
                         </Table>
                       </div>
                       
-                      <div className="mt-4 flex items-center justify-between">
-                        <div className="text-sm text-muted-foreground">
-                          {parsedData.entries.filter(e => e.matched).length} de {parsedData.entries.length} propriedades reconhecidas
-                        </div>
+                      <div className="mt-4 flex justify-end">
                         <Button
                           onClick={handleImport}
                           disabled={parsedData.entries.filter(e => e.matched).length === 0 || importMutation.isPending}
