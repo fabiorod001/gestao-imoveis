@@ -1,15 +1,17 @@
 # QUICK START - RentManager
-**Última atualização: 09/01/2025**
+**Última atualização: 09/09/2025**
 
 ## 🎯 O que é este projeto?
 Sistema completo de gestão financeira para imóveis de aluguel com:
 - Controle de múltiplas propriedades
 - Importação automática de dados do Airbnb
-- **NOVO: Importação de PDF de despesas de limpeza**
+- Importação de PDF de despesas de limpeza
 - Gestão de receitas e despesas  
 - Relatórios e análises financeiras
 - Cálculo de impostos e distribuição proporcional
 - Rastreamento de datas de hospedagem para cálculo de diárias
+- **NOVO: Sistema de múltiplas contas bancárias**
+- **NOVO: Lançamentos históricos (não afetam fluxo de caixa)**
 
 ## 🚀 Como acessar?
 1. **URL Local**: http://localhost:5000
@@ -38,6 +40,7 @@ Sistema completo de gestão financeira para imóveis de aluguel com:
 - Clique em valores para abrir formulário de edição
 - Botão "Eliminar entrada" para excluir registros
 - Distribuição entre propriedades
+- **Categoria "Ajuste de Saldo"**: Para criar marcos zero no fluxo de caixa
 
 ### 4. Sistema de Limpeza com Importação de PDF ✨ NOVO!
 - **Importação Automática de PDF**: Lê PDFs de serviços de limpeza
@@ -63,6 +66,19 @@ Sistema completo de gestão financeira para imóveis de aluguel com:
 - Fluxo de caixa detalhado
 - Cálculo de ocupação e diária média (quando há datas de hospedagem)
 - Exportação para Excel/PDF
+
+### 7. Sistema de Múltiplas Contas ✨ NOVO!
+- **Conta Principal**: ~90% das transações operacionais
+- **Conta Secundária**: Financiamentos e pagamentos específicos
+- **Conta de Investimentos**: Valores aplicados (visualização opcional)
+- **Interface Discreta**: Botões de expansão no card de saldo
+- **Quebra de Saldos**: Visualização detalhada por conta
+
+### 8. Lançamentos Históricos ✨ NOVO!
+- **Checkbox "Lançamento Histórico"**: Em todos os formulários de transação
+- **Separação de Fluxos**: Lançamentos históricos não afetam o fluxo de caixa
+- **Análise de Propriedades**: Históricos aparecem nas análises individuais
+- **Marco Financeiro**: Use com "Ajuste de Saldo" para criar pontos de referência
 
 ## 🔧 Configurações Importantes
 
@@ -151,7 +167,7 @@ Arquivo: `server/cleaningPdfParser.ts`
 - **Checkpoints** salvam automaticamente
 - **Categorias de receita**: Use "Airbnb" para importações, "Booking" para outras plataformas
 
-## 📌 Status Atual (09/01/2025)
+## 📌 Status Atual (09/09/2025)
 - ✅ Sistema 100% funcional
 - ✅ Importação com detecção de período e datas de hospedagem
 - ✅ Preservação inteligente (só sobrescreve Airbnb do período)
@@ -162,10 +178,33 @@ Arquivo: `server/cleaningPdfParser.ts`
 - ✅ **Editor Universal de Transações** implementado
 - ✅ **Sistema de notificações permanentes** com botão OK obrigatório
 - ✅ **Importação de PDF de Limpeza** com reconhecimento automático
+- ✅ **Sistema de Múltiplas Contas** com visualização detalhada
+- ✅ **Lançamentos Históricos** separados do fluxo de caixa
+- ✅ **Categoria "Ajuste de Saldo"** para marcos financeiros
 
-## 🔄 Última Atualização (09/01/2025)
+## 🔄 Última Atualização (09/09/2025)
 
-### Melhorias Recentes:
+### Melhorias Implementadas Hoje:
+
+- **Sistema de Múltiplas Contas Bancárias**
+  - Estrutura para gerenciar Conta Principal, Secundária e Investimentos
+  - Interface discreta com botões de expansão no fluxo de caixa
+  - Visualização detalhada de saldos por conta
+  - Ícone de seta para expandir detalhes
+  - Ícone de olho para mostrar/ocultar investimentos
+
+- **Lançamentos Históricos**
+  - Checkbox amarelo "Lançamento Histórico" em todos os formulários
+  - Transações históricas não afetam o fluxo de caixa atual
+  - Aparecem nas análises individuais de propriedades
+  - Ideal para importar dados históricos sem impactar saldo atual
+
+- **Categoria "Ajuste de Saldo"**
+  - Nova categoria administrativa para despesas
+  - Permite criar marcos zero no fluxo de caixa
+  - Útil para estabelecer pontos de referência financeiros
+
+### Melhorias Anteriores:
 
 - **Sistema de Importação de PDF de Limpeza**
   - Parser inteligente que reconhece múltiplos formatos de PDF
