@@ -38,6 +38,8 @@ const formSchema = z.object({
   recurringPeriod: z.string().optional(),
   recurringEndDate: z.string().optional(),
   notes: z.string().optional(),
+  // Flag para lançamentos históricos
+  isHistorical: z.boolean(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -110,6 +112,7 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
       phone: '',
       email: '',
       pixKey: '',
+      isHistorical: false,
     },
   });
 
@@ -526,6 +529,28 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
                 />
               </FormControl>
               <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Campo para lançamento histórico */}
+        <FormField
+          control={form.control}
+          name="isHistorical"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 bg-yellow-50 dark:bg-yellow-900/20">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Lançamento Histórico</FormLabel>
+                <div className="text-sm text-gray-500">
+                  Marque esta opção se este lançamento é histórico e não deve afetar o fluxo de caixa atual
+                </div>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
             </FormItem>
           )}
         />
