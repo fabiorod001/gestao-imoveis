@@ -6,9 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Lightbulb, Wrench, CreditCard, Trash2 } from "lucide-react";
+import { Lightbulb, Wrench, CreditCard, Trash2, Landmark } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Property } from "@shared/schema";
@@ -22,6 +23,7 @@ const singleExpenseSchema = z.object({
   description: z.string().min(1, "Descrição é obrigatória"),
   supplier: z.string().optional(),
   cpfCnpj: z.string().optional(),
+  isHistorical: z.boolean().optional(),
 });
 
 type FormData = z.infer<typeof singleExpenseSchema>;
@@ -64,6 +66,12 @@ const expenseTypeConfig = {
     category: 'commissions',
     placeholderDescription: 'Ex: Comissão venda',
   },
+  balance_adjustment: {
+    title: 'Ajuste de Saldo',
+    icon: Landmark,
+    category: 'balance_adjustment',
+    placeholderDescription: 'Ex: Marco Zero - Setembro 2025',
+  },
 };
 
 export default function SingleExpenseForm({ 
@@ -88,6 +96,7 @@ export default function SingleExpenseForm({
       description: "",
       supplier: "",
       cpfCnpj: "",
+      isHistorical: false,
     },
   });
 
@@ -123,6 +132,7 @@ export default function SingleExpenseForm({
     
     const transactionData = {
       propertyId: parseInt(data.propertyId),
+      isHistorical: data.isHistorical || false,
       type: 'expense',
       category: config.category,
       description: data.description,
@@ -242,6 +252,35 @@ export default function SingleExpenseForm({
                 )}
               />
             </div>
+
+            {/* Historical Transaction Checkbox - Always show for Ajuste de Saldo */}
+            {(expenseType === 'balance_adjustment' || includeSupplier) && (
+              <FormField
+                control={form.control}
+                name="isHistorical"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-yellow-50 border-yellow-200">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        className="data-[state=checked]:bg-yellow-600 data-[state=checked]:border-yellow-600"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="text-sm font-medium cursor-pointer">
+                        Lançamento Histórico
+                      </FormLabel>
+                      <p className="text-xs text-gray-600">
+                        {expenseType === 'balance_adjustment' 
+                          ? 'Marque para criar um marco zero que não afeta o fluxo de caixa' 
+                          : 'Marque se esta transação é histórica e não deve afetar o fluxo de caixa'}
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            )}
 
             {/* Supplier Info (if needed) */}
             {includeSupplier && (

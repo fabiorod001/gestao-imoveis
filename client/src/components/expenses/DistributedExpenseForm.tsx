@@ -27,6 +27,7 @@ const distributedExpenseSchema = z.object({
   amount: z.string().min(1, 'Valor é obrigatório'),
   paymentDate: z.string().min(1, 'Data de pagamento é obrigatória'),
   selectedPropertyIds: z.array(z.number()).min(1, 'Selecione pelo menos uma propriedade'),
+  isHistorical: z.boolean().optional(),
 });
 
 type DistributedExpenseFormData = z.infer<typeof distributedExpenseSchema>;
@@ -69,6 +70,7 @@ export default function DistributedExpenseForm({ expenseType, title, description
       amount: '',
       paymentDate: new Date().toISOString().split('T')[0],
       selectedPropertyIds: [],
+      isHistorical: false,
     },
   });
 
@@ -90,7 +92,8 @@ export default function DistributedExpenseForm({ expenseType, title, description
     mutationFn: async (data: DistributedExpenseFormData) => {
       const response = await apiRequest('/api/expenses/distributed', 'POST', {
         ...data,
-        expenseType
+        expenseType,
+        isHistorical: data.isHistorical || false
       });
       return response.json();
     },
@@ -256,6 +259,31 @@ export default function DistributedExpenseForm({ expenseType, title, description
                 )}
               />
             </div>
+
+            {/* Historical Transaction Checkbox */}
+            <FormField
+              control={form.control}
+              name="isHistorical"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-yellow-50 border-yellow-200">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      className="data-[state=checked]:bg-yellow-600 data-[state=checked]:border-yellow-600"
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="text-sm font-medium cursor-pointer">
+                      Lançamento Histórico
+                    </FormLabel>
+                    <FormDescription className="text-xs text-gray-600">
+                      Marque esta opção se esta transação é histórica e não deve afetar o fluxo de caixa
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
 
             {/* Property Selection */}
             <FormField
