@@ -182,9 +182,26 @@ Arquivo: `server/cleaningPdfParser.ts`
 - ✅ **Lançamentos Históricos** separados do fluxo de caixa
 - ✅ **Categoria "Ajuste de Saldo"** para marcos financeiros
 
-## 🔄 Última Atualização (09/09/2025)
+## 🔄 Última Atualização (09/09/2025 - 22:00)
 
-### Melhorias Implementadas Hoje:
+### 🆕 Novas Funcionalidades Implementadas Hoje:
+
+- **Lançamentos Históricos (Reformulado)**
+  - Checkbox simples e discreto em TODOS os formulários de receitas e despesas
+  - Checkbox amarelo quando marcado (visual diferenciado)
+  - Transações marcadas NÃO afetam o fluxo de caixa
+  - Útil para dados históricos sem impactar projeções futuras
+
+- **Marco Zero / Ajuste de Saldo (Nova Página)**
+  - Localização: Menu **Configurações** no sidebar
+  - Interface completa para definir saldos iniciais
+  - Contas padrão: Principal, Secundária, Investimentos
+  - Sistema de adição de novas contas (ilimitado)
+  - Tipos de conta: Conta Corrente ou Investimento
+  - Cria lançamentos históricos automaticamente
+  - Ideal para estabelecer ponto de partida financeiro
+
+### Melhorias Implementadas Anteriormente Hoje:
 
 - **Sistema de Múltiplas Contas Bancárias**
   - Estrutura para gerenciar Conta Principal, Secundária e Investimentos
@@ -199,10 +216,10 @@ Arquivo: `server/cleaningPdfParser.ts`
   - Aparecem nas análises individuais de propriedades
   - Ideal para importar dados históricos sem impactar saldo atual
 
-- **Categoria "Ajuste de Saldo"**
-  - Nova categoria administrativa para despesas
-  - Permite criar marcos zero no fluxo de caixa
-  - Útil para estabelecer pontos de referência financeiros
+- **Sistema de Múltiplas Contas (Interface preparada)**
+  - Estrutura visual para gerenciar múltiplas contas
+  - Botões discretos de expansão no fluxo de caixa
+  - Base para futura separação de saldos por conta
 
 ### Melhorias Anteriores:
 
