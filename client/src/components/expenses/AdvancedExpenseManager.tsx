@@ -14,8 +14,7 @@ import {
   Receipt,
   Trash2,
   ArrowLeft,
-  Plus,
-  Landmark
+  Plus
 } from "lucide-react";
 import ExpenseTypeSelector from "./ExpenseTypeSelector";
 import CondominiumExpenseForm from "./CondominiumExpenseForm";
@@ -35,7 +34,6 @@ export type ExpenseType =
   | 'internet'
   | 'cleaning'
   | 'commissions'
-  | 'balance_adjustment'
   | 'other';
 
 export interface PropertyExpenseStructure {
@@ -166,13 +164,6 @@ export default function AdvancedExpenseManager() {
       description: 'Luz, gás, água, TV, internet e outras',
       icon: Lightbulb,
       color: 'bg-yellow-50 hover:bg-yellow-100 border-yellow-200'
-    },
-    {
-      type: 'balance_adjustment' as ExpenseType,
-      title: 'Ajuste de Saldo',
-      description: 'Criar marcos zero e ajustes administrativos',
-      icon: Landmark,
-      color: 'bg-amber-50 hover:bg-amber-100 border-amber-200'
     }
   ];
 
@@ -229,7 +220,6 @@ export default function AdvancedExpenseManager() {
       case 'cleaning':
       case 'commissions':
       case 'other':
-      case 'balance_adjustment':
         return (
           <SingleExpenseForm
             expenseType={selectedExpenseType}
