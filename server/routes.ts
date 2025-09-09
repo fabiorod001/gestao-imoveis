@@ -11,6 +11,7 @@ import * as fs from "fs";
 import { db } from "./db";
 import { eq, and, gte, lte, lt, asc, desc, sql, inArray, or, isNull } from "drizzle-orm";
 import { parseAirbnbCSV, mapListingToProperty } from "./csvParser";
+import { parseCleaningPdf } from "./cleaningPdfParser";
 import { format } from "date-fns";
 
 
@@ -84,6 +85,21 @@ const uploadCSV = multer({
       cb(null, true);
     } else {
       cb(new Error('Apenas arquivos .csv são permitidos'));
+    }
+  },
+});
+
+// Configure multer for PDF file uploads (Cleaning import)
+const uploadPDF = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || file.originalname.endsWith('.pdf')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Apenas arquivos .pdf são permitidos'));
     }
   },
 });
@@ -4410,6 +4426,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PDF Import for Cleaning Expenses
+  app.post("/api/cleaning/parse-pdf", isAuthenticated, uploadPDF.single('file'), async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      
+      if (!req.file) {
+        return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      }
+
+      // Parse the PDF
+      const pdfData = await parseCleaningPdf(req.file.buffer);
+      
+      // Get user's properties for mapping
+      const userProperties = await storage.getProperties(userId);
+      
+      // Create a mapping of normalized property names
+      const propertyMap = new Map<string, Property>();
+      for (const prop of userProperties) {
+        // Map by name
+        const normalizedName = prop.name.normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toUpperCase()
+          .trim();
+        propertyMap.set(normalizedName, prop);
+        
+        // Also map by nickname if available
+        if (prop.nickname) {
+          const normalizedNickname = prop.nickname.normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toUpperCase()
+            .trim();
+          propertyMap.set(normalizedNickname, prop);
+        }
+      }
+      
+      // Process entries and find matching properties
+      const processedEntries = pdfData.entries.map(entry => {
+        const normalizedUnit = entry.unit.normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toUpperCase()
+          .trim();
+        
+        const matchedProperty = propertyMap.get(normalizedUnit);
+        
+        return {
+          ...entry,
+          propertyId: matchedProperty?.id || null,
+          propertyName: matchedProperty?.name || entry.unit,
+          matched: !!matchedProperty
+        };
+      });
+      
+      // Return parsed data for preview
+      res.json({
+        success: true,
+        period: pdfData.period,
+        entries: processedEntries,
+        total: pdfData.total,
+        errors: pdfData.errors,
+        unmatchedCount: processedEntries.filter(e => !e.matched).length
+      });
+      
+    } catch (error) {
+      console.error("Error parsing cleaning PDF:", error);
+      res.status(500).json({ error: "Erro ao processar PDF" });
+    }
+  });
+
+  // Import cleaning expenses from parsed PDF data
+  app.post("/api/cleaning/import-pdf", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { entries, supplier = "Serviço de Limpeza", paymentDate } = req.body;
+      
+      if (!entries || !Array.isArray(entries) || entries.length === 0) {
+        return res.status(400).json({ error: "Nenhuma entrada para importar" });
+      }
+      
+      const importedTransactions = [];
+      const errors = [];
+      
+      for (const entry of entries) {
+        if (!entry.propertyId) {
+          errors.push(`Propriedade não encontrada: ${entry.unit}`);
+          continue;
+        }
+        
+        try {
+          // Create expense transaction
+          const [transaction] = await db.insert(transactions).values({
+            userId,
+            propertyId: entry.propertyId,
+            type: 'expense',
+            category: 'cleaning',
+            amount: String(entry.value),
+            description: `Limpeza - ${format(new Date(entry.date), 'dd/MM/yyyy')}`,
+            date: new Date(entry.date),
+            supplier,
+            paymentDate: paymentDate ? new Date(paymentDate) : new Date(entry.date)
+          }).returning();
+          
+          importedTransactions.push(transaction);
+        } catch (error) {
+          console.error(`Error importing entry for ${entry.unit}:`, error);
+          errors.push(`Erro ao importar ${entry.unit}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+        }
+      }
+      
+      res.json({
+        success: true,
+        imported: importedTransactions.length,
+        errors,
+        message: `${importedTransactions.length} despesas de limpeza importadas com sucesso`
+      });
+      
+    } catch (error) {
+      console.error("Error importing cleaning expenses:", error);
+      res.status(500).json({ error: "Erro ao importar despesas" });
+    }
+  });
 
 
   const httpServer = createServer(app);
