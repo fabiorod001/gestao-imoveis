@@ -30,8 +30,9 @@ const UNIT_MAPPING: Record<string, string> = {
   'SEVILHA 307': 'Sevilha 307',
   'SEVILHA307': 'Sevilha 307',
   
-  // Haddock Lobo
+  // Haddock Lobo (incluindo erro de digitação comum)
   'HADDOCK LOBO': 'Next Haddock Lobo',
+  'HADDOK LOBO': 'Next Haddock Lobo', // Erro de digitação comum
   'HADDOCKLOBO': 'Next Haddock Lobo',
   'NEXT HADDOCK LOBO': 'Next Haddock Lobo',
   
@@ -183,42 +184,58 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<ParsedPdfData> {
         continue;
       }
       
-      // Detecta linha de total
-      if (line.toUpperCase().startsWith('TOTAL')) {
-        const totalMatch = line.match(/([0-9.,]+)/);
-        if (totalMatch) {
-          data.total = parseValue(totalMatch[1]);
+      // Ignora linhas de SUBTOTAL, DESCONTO e TOTAL
+      if (line.toUpperCase().includes('SUBTOTAL') || 
+          line.toUpperCase().includes('DESCONTO') ||
+          line.toUpperCase().includes('TOTAL')) {
+        // Se for a linha de TOTAL final, captura o valor para referência
+        if (line.toUpperCase().includes('TOTAL') && !line.toUpperCase().includes('SUBTOTAL')) {
+          const totalMatch = line.match(/R?\$?\s*([0-9.,]+)/);
+          if (totalMatch) {
+            data.total = parseValue(totalMatch[1]);
+          }
         }
-        isDataSection = false;
-        break;
+        continue; // Pula essas linhas
       }
       
       // Processa linhas de dados
       if (isDataSection || line.match(/^\d{2}\/\d{2}\/\d{4}/)) {
-        const parsed = intelligentSplit(line);
+        // Tenta primeiro o formato com espaços
+        let dataMatch = line.match(/^(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+R?\$?\s*([0-9.,]+)$/);
         
-        if (parsed) {
-          // Verifica se a unidade está mapeada
-          const unitUpper = parsed.unit.toUpperCase();
+        // Se não encontrou, tenta o formato sem espaços
+        if (!dataMatch) {
+          const parsed = intelligentSplit(line);
+          if (parsed) {
+            dataMatch = ['', parsed.date, parsed.unit, parsed.value];
+          }
+        }
+        
+        if (dataMatch) {
+          const [, dateStr, unit, valueStr] = dataMatch;
+          
+          // Limpa e mapeia a unidade
+          const unitClean = unit.trim();
+          const unitUpper = unitClean.toUpperCase();
           
           // Procura o mapeamento correto
           let mappedUnit = UNIT_MAPPING[unitUpper] || 
-                           UNIT_MAPPING[parsed.unit] ||
+                           UNIT_MAPPING[unitClean] ||
                            null;
           
           // Se não encontrou direto, tenta variações
           if (!mappedUnit) {
             // Remove espaços extras e tenta novamente
-            const unitNoSpace = parsed.unit.replace(/\s+/g, '');
+            const unitNoSpace = unitClean.replace(/\s+/g, '');
             mappedUnit = UNIT_MAPPING[unitNoSpace.toUpperCase()] || 
                         UNIT_MAPPING[unitNoSpace] ||
-                        parsed.unit;
+                        unitClean;
           }
           
           const entry: CleaningEntry = {
-            date: parseDate(parsed.date),
-            unit: mappedUnit || parsed.unit,
-            value: parseValue(parsed.value)
+            date: parseDate(dateStr),
+            unit: mappedUnit || unitClean,
+            value: parseValue(valueStr)
           };
           
           data.entries.push(entry);
@@ -226,22 +243,12 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<ParsedPdfData> {
       }
     }
     
-    // Calcula o total das entradas processadas
+    // Calcula o total das entradas processadas (soma dos valores individuais)
     const calculatedTotal = data.entries.reduce((sum, entry) => sum + entry.value, 0);
     
-    // Se não temos total do PDF, usa o calculado
-    if (data.total === 0 && calculatedTotal > 0) {
-      data.total = calculatedTotal;
-    }
-    
-    // Validação final: só adiciona erro se houver discrepância significativa (> 1 real)
-    if (data.total > 0 && Math.abs(calculatedTotal - data.total) > 1) {
-      // Só adiciona se for uma diferença relevante, não por centavos
-      const diff = Math.abs(calculatedTotal - data.total);
-      if (diff > 10) {
-        data.errors.push(`Atenção: diferença de ${diff.toFixed(2)} entre o total calculado e o informado no PDF`);
-      }
-    }
+    // IMPORTANTE: Usamos o total calculado das entradas individuais
+    // Ignoramos o total do PDF se houver desconto, pois queremos os valores individuais
+    data.total = calculatedTotal;
     
   } catch (error) {
     console.error('Erro ao processar PDF:', error);
