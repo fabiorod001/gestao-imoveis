@@ -65,6 +65,7 @@ const expenseCategories = [
   { value: 'management', label: 'Gestão' },
   { value: 'financing', label: 'Financiamento' },
   { value: 'decoration', label: 'Decoração' },
+  { value: 'balance_adjustment', label: 'Ajuste de Saldo' },
   { value: 'other', label: 'Outros' },
 ];
 

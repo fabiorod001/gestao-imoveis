@@ -3377,7 +3377,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             and(
               eq(transactions.userId, userId),
               gte(transactions.date, settings.initialDate),
-              lt(transactions.date, startDateStr)
+              lt(transactions.date, startDateStr),
+              eq(transactions.isHistorical, false) // Ignorar transações históricas
             )
           );
         
@@ -3407,7 +3408,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           and(
             eq(transactions.userId, userId),
             gte(transactions.date, startDate.toISOString().split('T')[0]),
-            lte(transactions.date, endDate.toISOString().split('T')[0])
+            lte(transactions.date, endDate.toISOString().split('T')[0]),
+            eq(transactions.isHistorical, false) // Ignorar transações históricas
           )
         )
         .orderBy(asc(transactions.date));
@@ -3503,7 +3505,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             and(
               eq(transactions.userId, userId),
               gte(transactions.date, settings.initialDate),
-              lt(transactions.date, startDateStr)
+              lt(transactions.date, startDateStr),
+              eq(transactions.isHistorical, false) // Ignorar transações históricas
             )
           );
         
@@ -3533,7 +3536,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           and(
             eq(transactions.userId, userId),
             gte(transactions.date, startDate.toISOString().split('T')[0]),
-            lte(transactions.date, endDate.toISOString().split('T')[0])
+            lte(transactions.date, endDate.toISOString().split('T')[0]),
+            eq(transactions.isHistorical, false) // Ignorar transações históricas
           )
         )
         .orderBy(asc(transactions.date));
@@ -3703,7 +3707,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : amount;
 
       // Get properties for distribution
-      const properties = await db
+      const userProperties = await db
         .select()
         .from(properties)
         .where(
@@ -3713,7 +3717,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
         );
 
-      if (properties.length === 0) {
+      if (userProperties.length === 0) {
         return res.status(404).json({ error: "Propriedades não encontradas" });
       }
 
@@ -3725,7 +3729,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       startDate.setDate(startDate.getDate() - 29);
 
       // Get revenues for each property in the period
-      const revenuePromises = properties.map(async (property) => {
+      const revenuePromises = userProperties.map(async (property) => {
         const revenues = await db
           .select({
             total: sql<number>`COALESCE(SUM(${transactions.amount}), 0)`
@@ -3757,7 +3761,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const transactionPromises = propertyRevenues.map(async (propRevenue) => {
         const proportion = hasRevenue 
           ? propRevenue.revenue / totalRevenue 
-          : 1 / properties.length;
+          : 1 / userProperties.length;
         
         const distributedAmount = parsedAmount * proportion;
 
@@ -3785,19 +3789,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return null;
       });
 
-      const transactions = (await Promise.all(transactionPromises)).filter(Boolean);
+      const createdTransactions = (await Promise.all(transactionPromises)).filter(Boolean);
 
       res.json({ 
         success: true, 
-        transactions,
+        transactions: createdTransactions,
         distribution: propertyRevenues.map(p => ({
           ...p,
           amount: hasRevenue 
             ? parsedAmount * (p.revenue / totalRevenue)
-            : parsedAmount / properties.length,
+            : parsedAmount / userProperties.length,
           percentage: hasRevenue 
             ? (p.revenue / totalRevenue * 100).toFixed(2) + '%'
-            : (100 / properties.length).toFixed(2) + '%'
+            : (100 / userProperties.length).toFixed(2) + '%'
         }))
       });
     } catch (error) {
@@ -3877,7 +3881,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Dados obrigatórios faltando" });
       }
 
-      const transactions = [];
+      const createdTransactions = [];
       let totalAmount = 0;
 
       // Create individual transactions for each property
@@ -3897,12 +3901,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           notes: `Pagamento de ${item.quantity} limpeza${item.quantity > 1 ? 's' : ''} no valor unitário de R$ ${item.unitValue.toFixed(2).replace('.', ',')}`
         }).returning();
         
-        transactions.push(transaction[0]);
+        createdTransactions.push(transaction[0]);
       }
 
       res.json({ 
         success: true, 
-        transactions,
+        transactions: createdTransactions,
         totalAmount,
         message: `Despesas de limpeza cadastradas para ${items.length} propriedade${items.length > 1 ? 's' : ''}`
       });
@@ -3928,7 +3932,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : amount;
 
       // Get properties
-      const properties = await db
+      const userProperties = await db
         .select()
         .from(properties)
         .where(
@@ -3946,7 +3950,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       startDate.setDate(startDate.getDate() - 29);
 
       // Get revenues
-      const revenuePromises = properties.map(async (property) => {
+      const revenuePromises = userProperties.map(async (property) => {
         const revenues = await db
           .select({
             total: sql<number>`COALESCE(SUM(${transactions.amount}), 0)`
@@ -3977,10 +3981,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         revenue: p.revenue,
         amount: hasRevenue 
           ? parsedAmount * (p.revenue / totalRevenue)
-          : parsedAmount / properties.length,
+          : parsedAmount / userProperties.length,
         percentage: hasRevenue 
           ? (p.revenue / totalRevenue * 100).toFixed(2) + '%'
-          : (100 / properties.length).toFixed(2) + '%'
+          : (100 / userProperties.length).toFixed(2) + '%'
       }));
 
       res.json({
