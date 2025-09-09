@@ -1,10 +1,11 @@
 # QUICK START - RentManager
-**Última atualização: 03/09/2025**
+**Última atualização: 09/01/2025**
 
 ## 🎯 O que é este projeto?
 Sistema completo de gestão financeira para imóveis de aluguel com:
 - Controle de múltiplas propriedades
 - Importação automática de dados do Airbnb
+- **NOVO: Importação de PDF de despesas de limpeza**
 - Gestão de receitas e despesas  
 - Relatórios e análises financeiras
 - Cálculo de impostos e distribuição proporcional
@@ -38,7 +39,17 @@ Sistema completo de gestão financeira para imóveis de aluguel com:
 - Botão "Eliminar entrada" para excluir registros
 - Distribuição entre propriedades
 
-### 4. Importação Airbnb
+### 4. Sistema de Limpeza com Importação de PDF ✨ NOVO!
+- **Importação Automática de PDF**: Lê PDFs de serviços de limpeza
+- **Reconhecimento Inteligente**: Mapeia automaticamente propriedades
+- **Processamento em Lote**: Importa múltiplas limpezas de uma vez
+- **Suporte a Formatos Múltiplos**: 
+  - PDFs com ou sem espaços entre campos
+  - Suporte a descontos/adiantamentos (usa valores individuais)
+  - Reconhece variações de nomes (ex: HADDOK/HADDOCK)
+- **Interface Simplificada**: Importação direta sem seleção manual
+
+### 5. Importação Airbnb
 - **Histórico**: Relatórios de pagamentos realizados
 - **Futuro**: Reservas pendentes
 - **Datas de hospedagem**: Captura automática das colunas 5 (início) e 6 (fim)
@@ -46,7 +57,7 @@ Sistema completo de gestão financeira para imóveis de aluguel com:
 - Substituição inteligente (preserva Booking, Recorrente e outras fontes)
 - Preserva receitas Airbnb fora do período do relatório
 
-### 5. Relatórios
+### 6. Relatórios
 - Dashboard com visão geral
 - Análise por propriedade individual
 - Fluxo de caixa detalhado
@@ -65,6 +76,12 @@ const AIRBNB_PROPERTY_MAPPING = {
 }
 ```
 
+### Mapeamento de Limpeza (PDF)
+Arquivo: `server/cleaningPdfParser.ts`
+- Mapeamento automático de variações de nomes
+- Suporta erros de digitação comuns (HADDOK/HADDOCK)
+- Reconhece todas as 10 propriedades do sistema
+
 ### Categorias de Receitas
 - **Airbnb**: Importação automática com datas de hospedagem
 - **Booking**: Outras plataformas de reserva
@@ -82,8 +99,9 @@ const AIRBNB_PROPERTY_MAPPING = {
 2. **Configure o mapeamento** Airbnb no código
 3. **Importe dados históricos** via Excel ou CSV
 4. **Importe relatórios Airbnb** mensalmente (sobrescreve apenas período do relatório)
-5. **Registre despesas** conforme ocorrem
-6. **Analise relatórios** para tomada de decisão
+5. **Importe PDFs de limpeza** quando receber do fornecedor
+6. **Registre despesas** conforme ocorrem
+7. **Analise relatórios** para tomada de decisão
 
 ## ⚠️ Pontos de Atenção
 
@@ -93,6 +111,10 @@ const AIRBNB_PROPERTY_MAPPING = {
   - Remove apenas transações Airbnb do período do relatório
   - Preserva Booking e outras fontes sempre
   - Preserva Airbnb de outros períodos
+- **Importação PDF Limpeza**:
+  - Ignora descontos/adiantamentos automaticamente
+  - Usa valores individuais de cada serviço
+  - Importa apenas propriedades reconhecidas
 - **Datas de Hospedagem**: Essenciais para cálculo de ocupação e diária média
 - **Backup**: Sistema cria checkpoints automáticos
 
@@ -102,6 +124,11 @@ const AIRBNB_PROPERTY_MAPPING = {
 - Verifique o mapeamento de propriedades
 - Confirme formato do CSV (deve ser o relatório oficial Airbnb)
 - Certifique que o CSV tem as colunas de data de início e fim
+
+### PDF de limpeza não reconhece propriedades?
+- Verifique os nomes exatos no sistema
+- O parser reconhece variações comuns automaticamente
+- Propriedades não reconhecidas aparecem em amarelo
 
 ### Propriedade não aparece?
 - Certifique que está ativa
@@ -120,10 +147,11 @@ const AIRBNB_PROPERTY_MAPPING = {
 - Use **Ctrl+Click** para editar valores inline
 - **Arraste** para reordenar categorias
 - **Reimporte** CSVs do Airbnb para atualizar com datas de hospedagem
+- **PDFs de limpeza** são processados automaticamente sem seleção manual
 - **Checkpoints** salvam automaticamente
 - **Categorias de receita**: Use "Airbnb" para importações, "Booking" para outras plataformas
 
-## 📌 Status Atual (03/09/2025)
+## 📌 Status Atual (09/01/2025)
 - ✅ Sistema 100% funcional
 - ✅ Importação com detecção de período e datas de hospedagem
 - ✅ Preservação inteligente (só sobrescreve Airbnb do período)
@@ -133,10 +161,34 @@ const AIRBNB_PROPERTY_MAPPING = {
 - ✅ Formulário de receitas com datas de acomodação funcionando
 - ✅ **Editor Universal de Transações** implementado
 - ✅ **Sistema de notificações permanentes** com botão OK obrigatório
+- ✅ **Importação de PDF de Limpeza** com reconhecimento automático
 
-## 🔄 Última Atualização (03/09/2025)
+## 🔄 Última Atualização (09/01/2025)
 
 ### Melhorias Recentes:
+
+- **Sistema de Importação de PDF de Limpeza**
+  - Parser inteligente que reconhece múltiplos formatos de PDF
+  - Suporte a PDFs com/sem espaços entre campos
+  - Ignora automaticamente descontos e adiantamentos
+  - Usa valores individuais de cada serviço
+  - Reconhece variações de nomes (HADDOK/HADDOCK, etc)
+  - Interface simplificada sem checkboxes
+  - Importação automática de todas as entradas reconhecidas
+
+- **Melhorias no Parser de PDF**
+  - Detecção automática de formato (concatenado ou espaçado)
+  - Mapeamento completo das 10 propriedades do sistema
+  - Tratamento de erros de digitação comuns
+  - Remoção de logs de debug e mensagens desnecessárias
+
+- **Interface de Limpeza Aprimorada**
+  - Remoção de seleção manual (checkboxes)
+  - Importação direta com um clique
+  - Visualização clara de propriedades reconhecidas/não reconhecidas
+  - Remoção de informações confusas de contagem
+
+### Funcionalidades Anteriores:
 - **Sistema de Notificações Permanentes**
   - Avisos não desaparecem automaticamente
   - Botão OK obrigatório para confirmar leitura
@@ -151,7 +203,6 @@ const AIRBNB_PROPERTY_MAPPING = {
   - Filtro de mês mostra todos os 108+ meses com transações (2014-2025)
   - Seleção dinâmica baseada em dados reais do sistema
 
-### Funcionalidades Anteriores:
 - **Editor Universal de Transações** (`EditTransactionDialog`)
   - Formulário unificado para editar qualquer transação no sistema
   - Clique em valores de despesas/receitas abre formulário completo
