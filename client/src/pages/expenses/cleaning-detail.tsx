@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Plus, Edit2, Check, X, DollarSign } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Edit2, Check, X, DollarSign, FileSpreadsheet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -299,10 +300,18 @@ export default function CleaningDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Limpeza - Análise Detalhada</h1>
-        <Button onClick={() => setShowCleaningForm(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Despesa de Limpeza
-        </Button>
+        <div className="flex gap-2">
+          <Link href="/expenses/cleaning">
+            <Button variant="outline">
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Importar PDF
+            </Button>
+          </Link>
+          <Button onClick={() => setShowCleaningForm(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Despesa de Limpeza
+          </Button>
+        </div>
       </div>
 
       {/* View Mode Toggle */}
