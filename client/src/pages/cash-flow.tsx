@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, DollarSign, Calendar, Filter, RefreshCw, Eye, EyeOff, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Calendar, Filter, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface CashFlowData {
@@ -30,8 +30,6 @@ export default function CashFlowPage() {
   const [showSaidas, setShowSaidas] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showAccountBreakdown, setShowAccountBreakdown] = useState(false);
-  const [showInvestments, setShowInvestments] = useState(false);
 
   // Fetch cash flow data
   const { data: cashFlowData = [], isLoading: isLoadingCashFlow, refetch: refetchCashFlow } = useQuery({
@@ -179,45 +177,10 @@ export default function CashFlowPage() {
                 <div className="flex items-center space-x-2 mb-2">
                   <DollarSign className="w-6 h-6" />
                   <span className="text-lg font-medium opacity-90">Saldo Hoje</span>
-                  {/* Botões discretos para expandir detalhes */}
-                  <button
-                    onClick={() => setShowAccountBreakdown(!showAccountBreakdown)}
-                    className="ml-2 p-1 rounded hover:bg-white/10 transition-colors"
-                    title="Ver quebra por conta"
-                  >
-                    <ChevronRight className={`w-4 h-4 transition-transform ${showAccountBreakdown ? 'rotate-90' : ''}`} />
-                  </button>
-                  <button
-                    onClick={() => setShowInvestments(!showInvestments)}
-                    className="p-1 rounded hover:bg-white/10 transition-colors"
-                    title="Ver investimentos"
-                  >
-                    {showInvestments ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
                 </div>
                 <div className={`text-3xl font-bold ${todayData.balance < 0 ? 'text-red-300' : ''}`}>
                   {formatCurrency(todayData.balance)}
                 </div>
-                
-                {/* Quebra por conta - expansível */}
-                {showAccountBreakdown && (
-                  <div className="mt-3 pt-3 border-t border-white/20 space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="opacity-75">Conta Principal:</span>
-                      <span className="font-semibold">{formatCurrency(todayData.balance * 0.9)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="opacity-75">Conta Secundária:</span>
-                      <span className="font-semibold">{formatCurrency(todayData.balance * 0.1)}</span>
-                    </div>
-                    {showInvestments && (
-                      <div className="flex justify-between text-sm pt-2 border-t border-white/10">
-                        <span className="opacity-75">Investimentos:</span>
-                        <span className="font-semibold text-yellow-200">{formatCurrency(0)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
               <div className="text-right">
                 <div className="text-sm opacity-75 mb-1">Movimentação do Dia</div>
