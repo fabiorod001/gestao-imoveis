@@ -84,15 +84,13 @@ const EXPENSE_CATEGORY_LABELS = {
 };
 
 export default function ExpensesPage() {
-  // Function to get current month in MM/YYYY format
-  const getCurrentMonth = () => {
+  // Memoized current month to prevent re-renders
+  const currentMonth = useMemo(() => {
     const now = new Date();
     return `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-  };
+  }, []);
   
-  // Always default to current month
-  const currentMonth = getCurrentMonth(); // "07/2025"
-  const defaultMonths = [currentMonth];
+  const defaultMonths = useMemo(() => [currentMonth], [currentMonth]);
   
   const [selectedMonths, setSelectedMonths] = useState<string[]>(defaultMonths);
   const [selectedProperties, setSelectedProperties] = useState<number[]>([]);
@@ -138,7 +136,7 @@ export default function ExpensesPage() {
     // - Current month only
     // - All properties selected
     // - Only the specific category
-    const currentMonth = getCurrentMonth();
+    // currentMonth is now memoized above
     const allPropertyIds = allProperties.map(p => p.id);
     
     const params = new URLSearchParams({
@@ -602,9 +600,9 @@ export default function ExpensesPage() {
               {/* Quick Period Selection Buttons */}
               <div className="flex gap-1">
                 <Button
-                  variant={selectedMonths.length === 1 && selectedMonths[0] === getCurrentMonth() ? "default" : "outline"}
+                  variant={selectedMonths.length === 1 && selectedMonths[0] === currentMonth ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setSelectedMonths([getCurrentMonth()])}
+                  onClick={() => setSelectedMonths([currentMonth])}
                   className="h-8 px-3 text-xs"
                 >
                   Mês Atual
