@@ -57,13 +57,16 @@ const simpleTaxFormSchema = z.object({
   taxType: z.enum(['PIS', 'COFINS', 'CSLL', 'IRPJ'], {
     required_error: 'Selecione o tipo de imposto',
   }),
-  competencyMonth: z.string().min(1, 'Selecione o mês de competência'),
+  competencyMonth: z.string().min(1, 'Selecione o período de competência'),
   amount: z.string().min(1, 'Valor é obrigatório'),
   paymentDate: z.date({
     required_error: 'Data de pagamento é obrigatória',
   }),
   selectedPropertyIds: z.array(z.number()).min(1, 'Selecione pelo menos uma propriedade'),
-  enableInstallment: z.boolean().default(false),
+  // Cotas para CSLL e IRPJ
+  cota1: z.boolean().default(false),
+  cota2: z.boolean().default(false),
+  cota3: z.boolean().default(false),
 });
 
 type SimpleTaxFormValues = z.infer<typeof simpleTaxFormSchema>;
@@ -91,7 +94,9 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
       competencyMonth: '',
       amount: '',
       selectedPropertyIds: [],
-      enableInstallment: false,
+      cota1: false,
+      cota2: false,
+      cota3: false,
     },
   });
 
@@ -179,6 +184,41 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
     return options;
   };
 
+  // Generate quarter options (3 previous + current + 3 future)
+  const getQuarterOptions = () => {
+    const options = [];
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const currentQuarter = Math.floor(currentMonth / 3);
+    
+    // Calculate quarters from -3 to +3 relative to current
+    for (let i = -3; i <= 3; i++) {
+      let quarter = currentQuarter + i;
+      let year = currentYear;
+      
+      // Adjust year and quarter for overflow
+      while (quarter < 0) {
+        quarter += 4;
+        year--;
+      }
+      while (quarter > 3) {
+        quarter -= 4;
+        year++;
+      }
+      
+      const quarterNumber = quarter + 1; // Convert 0-3 to 1-4
+      const value = `Q${quarterNumber}/${year}`;
+      const label = `${quarterNumber}º Trim. ${year}`;
+      options.push({ value, label });
+    }
+    
+    return options;
+  };
+
+  const taxType = form.watch('taxType');
+  const isQuarterlyTax = taxType === 'CSLL' || taxType === 'IRPJ';
+
   function onSubmit(values: SimpleTaxFormValues) {
     if (showPreview) {
       submitMutation.mutate(values);
@@ -215,21 +255,28 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
           )}
         />
 
-        {/* Competency Month */}
+        {/* Competency Period */}
         <FormField
           control={form.control}
           name="competencyMonth"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Mês de Competência</FormLabel>
+              <FormLabel>
+                {isQuarterlyTax ? 'Trimestre de Competência' : 'Mês de Competência'}
+              </FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione o mês de competência" />
+                    <SelectValue 
+                      placeholder={isQuarterlyTax 
+                        ? "Selecione o trimestre de competência" 
+                        : "Selecione o mês de competência"
+                      } 
+                    />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {getMonthOptions().map((option) => (
+                  {(isQuarterlyTax ? getQuarterOptions() : getMonthOptions()).map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -237,7 +284,10 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
                 </SelectContent>
               </Select>
               <FormDescription>
-                Mês ao qual o imposto se refere
+                {isQuarterlyTax 
+                  ? 'Trimestre ao qual o imposto se refere'
+                  : 'Mês ao qual o imposto se refere'
+                }
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -323,30 +373,73 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
           )}
         />
 
-        {/* Installment Option (only for CSLL and IRPJ) */}
-        {(form.watch('taxType') === 'CSLL' || form.watch('taxType') === 'IRPJ') && (
-          <FormField
-            control={form.control}
-            name="enableInstallment"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                <FormControl>
-                  <Checkbox
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                </FormControl>
-                <div className="space-y-1 leading-none">
-                  <FormLabel>
-                    Parcelamento em 3x
-                  </FormLabel>
-                  <FormDescription>
-                    Dividir em 3 parcelas: 1/3 (sem juros) + 1/3 (1% juros) + 1/3 (1% juros)
-                  </FormDescription>
-                </div>
-              </FormItem>
-            )}
-          />
+        {/* Quota Options (only for CSLL and IRPJ) */}
+        {isQuarterlyTax && (
+          <div className="space-y-2">
+            <FormLabel>Cotas de Pagamento</FormLabel>
+            <div className="rounded-md border p-4 space-y-3">
+              <FormField
+                control={form.control}
+                name="cota1"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="cursor-pointer">
+                        Cota 1
+                      </FormLabel>
+                    </div>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="cota2"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="cursor-pointer">
+                        Cota 2
+                      </FormLabel>
+                    </div>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="cota3"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="cursor-pointer">
+                        Cota 3
+                      </FormLabel>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormDescription>
+              Selecione as cotas que deseja pagar. Cada cota criará uma despesa separada.
+            </FormDescription>
+          </div>
         )}
 
         {/* Property Selection */}

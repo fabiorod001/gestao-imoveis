@@ -3417,7 +3417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process daily cash flow
       const dailyData: { [key: string]: { revenue: number; expenses: number; } } = {};
       
-      periodTransactions.forEach(transaction => {
+      transactionData.forEach(transaction => {
         // Skip parent transactions in cash flow
         if (transaction.isCompositeParent) {
           return;
@@ -3545,7 +3545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process daily cash flow
       const dailyData: { [key: string]: { revenue: number; expenses: number; } } = {};
       
-      periodTransactions.forEach(transaction => {
+      transactionData.forEach(transaction => {
         // Skip parent transactions in cash flow
         if (transaction.isCompositeParent) {
           return;
@@ -4007,33 +4007,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/taxes/simple', isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      const { taxType, amount, competencyMonth, selectedPropertyIds, paymentDate } = req.body;
+      const { taxType, amount, competencyMonth, selectedPropertyIds, paymentDate, cota1, cota2, cota3 } = req.body;
       
       // Simple validation
       if (!taxType || !amount || !competencyMonth || !selectedPropertyIds || selectedPropertyIds.length === 0 || !paymentDate) {
         return res.status(400).json({ success: false, message: "Dados incompletos" });
       }
 
-      // Create tax payment record
-      const [month, year] = competencyMonth.split('/');
-      const competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
-      const competencyEnd = new Date(parseInt(year), parseInt(month), 0);
+      // Parse competency period - handle both month (MM/YYYY) and quarter (Q1/2025) formats
+      let competencyStart: Date, competencyEnd: Date;
+      
+      if (competencyMonth.startsWith('Q')) {
+        // Quarter format: Q1/2025
+        const [quarterStr, yearStr] = competencyMonth.split('/');
+        const quarter = parseInt(quarterStr.substring(1)) - 1; // Convert Q1-Q4 to 0-3
+        const year = parseInt(yearStr);
+        
+        competencyStart = new Date(year, quarter * 3, 1); // Start of quarter
+        competencyEnd = new Date(year, (quarter + 1) * 3, 0); // End of quarter
+      } else {
+        // Month format: MM/YYYY
+        const [month, year] = competencyMonth.split('/');
+        competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
+        competencyEnd = new Date(parseInt(year), parseInt(month), 0);
+      }
       
       // Convert amount from centavos to reais
       const taxAmount = typeof amount === 'string' ? parseFloat(amount) / 100 : amount;
       
-      const taxPayment = await db.insert(taxPayments).values({
-        userId,
-        taxType,
-        totalAmount: taxAmount.toString(),
-        paymentDate: paymentDate,
-        competencyPeriodStart: competencyStart.toISOString().split('T')[0],
-        competencyPeriodEnd: competencyEnd.toISOString().split('T')[0],
-        selectedPropertyIds: JSON.stringify(selectedPropertyIds),
-        isInstallment: false,
-        notes: `Imposto ${taxType} - Competência ${competencyMonth}`
-      }).returning();
-
       // Get gross revenue for selected properties in competency period
       const transactionData = await db.select({
         propertyId: transactions.propertyId,
@@ -4052,34 +4053,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Calculate total revenue by property
       const propertyRevenues = new Map<number, number>();
-      periodTransactions.forEach(transaction => {
+      transactionData.forEach(transaction => {
         const current = propertyRevenues.get(transaction.propertyId) || 0;
         propertyRevenues.set(transaction.propertyId, current + transaction.amount);
       });
       
       const totalRevenue = Array.from(propertyRevenues.values()).reduce((sum, amount) => sum + amount, 0);
       
-      // Create distributed transactions for each property
-      for (const propertyId of selectedPropertyIds) {
-        const propertyRevenue = propertyRevenues.get(propertyId) || 0;
-        const proportion = totalRevenue > 0 ? propertyRevenue / totalRevenue : 1 / selectedPropertyIds.length;
-        const propertyTaxAmount = taxAmount * proportion;
+      // Handle quotas for CSLL and IRPJ
+      const isQuarterlyTax = taxType === 'CSLL' || taxType === 'IRPJ';
+      const selectedCotas = isQuarterlyTax ? [cota1, cota2, cota3] : [true]; // Non-quarterly taxes always create one entry
+      
+      const createdTransactions = [];
+      
+      // Process each selected quota
+      for (let cotaIndex = 0; cotaIndex < selectedCotas.length; cotaIndex++) {
+        if (!selectedCotas[cotaIndex] && isQuarterlyTax) continue; // Skip unselected quotas for quarterly taxes
         
-        if (propertyTaxAmount > 0) {
-          await storage.createTransaction({
-            userId,
-            propertyId,
-            type: 'expense',
-            category: 'taxes',
-            amount: propertyTaxAmount.toString(),
-            description: `${taxType} - ${competencyMonth} (${(proportion * 100).toFixed(1)}% do total)`,
-            date: paymentDate,
-            currency: 'BRL'
-          });
+        const cotaLabel = isQuarterlyTax ? ` - Cota ${cotaIndex + 1}` : '';
+        
+        // Create distributed transactions for each property
+        for (const propertyId of selectedPropertyIds) {
+          const propertyRevenue = propertyRevenues.get(propertyId) || 0;
+          const proportion = totalRevenue > 0 ? propertyRevenue / totalRevenue : 1 / selectedPropertyIds.length;
+          const propertyTaxAmount = taxAmount * proportion;
+          
+          if (propertyTaxAmount > 0) {
+            const transaction = await storage.createTransaction({
+              userId,
+              propertyId,
+              type: 'expense',
+              category: 'taxes',
+              amount: propertyTaxAmount.toString(),
+              description: `${taxType} - ${competencyMonth}${cotaLabel} (${(proportion * 100).toFixed(1)}% do total)`,
+              date: paymentDate,
+              currency: 'BRL'
+            });
+            createdTransactions.push(transaction);
+          }
         }
       }
 
-      res.json({ success: true, taxPayment: taxPayment[0] });
+      res.json({ success: true, transactions: createdTransactions });
     } catch (error) {
       console.error("Error creating tax payment:", error);
       res.status(500).json({ success: false, message: "Erro ao cadastrar imposto" });
@@ -4089,12 +4104,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/taxes/preview', isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      const { taxType, competencyMonth, amount, paymentDate, selectedPropertyIds } = req.body;
+      const { taxType, competencyMonth, amount, paymentDate, selectedPropertyIds, cota1, cota2, cota3 } = req.body;
       
-      // Parse competency month (format: MM/YYYY)
-      const [month, year] = competencyMonth.split('/');
-      const competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
-      const competencyEnd = new Date(parseInt(year), parseInt(month), 0);
+      // Parse competency period - handle both month (MM/YYYY) and quarter (Q1/2025) formats
+      let competencyStart: Date, competencyEnd: Date;
+      
+      if (competencyMonth.startsWith('Q')) {
+        // Quarter format: Q1/2025
+        const [quarterStr, yearStr] = competencyMonth.split('/');
+        const quarter = parseInt(quarterStr.substring(1)) - 1; // Convert Q1-Q4 to 0-3
+        const year = parseInt(yearStr);
+        
+        competencyStart = new Date(year, quarter * 3, 1); // Start of quarter
+        competencyEnd = new Date(year, (quarter + 1) * 3, 0); // End of quarter
+      } else {
+        // Month format: MM/YYYY
+        const [month, year] = competencyMonth.split('/');
+        competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
+        competencyEnd = new Date(parseInt(year), parseInt(month), 0);
+      }
       
       // Get gross revenue for selected properties in competency period
       const transactionData = await db.select({
@@ -4114,7 +4142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Calculate total revenue by property
       const propertyRevenues = new Map<number, number>();
-      periodTransactions.forEach(transaction => {
+      transactionData.forEach(transaction => {
         const current = propertyRevenues.get(transaction.propertyId) || 0;
         propertyRevenues.set(transaction.propertyId, current + transaction.amount);
       });
@@ -4146,6 +4174,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       });
       
+      // Add quota information to response for quarterly taxes
+      const isQuarterlyTax = taxType === 'CSLL' || taxType === 'IRPJ';
+      const selectedCotas = isQuarterlyTax ? 
+        [(cota1 ? 'Cota 1' : null), (cota2 ? 'Cota 2' : null), (cota3 ? 'Cota 3' : null)].filter(Boolean) : 
+        [];
+      
       res.json({
         success: true,
         competencyPeriod: {
@@ -4153,7 +4187,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           end: competencyEnd.toISOString().split('T')[0]
         },
         totalRevenue,
-        breakdown
+        breakdown,
+        total: totalTaxAmount,
+        selectedCotas: selectedCotas,
+        cotasTotal: isQuarterlyTax ? totalTaxAmount * selectedCotas.length : totalTaxAmount
       });
       
     } catch (error) {
@@ -4200,7 +4237,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Calculate total revenue by property
       const propertyRevenues = new Map<number, number>();
-      periodTransactions.forEach(transaction => {
+      transactionData.forEach(transaction => {
         const current = propertyRevenues.get(transaction.propertyId) || 0;
         propertyRevenues.set(transaction.propertyId, current + transaction.amount);
       });
