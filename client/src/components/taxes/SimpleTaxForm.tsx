@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -87,11 +87,23 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
     queryKey: ['/api/properties'],
   });
 
+  // Get current month and quarter for default values
+  const getCurrentPeriod = () => {
+    const today = new Date();
+    const currentMonth = format(today, 'MM/yyyy');
+    const currentQuarter = Math.floor(today.getMonth() / 3) + 1;
+    const currentYear = today.getFullYear();
+    const currentQuarterValue = `Q${currentQuarter}/${currentYear}`;
+    return { currentMonth, currentQuarterValue };
+  };
+
+  const { currentMonth, currentQuarterValue } = getCurrentPeriod();
+
   const form = useForm<SimpleTaxFormValues>({
     resolver: zodResolver(simpleTaxFormSchema),
     defaultValues: {
       taxType: 'PIS',
-      competencyMonth: '',
+      competencyMonth: currentMonth, // Default to current month
       amount: '',
       selectedPropertyIds: [],
       cota1: false,
@@ -255,6 +267,15 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
 
   const taxType = form.watch('taxType');
   const isQuarterlyTax = taxType === 'CSLL' || taxType === 'IRPJ';
+  
+  // Update competency period when tax type changes
+  useEffect(() => {
+    if (isQuarterlyTax) {
+      form.setValue('competencyMonth', currentQuarterValue);
+    } else {
+      form.setValue('competencyMonth', currentMonth);
+    }
+  }, [isQuarterlyTax, currentMonth, currentQuarterValue, form]);
 
   function onSubmit(values: SimpleTaxFormValues) {
     if (showPreview) {
