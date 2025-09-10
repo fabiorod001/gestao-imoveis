@@ -192,11 +192,47 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     }
   };
 
-  const monthOptions = [
-    { value: `${new Date().getFullYear()}-${String(new Date().getMonth()).padStart(2, '0')}`, label: 'Mês Anterior' },
-    { value: `${new Date().getFullYear()}-${String(new Date().getMonth() - 1).padStart(2, '0')}`, label: '2 Meses Atrás' },
-    { value: `${new Date().getFullYear()}-${String(new Date().getMonth() - 2).padStart(2, '0')}`, label: '3 Meses Atrás' },
-  ];
+  // Generate month options: 3 future months, current month (bold), 3 past months
+  const generateMonthOptions = () => {
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth();
+    const currentYear = currentDate.getFullYear();
+    const options = [];
+
+    // 3 future months (in reverse order - farthest first)
+    for (let i = 3; i >= 1; i--) {
+      const futureDate = new Date(currentYear, currentMonth + i, 1);
+      const month = futureDate.getMonth();
+      const year = futureDate.getFullYear();
+      options.push({
+        value: `${year}-${String(month + 1).padStart(2, '0')}`,
+        label: `${months[month]} ${year}`
+      });
+    }
+
+    // Current month (bold)
+    options.push({
+      value: `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`,
+      label: `${months[currentMonth]} ${currentYear}`,
+      isCurrent: true
+    });
+
+    // 3 past months
+    for (let i = 1; i <= 3; i++) {
+      const pastDate = new Date(currentYear, currentMonth - i, 1);
+      const month = pastDate.getMonth();
+      const year = pastDate.getFullYear();
+      options.push({
+        value: `${year}-${String(month + 1).padStart(2, '0')}`,
+        label: `${months[month]} ${year}`
+      });
+    }
+
+    return options;
+  };
+
+  const monthOptions = generateMonthOptions();
 
   const totalCalculated = proRataCalculation.reduce((sum, calc) => sum + calc.allocatedAmount, 0);
 
