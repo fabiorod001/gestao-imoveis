@@ -85,20 +85,10 @@ export default function TaxesDetailPage() {
   // Fetch data
   const { data: allTransactions = [], isLoading: isLoadingTransactions } = useQuery<Transaction[]>({
     queryKey: ['/api/expenses/dashboard'],
-    queryFn: async () => {
-      const res = await fetch('/api/expenses/dashboard', { credentials: 'include' });
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      return res.json();
-    }
   });
 
   const { data: allProperties = [], isLoading: isLoadingProperties } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
-    queryFn: async () => {
-      const res = await fetch('/api/properties', { credentials: 'include' });
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      return res.json();
-    }
   });
 
   const isLoading = isLoadingTransactions || isLoadingProperties;
@@ -450,7 +440,7 @@ export default function TaxesDetailPage() {
       }
       
       rowData.push(-row.total);
-      data.push(rowData.map(String));
+      data.push(rowData);
     });
     
     const totalsRow = [
@@ -463,7 +453,7 @@ export default function TaxesDetailPage() {
     }
     
     totalsRow.push(-taxDetailData.grandTotal);
-    data.push(totalsRow.map(String));
+    data.push(totalsRow);
     
     const ws = XLSX.utils.aoa_to_sheet(data);
     const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');

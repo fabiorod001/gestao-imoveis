@@ -565,92 +565,36 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
 
           {/* Preview Results */}
           {showPreview && previewData && (
-            <div className="space-y-4">
-              <Card className="bg-green-50 border-green-200">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    Preview do Rateio
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {previewData.breakdown?.map((item: any) => (
-                      <div key={item.propertyName} className="flex justify-between items-center">
-                        <span className="font-medium">{item.propertyName}</span>
-                        <div className="flex gap-2">
-                          {item.taxes.map((tax: any) => (
-                            <Badge key={tax.taxType} variant="secondary">
-                              {tax.taxType}: R$ {tax.amount.toFixed(2)}
-                            </Badge>
-                          ))}
-                        </div>
+            <Card className="bg-green-50 border-green-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  Preview do Rateio
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {previewData.breakdown?.map((item: any) => (
+                    <div key={item.propertyName} className="flex justify-between items-center">
+                      <span className="font-medium">{item.propertyName}</span>
+                      <div className="flex gap-2">
+                        {item.taxes.map((tax: any) => (
+                          <Badge key={tax.taxType} variant="secondary">
+                            {tax.taxType}: R$ {tax.amount.toFixed(2)}
+                          </Badge>
+                        ))}
                       </div>
-                    ))}
-                    <div className="pt-2 mt-2 border-t">
-                      <div className="flex justify-between font-semibold">
-                        <span>Total</span>
-                        <span>R$ {previewData.total.toFixed(2)}</span>
-                      </div>
+                    </div>
+                  ))}
+                  <div className="pt-2 mt-2 border-t">
+                    <div className="flex justify-between font-semibold">
+                      <span>Total</span>
+                      <span>R$ {previewData.total.toFixed(2)}</span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Installment Information */}
-              {previewData.isQuarterlyTax && previewData.paymentInfo && (
-                <Card className="bg-blue-50 border-blue-200">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4 text-blue-600" />
-                      Informações de Parcelamento (Lucro Presumido)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {previewData.paymentInfo.canInstall ? (
-                        <div className="space-y-2">
-                          <p className="text-sm text-blue-800 font-medium">
-                            ✅ Parcelamento automático habilitado: {previewData.paymentInfo.automaticInstallments} parcelas
-                          </p>
-                          {previewData.installments && (
-                            <div className="space-y-1">
-                              {previewData.installments.map((installment: any) => (
-                                <div key={installment.installmentNumber} className="flex justify-between text-sm">
-                                  <span>Parcela {installment.installmentNumber}:</span>
-                                  <span className="font-medium">
-                                    R$ {installment.amount.toFixed(2)}
-                                    {installment.interest > 0 && (
-                                      <span className="text-blue-600 ml-1">
-                                        (base: R$ {installment.baseAmount.toFixed(2)} + juros: R$ {installment.interest.toFixed(2)})
-                                      </span>
-                                    )}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <p className="text-sm text-gray-700">
-                            💡 Valor inferior a R$ {previewData.paymentInfo.minimumForInstallment?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </p>
-                          <p className="text-sm font-medium text-gray-800">
-                            Pagamento único obrigatório (não é possível parcelar)
-                          </p>
-                        </div>
-                      )}
-                      <div className="text-xs text-gray-600 border-t pt-2">
-                        <p>• Valor mínimo para parcelamento: R$ 2.000,00</p>
-                        <p>• Máximo: 3 parcelas com juros de 1% ao mês (2ª e 3ª parcelas)</p>
-                        <p>• Valor mínimo por parcela: R$ 1.000,00</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
 

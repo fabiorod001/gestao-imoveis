@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,7 +73,7 @@ const CATEGORY_ORDER = [
   'Despesas Gerais'
 ];
 
-const EXPENSE_CATEGORY_LABELS: { [key: string]: string } = {
+const EXPENSE_CATEGORY_LABELS = {
   'taxes': 'Impostos',
   'maintenance': 'Manutenção',
   'condominium': 'Condomínio',
@@ -84,13 +84,15 @@ const EXPENSE_CATEGORY_LABELS: { [key: string]: string } = {
 };
 
 export default function ExpensesPage() {
-  // Memoized current month to prevent re-renders
-  const currentMonth = useMemo(() => {
+  // Function to get current month in MM/YYYY format
+  const getCurrentMonth = () => {
     const now = new Date();
     return `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-  }, []);
+  };
   
-  const defaultMonths = useMemo(() => [currentMonth], [currentMonth]);
+  // Always default to current month
+  const currentMonth = getCurrentMonth(); // "07/2025"
+  const defaultMonths = [currentMonth];
   
   const [selectedMonths, setSelectedMonths] = useState<string[]>(defaultMonths);
   const [selectedProperties, setSelectedProperties] = useState<number[]>([]);
@@ -136,7 +138,7 @@ export default function ExpensesPage() {
     // - Current month only
     // - All properties selected
     // - Only the specific category
-    // currentMonth is now memoized above
+    const currentMonth = getCurrentMonth();
     const allPropertyIds = allProperties.map(p => p.id);
     
     const params = new URLSearchParams({
@@ -151,29 +153,11 @@ export default function ExpensesPage() {
   // Fetch all properties for filters
   const { data: allProperties = [] } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
-    queryFn: async () => {
-      const res = await fetch('/api/properties', { credentials: 'include' });
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      return res.json();
-    }
   });
 
-  // Fetch expense transactions - optimized endpoint - FIXED TO PREVENT INFINITE LOOP
+  // Fetch expense transactions - optimized endpoint
   const { data: expenses = [], isLoading } = useQuery({
-    queryKey: ['/api/expenses/dashboard', 'expenses-page'],
-    queryFn: async () => {
-      const res = await fetch('/api/expenses/dashboard', { credentials: 'include' });
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      return res.json();
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes - much longer cache
-    gcTime: 10 * 60 * 1000, // 10 minutes in cache
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
-    refetchOnMount: false, // Don't refetch on mount
-    refetchOnReconnect: false,
-    enabled: true, // Only run once initially
-    retry: 1 // Only retry once if it fails
+    queryKey: ['/api/expenses/dashboard'],
   });
 
   // Handle expense completion from AdvancedExpenseManager
@@ -206,7 +190,7 @@ export default function ExpensesPage() {
     return options;
   };
 
-  const monthOptions = useMemo(() => generateMonthOptions(), []);
+  const monthOptions = generateMonthOptions();
 
 
 
@@ -306,7 +290,7 @@ export default function ExpensesPage() {
     };
   };
 
-  const pivotData = useMemo(() => generatePivotData(), [expenses, selectedMonths, selectedProperties, selectedExpenseTypes]);
+  const pivotData = generatePivotData();
 
   // Sorting logic
   const sortData = (data: PivotRow[]) => {
@@ -336,16 +320,14 @@ export default function ExpensesPage() {
     });
   };
 
-  // Sort data by category order if no other sort is applied - MEMOIZED
-  const sortedData = useMemo(() => {
-    const sortedByCategory = pivotData.rows.sort((a, b) => {
-      const indexA = CATEGORY_ORDER.indexOf(a.category);
-      const indexB = CATEGORY_ORDER.indexOf(b.category);
-      return indexA - indexB;
-    });
-    
-    return sortData(sortedByCategory);
-  }, [pivotData.rows, sortConfig]);
+  // Sort data by category order if no other sort is applied
+  const sortedByCategory = pivotData.rows.sort((a, b) => {
+    const indexA = CATEGORY_ORDER.indexOf(a.category);
+    const indexB = CATEGORY_ORDER.indexOf(b.category);
+    return indexA - indexB;
+  });
+  
+  const sortedData = sortData(sortedByCategory);
 
   // Column resizing
   const handleMouseDown = (column: string) => (e: React.MouseEvent) => {
@@ -583,11 +565,356 @@ export default function ExpensesPage() {
       {/* Advanced Expense Manager - MOVED TO TOP */}
       {isAddingExpense && (
         <div className="mb-6">
-          <AdvancedExpenseManager />
+          <AdvancedExpenseManager 
+            onComplete={handleExpenseComplete}
+            onCancel={() => setIsAddingExpense(false)}
+          />
         </div>
       )}
 
-      {/* Tabela Dinâmica de Despesas foi REMOVIDA conforme solicitado */}
+      {/* Consolidated View - Pivot Table */}
+      {viewMode === 'consolidated' && (
+        <Card>
+          <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Tabela Dinâmica de Despesas</CardTitle>
+            <div className="flex items-center gap-2">
+              {/* Quick Period Selection Buttons */}
+              <div className="flex gap-1">
+                <Button
+                  variant={selectedMonths.length === 1 && selectedMonths[0] === getCurrentMonth() ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedMonths([getCurrentMonth()])}
+                  className="h-8 px-3 text-xs"
+                >
+                  Mês Atual
+                </Button>
+                <Button
+                  variant={selectedMonths.length === 3 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    // Select last 3 months
+                    const months = [];
+                    const now = new Date();
+                    for (let i = 0; i < 3; i++) {
+                      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                      months.push(`${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`);
+                    }
+                    setSelectedMonths(months);
+                  }}
+                  className="h-8 px-3 text-xs"
+                >
+                  3 meses
+                </Button>
+                <Button
+                  variant={selectedMonths.length === 5 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    // Select last 5 months
+                    const months = [];
+                    const now = new Date();
+                    for (let i = 0; i < 5; i++) {
+                      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                      months.push(`${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`);
+                    }
+                    setSelectedMonths(months);
+                  }}
+                  className="h-8 px-3 text-xs"
+                >
+                  5 meses
+                </Button>
+                <Button
+                  variant={selectedMonths.length === 12 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    // Select last 12 months
+                    const months = [];
+                    const now = new Date();
+                    for (let i = 0; i < 12; i++) {
+                      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                      months.push(`${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`);
+                    }
+                    setSelectedMonths(months);
+                  }}
+                  className="h-8 px-3 text-xs"
+                >
+                  12 meses
+                </Button>
+              </div>
+              <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Filter className="h-4 w-4 mr-2" />
+                    Filtros
+                    <ChevronDown className={`h-4 w-4 ml-2 transition-transform ${isFiltersOpen ? 'rotate-180' : ''}`} />
+                  </Button>
+                </CollapsibleTrigger>
+              </Collapsible>
+            </div>
+          </div>
+          {isFiltersOpen && (
+            <div className="mt-4 p-4 bg-gray-50 border rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Month Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Meses</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-between">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        {selectedMonths.length === 1 ? monthOptions.find(m => m.key === selectedMonths[0])?.label : `${selectedMonths.length} meses`}
+                        <ChevronDown className="h-4 w-4 ml-2" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-0">
+                      <Command>
+                        <CommandInput placeholder="Buscar mês..." />
+                        <CommandEmpty>Nenhum mês encontrado.</CommandEmpty>
+                        <CommandGroup className="max-h-64 overflow-y-auto">
+                          {monthOptions.map(option => (
+                            <CommandItem
+                              key={option.key}
+                              onSelect={() => {
+                                setSelectedMonths(prev => 
+                                  prev.includes(option.key) 
+                                    ? prev.filter(m => m !== option.key)
+                                    : [...prev, option.key]
+                                );
+                              }}
+                            >
+                              <Check className={`h-4 w-4 mr-2 ${selectedMonths.includes(option.key) ? 'opacity-100' : 'opacity-0'}`} />
+                              {option.label}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Property Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Propriedades</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-between">
+                        {selectedProperties.length === 0 ? 'Todas' : `${selectedProperties.length} selecionadas`}
+                        <ChevronDown className="h-4 w-4 ml-2" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-0">
+                      <Command>
+                        <CommandInput placeholder="Buscar propriedade..." />
+                        <CommandEmpty>Nenhuma propriedade encontrada.</CommandEmpty>
+                        <CommandGroup className="max-h-64 overflow-y-auto">
+                          {allProperties.map(property => (
+                            <CommandItem
+                              key={property.id}
+                              onSelect={() => {
+                                setSelectedProperties(prev => 
+                                  prev.includes(property.id) 
+                                    ? prev.filter(id => id !== property.id)
+                                    : [...prev, property.id]
+                                );
+                              }}
+                            >
+                              <Check className={`h-4 w-4 mr-2 ${selectedProperties.includes(property.id) ? 'opacity-100' : 'opacity-0'}`} />
+                              {property.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Expense Type Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Categorias</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-between">
+                        {selectedExpenseTypes.length === EXPENSE_CATEGORIES.length ? 'Todas' : `${selectedExpenseTypes.length} selecionadas`}
+                        <ChevronDown className="h-4 w-4 ml-2" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-0">
+                      <Command>
+                        <CommandInput placeholder="Buscar categoria..." />
+                        <CommandEmpty>Nenhuma categoria encontrada.</CommandEmpty>
+                        <CommandGroup className="max-h-64 overflow-y-auto">
+                          {EXPENSE_CATEGORIES.map(category => (
+                            <CommandItem
+                              key={category}
+                              onSelect={() => {
+                                setSelectedExpenseTypes(prev => 
+                                  prev.includes(category) 
+                                    ? prev.filter(c => c !== category)
+                                    : [...prev, category]
+                                );
+                              }}
+                            >
+                              <Check className={`h-4 w-4 mr-2 ${selectedExpenseTypes.includes(category) ? 'opacity-100' : 'opacity-0'}`} />
+                              {EXPENSE_CATEGORY_LABELS[category]}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedMonths(defaultMonths);
+                    setSelectedProperties([]);
+                    setSelectedExpenseTypes(EXPENSE_CATEGORIES);
+                  }}
+                >
+                  Limpar Filtros
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b">
+                  <th 
+                    className="text-left p-2 font-medium relative cursor-pointer hover:bg-gray-50"
+                    onClick={() => setSortConfig(prev => ({
+                      key: 'category',
+                      direction: prev?.key === 'category' && prev.direction === 'asc' ? 'desc' : 'asc'
+                    }))}
+                    style={{ width: columnWidths['category'] || 150 }}
+                  >
+                    <div className="flex items-center justify-between">
+                      Categoria
+                      {sortConfig?.key === 'category' && (
+                        sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div
+                      className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500"
+                      onMouseDown={handleMouseDown('category')}
+                    />
+                  </th>
+                  {pivotData.monthHeaders.map(month => (
+                    <th 
+                      key={month}
+                      className="text-right p-2 font-medium relative cursor-pointer hover:bg-gray-50"
+                      onClick={() => setSortConfig(prev => ({
+                        key: `month-${month}`,
+                        direction: prev?.key === `month-${month}` && prev.direction === 'asc' ? 'desc' : 'asc'
+                      }))}
+                      style={{ width: columnWidths[`month-${month}`] || 120 }}
+                    >
+                      <div className="flex items-center justify-end">
+                        {monthOptions.find(m => m.key === month)?.label || month}
+                        {sortConfig?.key === `month-${month}` && (
+                          sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4 ml-1" /> : <ArrowDown className="h-4 w-4 ml-1" />
+                        )}
+                      </div>
+                      <div
+                        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500"
+                        onMouseDown={handleMouseDown(`month-${month}`)}
+                      />
+                    </th>
+                  ))}
+                  <th 
+                    className="text-right p-2 font-medium relative cursor-pointer hover:bg-gray-50"
+                    onClick={() => setSortConfig(prev => ({
+                      key: 'total',
+                      direction: prev?.key === 'total' && prev.direction === 'asc' ? 'desc' : 'asc'
+                    }))}
+                    style={{ width: columnWidths['total'] || 120 }}
+                  >
+                    <div className="flex items-center justify-end">
+                      Total
+                      {sortConfig?.key === 'total' && (
+                        sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4 ml-1" /> : <ArrowDown className="h-4 w-4 ml-1" />
+                      )}
+                    </div>
+                    <div
+                      className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500"
+                      onMouseDown={handleMouseDown('total')}
+                    />
+                  </th>
+                  {selectedMonths.length > 1 && (
+                    <th 
+                      className="text-right p-2 font-medium relative cursor-pointer hover:bg-gray-50 bg-blue-50"
+                      onClick={() => setSortConfig(prev => ({
+                        key: 'monthlyAverage',
+                        direction: prev?.key === 'monthlyAverage' && prev.direction === 'asc' ? 'desc' : 'asc'
+                      }))}
+                      style={{ width: columnWidths['monthlyAverage'] || 150 }}
+                    >
+                      <div className="flex items-center justify-end">
+                        Média Mensal
+                        <span className="text-xs text-gray-500 ml-1">(÷ {selectedMonths.length})</span>
+                        {sortConfig?.key === 'monthlyAverage' && (
+                          sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4 ml-1" /> : <ArrowDown className="h-4 w-4 ml-1" />
+                        )}
+                      </div>
+                      <div
+                        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500"
+                        onMouseDown={handleMouseDown('monthlyAverage')}
+                      />
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {sortedData.map((row, index) => (
+                  <tr 
+                    key={index} 
+                    className="border-b hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleCategoryClick(row.category)}
+                  >
+                    <td className="p-2 font-medium">{row.category}</td>
+                    {pivotData.monthHeaders.map(month => (
+                      <td key={month} className="text-right p-2 text-red-600">
+                        {row.monthlyData[month] > 0 ? `-${row.monthlyData[month].toLocaleString('pt-BR', { maximumFractionDigits: 0 })}` : '-'}
+                      </td>
+                    ))}
+                    <td className="text-right p-2 font-medium text-red-600">
+                      -{row.total.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                    </td>
+                    {selectedMonths.length > 1 && (
+                      <td className="text-right p-2 font-medium text-red-600 bg-blue-50">
+                        -{row.monthlyAverage.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+                <tr className="font-bold bg-gray-100">
+                  <td className="p-2">Total</td>
+                  {pivotData.monthHeaders.map(month => (
+                    <td key={month} className="text-right p-2 text-red-600">
+                      -{(pivotData.columnTotals[month] || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                    </td>
+                  ))}
+                  <td className="text-right p-2 text-red-600">
+                    -{pivotData.grandTotal.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                  </td>
+                  {selectedMonths.length > 1 && (
+                    <td className="text-right p-2 text-red-600 bg-blue-50">
+                      -{(pivotData.grandTotal / selectedMonths.length).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                    </td>
+                  )}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+      )}
 
       {/* Detailed View - Individual Transactions */}
       {viewMode === 'detailed' && (

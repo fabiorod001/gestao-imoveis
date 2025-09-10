@@ -143,9 +143,6 @@ export const transactions: any = pgTable("transactions", {
   isHistorical: boolean("is_historical").default(false), // Transações históricas não afetam fluxo de caixa
   // Account reference for multiple accounts support  
   accountId: integer("account_id").references(() => accounts.id), // Conta associada (Principal, Secundária, etc)
-  isAutoTax: boolean("is_auto_tax").default(false), // Se é imposto calculado automaticamente
-  competencyPeriod: varchar("competency_period"), // Período de competência (MM/YYYY ou Q1/YYYY)
-  basedOnRevenue: decimal("based_on_revenue", { precision: 12, scale: 2 }), // Receita base para cálculo
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -172,8 +169,8 @@ export const cashFlowSettings = pgTable("cash_flow_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Tax payments table - for PIS, COFINS, CSLL, IRPJ (simple registry)
-export const taxPayments = pgTable("tax_payments", {
+// Tax payments table - for PIS, COFINS, CSLL, IRPJ
+export const taxPayments: any = pgTable("tax_payments", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   taxType: varchar("tax_type").notNull(), // PIS, COFINS, CSLL, IRPJ
@@ -184,10 +181,7 @@ export const taxPayments = pgTable("tax_payments", {
   selectedPropertyIds: jsonb("selected_property_ids").notNull(), // Array de IDs das propriedades selecionadas
   isInstallment: boolean("is_installment").default(false), // Para CSLL e IRPJ - se é parcelado
   installmentNumber: integer("installment_number"), // 1, 2, 3 (para pagamentos parcelados)
-  parentTaxPaymentId: integer("parent_tax_payment_id"), // Will add reference later
-  baseAmount: decimal("base_amount", { precision: 12, scale: 2 }), // Base amount without interest
-  interestAmount: decimal("interest_amount", { precision: 12, scale: 2 }), // Interest amount (1% for 2nd and 3rd installments)
-  isAutoCalculated: boolean("is_auto_calculated").default(false), // Se foi calculado automaticamente
+  parentTaxPaymentId: integer("parent_tax_payment_id").references(() => taxPayments.id), // Referência ao pagamento principal
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -253,7 +247,6 @@ export const taxPaymentsRelations = relations(taxPayments, ({ one }) => ({
   }),
 }));
 
-
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -269,7 +262,6 @@ export type Transaction = typeof transactions.$inferSelect;
 
 export type InsertTaxPayment = typeof taxPayments.$inferInsert;
 export type TaxPayment = typeof taxPayments.$inferSelect;
-
 
 // Schemas
 export const insertAccountSchema = createInsertSchema(accounts).omit({

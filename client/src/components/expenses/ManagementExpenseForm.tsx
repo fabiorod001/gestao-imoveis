@@ -49,8 +49,6 @@ interface ManagementPreview {
 }
 
 interface ManagementExpenseFormProps {
-  onComplete?: (expense: any) => void;
-  onCancel?: () => void;
   editData?: {
     editId: number;
     date: string;
@@ -59,7 +57,7 @@ interface ManagementExpenseFormProps {
   };
 }
 
-export default function ManagementExpenseForm({ onComplete, onCancel, editData }: ManagementExpenseFormProps) {
+export default function ManagementExpenseForm({ editData }: ManagementExpenseFormProps) {
   const { toast } = useToast();
   const [preview, setPreview] = useState<ManagementPreview[]>([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -241,7 +239,7 @@ export default function ManagementExpenseForm({ onComplete, onCancel, editData }
         distribution
       });
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/expenses/dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
       toast({
@@ -259,9 +257,6 @@ export default function ManagementExpenseForm({ onComplete, onCancel, editData }
       // If editing, redirect back to expenses page
       if (editData) {
         window.location.href = '/expenses';
-      } else {
-        // Call onComplete callback if provided
-        onComplete?.(data);
       }
     },
     onError: (error) => {

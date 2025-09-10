@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,30 +21,9 @@ const taxFormSchema = z.object({
   taxType: z.enum(['PIS', 'COFINS', 'CSLL', 'IRPJ']),
   totalAmount: z.string().min(1, "Valor total é obrigatório"),
   paymentDate: z.string().min(1, "Data de pagamento é obrigatória"),
-  // Campos mensais (PIS/COFINS)
-  competencyMonth: z.string().optional(),
-  // Campos trimestrais (CSLL/IRPJ)
-  competencyQuarter: z.string().optional(),
-  selectedCota: z.enum(['cota1', 'cota2', 'cota3']).optional(),
+  competencyMonth: z.string().min(1, "Mês de competência é obrigatório"),
   selectedProperties: z.array(z.string()).min(1, "Selecione pelo menos uma propriedade"),
   description: z.string().optional(),
-}).refine(data => {
-  // Validação condicional baseada no tipo de imposto
-  const isMonthly = ['PIS', 'COFINS'].includes(data.taxType);
-  const isQuarterly = ['CSLL', 'IRPJ'].includes(data.taxType);
-  
-  if (isMonthly && !data.competencyMonth) {
-    return false;
-  }
-  
-  if (isQuarterly && (!data.competencyQuarter || !data.selectedCota)) {
-    return false;
-  }
-  
-  return true;
-}, {
-  message: "Preencha os campos de competência corretos para o tipo de imposto",
-  path: ["competencyMonth"]
 });
 
 type FormData = z.infer<typeof taxFormSchema>;
@@ -75,62 +54,26 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
       totalAmount: "",
       paymentDate: new Date().toISOString().split('T')[0],
       competencyMonth: "",
-      competencyQuarter: "",
-      selectedCota: undefined,
       selectedProperties: [],
       description: "",
     },
   });
 
-  // Detectar se é imposto mensal ou trimestral
-  const taxType = form.watch('taxType');
-  const isMonthlyTax = ['PIS', 'COFINS'].includes(taxType);
-  const isQuarterlyTax = ['CSLL', 'IRPJ'].includes(taxType);
-
   const { data: properties = [] } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
-    queryFn: async () => {
-      const res = await fetch('/api/properties', { credentials: 'include' });
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      return res.json();
-    }
   });
 
-  // Buscar receitas do mês/trimestre de competência para cálculo pro-rata
-  const competencyPeriod = isMonthlyTax ? form.watch('competencyMonth') : form.watch('competencyQuarter');
+  // Buscar receitas do mês de competência para cálculo pro-rata
   const { data: revenueData = [] } = useQuery({
-    queryKey: ['period-revenue', competencyPeriod, taxType],
-    enabled: !!competencyPeriod,
+    queryKey: ['/api/analytics/monthly-revenue', form.watch('competencyMonth')],
+    enabled: !!form.watch('competencyMonth'),
     queryFn: async () => {
-      if (!competencyPeriod) return [];
+      const month = form.watch('competencyMonth');
+      if (!month) return [];
       
-      if (isMonthlyTax) {
-        // Para impostos mensais (PIS/COFINS)
-        const [year, monthNum] = competencyPeriod.split('-');
-        console.log('📊 Fetching monthly revenue for', `${monthNum}/${year}`);
-        const response = await fetch(`/api/analytics/monthly-revenue?month=${monthNum}&year=${year}`, {
-          credentials: 'include'
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        return await response.json();
-      } else {
-        // Para impostos trimestrais (CSLL/IRPJ) 
-        const [year, quarter] = competencyPeriod.split('-Q');
-        console.log('📊 Fetching quarterly revenue for', `Q${quarter}/${year}`);
-        const response = await fetch(`/api/analytics/quarterly-revenue?quarter=${quarter}&year=${year}`, {
-          credentials: 'include'
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        return await response.json();
-      }
+      const [year, monthNum] = month.split('-');
+      const response = await apiRequest(`/api/analytics/monthly-revenue?month=${monthNum}&year=${year}`);
+      return response;
     }
   });
 
@@ -168,12 +111,12 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     },
   });
 
-  // Função para calcular pro-rata sem dependencias reativas
-  const calculateProRata = () => {
-    const selectedProps = form.getValues('selectedProperties') || [];
-    const amount = parseFloat(form.getValues('totalAmount') || '0') || 0;
+  // Calcular rateio pro-rata quando dados mudarem
+  useState(() => {
+    const selectedProps = form.watch('selectedProperties');
+    const totalAmount = parseFloat(form.watch('totalAmount')) || 0;
     
-    if (selectedProps.length > 0 && amount > 0 && revenueData.length > 0) {
+    if (selectedProps.length > 0 && totalAmount > 0 && revenueData.length > 0) {
       const selectedRevenueData = revenueData.filter((rev: any) => 
         selectedProps.includes(rev.propertyId.toString())
       );
@@ -185,7 +128,7 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
       if (totalSelectedRevenue > 0) {
         const calculation = selectedRevenueData.map((rev: any) => {
           const percentage = (rev.totalRevenue / totalSelectedRevenue) * 100;
-          const allocatedAmount = (rev.totalRevenue / totalSelectedRevenue) * amount;
+          const allocatedAmount = (rev.totalRevenue / totalSelectedRevenue) * totalAmount;
           
           return {
             propertyId: rev.propertyId,
@@ -197,18 +140,11 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
         });
 
         setProRataCalculation(calculation);
-      } else {
-        setProRataCalculation([]);
       }
     } else {
       setProRataCalculation([]);
     }
-  };
-
-  // Calcular apenas quando dados de receita mudam
-  useEffect(() => {
-    calculateProRata();
-  }, [revenueData]);
+  }, [form.watch('selectedProperties'), form.watch('totalAmount'), revenueData]);
 
   const onSubmit = async (data: FormData) => {
     if (proRataCalculation.length === 0) {
@@ -221,136 +157,46 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     }
 
     // Criar transações para cada propriedade
-    const competencyPeriod = isMonthlyTax ? data.competencyMonth : data.competencyQuarter;
-    const periodLabel = isMonthlyTax ? data.competencyMonth : data.competencyQuarter;
-    
-    // Gerar descrição baseada no tipo de imposto
-    let baseDescription = `${data.taxType} ${periodLabel}`;
-    
-    // Para impostos trimestrais, adicionar informação da cota
-    if (isQuarterlyTax && data.selectedCota) {
-      const cotaLabels = {
-        'cota1': 'Cota 1',
-        'cota2': 'Cota 2', 
-        'cota3': 'Cota 3'
-      };
-      baseDescription += ` ${cotaLabels[data.selectedCota]}`;
-    }
-    
-    // Criar transações para cada propriedade
     const transactions = proRataCalculation.map(calc => ({
       propertyId: calc.propertyId,
       type: 'expense',
       category: 'taxes',
       subcategory: data.taxType.toLowerCase(),
-      description: `${baseDescription} - ${calc.propertyName} (${calc.percentage.toFixed(2)}%)`,
-      amount: calc.allocatedAmount.toString(),
+      description: `${data.taxType} ${data.competencyMonth} - ${calc.propertyName} (${calc.percentage.toFixed(2)}%)`,
+      amount: calc.allocatedAmount.toString(), // Convert to string
       date: data.paymentDate,
       currency: 'BRL',
       metadata: {
         taxType: data.taxType,
-        competencyPeriod: competencyPeriod,
-        selectedCota: isQuarterlyTax ? data.selectedCota : undefined,
+        competencyMonth: data.competencyMonth,
         totalAmount: parseFloat(data.totalAmount),
         revenueBase: calc.totalRevenue,
         percentage: calc.percentage,
         proRataCalculation: true,
-        isQuarterly: isQuarterlyTax
       }
     }));
 
     try {
       await createMutation.mutateAsync(transactions);
       
-      const cotaInfo = isQuarterlyTax && data.selectedCota ? {
-        'cota1': 'Cota 1',
-        'cota2': 'Cota 2',
-        'cota3': 'Cota 3'
-      }[data.selectedCota] : '';
-      
       onComplete({
-        type: `Impostos - ${data.taxType}${cotaInfo ? ` ${cotaInfo}` : ''}`,
+        type: `Impostos - ${data.taxType}`,
         totalAmount: parseFloat(data.totalAmount),
-        propertiesCount: proRataCalculation.length,
-        transactionCount: transactions.length,
-        competencyPeriod: competencyPeriod,
+        propertiesCount: transactions.length,
+        competencyMonth: data.competencyMonth,
         paymentDate: data.paymentDate,
         calculation: proRataCalculation,
-        selectedCota: isQuarterlyTax ? data.selectedCota : undefined,
       });
     } catch (error) {
       // Erro já tratado no onError da mutation
     }
   };
 
-  // Generate month options: 3 future months, current month (bold), 3 past months
-  const generateMonthOptions = () => {
-    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    const currentDate = new Date();
-    const currentMonth = currentDate.getMonth();
-    const currentYear = currentDate.getFullYear();
-    const options = [];
-
-    // 3 future months (in reverse order - farthest first)
-    for (let i = 3; i >= 1; i--) {
-      const futureDate = new Date(currentYear, currentMonth + i, 1);
-      const month = futureDate.getMonth();
-      const year = futureDate.getFullYear();
-      options.push({
-        value: `${year}-${String(month + 1).padStart(2, '0')}`,
-        label: `${months[month]} ${year}`
-      });
-    }
-
-    // Current month (bold)
-    options.push({
-      value: `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`,
-      label: `${months[currentMonth]} ${currentYear}`,
-      isCurrent: true
-    });
-
-    // 3 past months
-    for (let i = 1; i <= 3; i++) {
-      const pastDate = new Date(currentYear, currentMonth - i, 1);
-      const month = pastDate.getMonth();
-      const year = pastDate.getFullYear();
-      options.push({
-        value: `${year}-${String(month + 1).padStart(2, '0')}`,
-        label: `${months[month]} ${year}`
-      });
-    }
-
-    return options;
-  };
-
-  const monthOptions = generateMonthOptions();
-
-  // Generate quarter options for quarterly taxes (CSLL/IRPJ)
-  const generateQuarterOptions = () => {
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    const currentQuarter = Math.floor(currentDate.getMonth() / 3) + 1;
-    const options = [];
-
-    // Add current year quarters
-    for (let q = 1; q <= 4; q++) {
-      options.push({
-        value: `${currentYear}-Q${q}`,
-        label: `${q}° Trimestre ${currentYear}`,
-        isCurrent: q === currentQuarter
-      });
-    }
-
-    // Add previous year quarters
-    for (let q = 4; q >= 1; q--) {
-      options.push({
-        value: `${currentYear - 1}-Q${q}`,
-        label: `${q}° Trimestre ${currentYear - 1}`
-      });
-    }
-
-    return options.sort((a, b) => b.value.localeCompare(a.value));
-  };
+  const monthOptions = [
+    { value: `${new Date().getFullYear()}-${String(new Date().getMonth()).padStart(2, '0')}`, label: 'Mês Anterior' },
+    { value: `${new Date().getFullYear()}-${String(new Date().getMonth() - 1).padStart(2, '0')}`, label: '2 Meses Atrás' },
+    { value: `${new Date().getFullYear()}-${String(new Date().getMonth() - 2).padStart(2, '0')}`, label: '3 Meses Atrás' },
+  ];
 
   const totalCalculated = proRataCalculation.reduce((sum, calc) => sum + calc.allocatedAmount, 0);
 
@@ -407,10 +253,6 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
                         step="0.01"
                         placeholder="1.500,00"
                         {...field}
-                        onChange={(e) => {
-                          field.onChange(e);
-                          setTimeout(calculateProRata, 100);
-                        }}
                       />
                     </FormControl>
                     <FormMessage />
@@ -433,137 +275,31 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
               />
             </div>
 
-            {/* Campos de Competência - Condicionais baseados no tipo de imposto */}
-            {isMonthlyTax && (
-              <FormField
-                control={form.control}
-                name="competencyMonth"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Mês de Competência (base para cálculo)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o mês de competência" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {monthOptions.map(option => (
-                          <SelectItem key={option.value} value={option.value}>
-                            <span className={option.isCurrent ? "font-bold" : ""}>
-                              {option.label}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {isQuarterlyTax && (
-              <>
-                {/* Trimestre de Competência */}
-                <FormField
-                  control={form.control}
-                  name="competencyQuarter"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Trimestre de Competência (base para cálculo)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o trimestre de competência" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {generateQuarterOptions().map(option => (
-                            <SelectItem key={option.value} value={option.value}>
-                              <span className={option.isCurrent ? "font-bold" : ""}>
-                                {option.label}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Seleção de Cota */}
-                <FormField
-                  control={form.control}
-                  name="selectedCota"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Qual cota você está cadastrando?</FormLabel>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value === 'cota1'}
-                              onCheckedChange={(checked) => {
-                                field.onChange(checked ? 'cota1' : undefined);
-                              }}
-                            />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel className="text-sm font-normal">
-                              Cota 1
-                            </FormLabel>
-                            <p className="text-xs text-muted-foreground">
-                              Primeira cota do trimestre
-                            </p>
-                          </div>
-                        </FormItem>
-
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value === 'cota2'}
-                              onCheckedChange={(checked) => {
-                                field.onChange(checked ? 'cota2' : undefined);
-                              }}
-                            />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel className="text-sm font-normal">
-                              Cota 2
-                            </FormLabel>
-                            <p className="text-xs text-muted-foreground">
-                              Segunda cota do trimestre
-                            </p>
-                          </div>
-                        </FormItem>
-
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value === 'cota3'}
-                              onCheckedChange={(checked) => {
-                                field.onChange(checked ? 'cota3' : undefined);
-                              }}
-                            />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel className="text-sm font-normal">
-                              Cota 3
-                            </FormLabel>
-                            <p className="text-xs text-muted-foreground">
-                              Terceira cota do trimestre
-                            </p>
-                          </div>
-                        </FormItem>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </>
-            )}
+            {/* Competency Month */}
+            <FormField
+              control={form.control}
+              name="competencyMonth"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Mês de Competência (base para cálculo)</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o mês de competência" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {monthOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* Property Selection */}
             <div className="space-y-4">
@@ -580,11 +316,9 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
                           <Checkbox
                             checked={field.value?.includes(property.id.toString())}
                             onCheckedChange={(checked) => {
-                              const newValue = checked
-                                ? [...field.value, property.id.toString()]
-                                : field.value?.filter((value) => value !== property.id.toString());
-                              field.onChange(newValue);
-                              setTimeout(calculateProRata, 100);
+                              return checked
+                                ? field.onChange([...field.value, property.id.toString()])
+                                : field.onChange(field.value?.filter((value) => value !== property.id.toString()))
                             }}
                           />
                         </FormControl>

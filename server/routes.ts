@@ -9,7 +9,7 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import * as fs from "fs";
 import { db } from "./db";
-import { eq, and, gte, lte, lt, asc, desc, sql, inArray, or, isNull, like } from "drizzle-orm";
+import { eq, and, gte, lte, lt, asc, desc, sql, inArray, or, isNull } from "drizzle-orm";
 import { parseAirbnbCSV, mapListingToProperty } from "./csvParser";
 import { parseCleaningPdf } from "./cleaningPdfParser";
 import { format } from "date-fns";
@@ -419,16 +419,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
       });
       
-      // 🚀 AUTOMATIC TAX CALCULATION
-      // If this is a revenue transaction, automatically calculate taxes
-      if (transaction.type === 'revenue' && transaction.propertyId && !transaction.isAutoTax) {
-        const revenueAmount = parseFloat(transaction.amount);
-        console.log(`💰 Revenue detected: R$ ${revenueAmount} - calculating automatic taxes`);
-        
-        // Calculate and create automatic tax transactions
-        await calculateAndCreateAutoTaxes(userId, transaction.propertyId, revenueAmount, transaction.date);
-      }
-      
       res.status(201).json(transaction);
     } catch (error) {
       console.error("Error creating transaction:", error);
@@ -452,16 +442,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!transaction) {
         return res.status(404).json({ message: "Transaction not found" });
-      }
-      
-      // 🚀 AUTOMATIC TAX RECALCULATION
-      // If this is a revenue transaction update, recalculate taxes
-      if (transaction.type === 'revenue' && transaction.propertyId && !transaction.isAutoTax) {
-        const revenueAmount = parseFloat(transaction.amount);
-        console.log(`🔄 Revenue updated: R$ ${revenueAmount} - recalculating automatic taxes`);
-        
-        // Recalculate and update automatic tax transactions
-        await calculateAndCreateAutoTaxes(userId, transaction.propertyId, revenueAmount, transaction.date);
       }
       
       res.json(transaction);
@@ -3437,7 +3417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process daily cash flow
       const dailyData: { [key: string]: { revenue: number; expenses: number; } } = {};
       
-      periodTransactions.forEach(transaction => {
+      transactionData.forEach(transaction => {
         // Skip parent transactions in cash flow
         if (transaction.isCompositeParent) {
           return;
@@ -3565,7 +3545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process daily cash flow
       const dailyData: { [key: string]: { revenue: number; expenses: number; } } = {};
       
-      periodTransactions.forEach(transaction => {
+      transactionData.forEach(transaction => {
         // Skip parent transactions in cash flow
         if (transaction.isCompositeParent) {
           return;
@@ -4073,7 +4053,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Calculate total revenue by property
       const propertyRevenues = new Map<number, number>();
-      periodTransactions.forEach(transaction => {
+      transactionData.forEach(transaction => {
         const current = propertyRevenues.get(transaction.propertyId) || 0;
         propertyRevenues.set(transaction.propertyId, current + transaction.amount);
       });
@@ -4121,252 +4101,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Helper function to calculate tax rates for Lucro Presumido
-  const TAX_RATES = {
-    PIS: 0.0065, // 0.65%
-    COFINS: 0.03, // 3%
-    IRPJ: 0.15, // 15% base
-    IRPJ_ADDITIONAL: 0.10, // 10% adicional sobre excesso de R$ 60.000/trimestre
-    CSLL: 0.09 // 9%
-  };
-
-  // Helper function to calculate due dates for tax payments
-  const calculateTaxDueDate = (revenueDate: string, taxType: string): string => {
-    const date = new Date(revenueDate);
-    
-    if (taxType === 'PIS' || taxType === 'COFINS') {
-      // Monthly taxes: due by 25th of following month
-      const dueDate = new Date(date.getFullYear(), date.getMonth() + 1, 25);
-      return dueDate.toISOString().split('T')[0];
-    } else if (taxType === 'IRPJ' || taxType === 'CSLL') {
-      // Quarterly taxes: due by last day of month following quarter
-      const month = date.getMonth();
-      const quarter = Math.floor(month / 3);
-      const nextQuarterStart = new Date(date.getFullYear(), (quarter + 1) * 3, 1);
-      const dueDate = new Date(nextQuarterStart.getFullYear(), nextQuarterStart.getMonth() + 1, 0);
-      return dueDate.toISOString().split('T')[0];
-    }
-    
-    return revenueDate;
-  };
-
-  // Helper function to format competency period
-  const getCompetencyPeriod = (date: string, taxType: string): string => {
-    const d = new Date(date);
-    
-    if (taxType === 'PIS' || taxType === 'COFINS') {
-      // Monthly: MM/YYYY
-      return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-    } else if (taxType === 'IRPJ' || taxType === 'CSLL') {
-      // Quarterly: Q1/YYYY
-      const quarter = Math.floor(d.getMonth() / 3) + 1;
-      return `Q${quarter}/${d.getFullYear()}`;
-    }
-    
-    return '';
-  };
-
-  // Function to automatically calculate and create tax transactions
-  const calculateAndCreateAutoTaxes = async (userId: string, propertyId: number, revenueAmount: number, revenueDate: string) => {
-    try {
-      console.log(`🏛️ Calculating automatic taxes for revenue: R$ ${revenueAmount} on ${revenueDate}`);
-      
-      // Delete existing auto-calculated taxes for same competency periods
-      const taxTypes = ['PIS', 'COFINS', 'IRPJ', 'CSLL'];
-      
-      for (const taxType of taxTypes) {
-        const competencyPeriod = getCompetencyPeriod(revenueDate, taxType);
-        const dueDate = calculateTaxDueDate(revenueDate, taxType);
-        
-        // Delete existing auto tax for same property/period/type
-        await db.delete(transactions).where(
-          and(
-            eq(transactions.userId, userId),
-            eq(transactions.propertyId, propertyId),
-            eq(transactions.type, 'expense'),
-            eq(transactions.category, 'taxes'),
-            eq(transactions.isAutoTax, true),
-            like(transactions.description, `${taxType}%`),
-            eq(transactions.competencyPeriod, competencyPeriod)
-          )
-        );
-        
-        // Calculate tax amount
-        let taxAmount = 0;
-        let description = '';
-        
-        if (taxType === 'PIS') {
-          taxAmount = revenueAmount * TAX_RATES.PIS;
-          description = `PIS - ${competencyPeriod} (calculado automaticamente)`;
-        } else if (taxType === 'COFINS') {
-          taxAmount = revenueAmount * TAX_RATES.COFINS;
-          description = `COFINS - ${competencyPeriod} (calculado automaticamente)`;
-        } else if (taxType === 'IRPJ') {
-          // For IRPJ/CSLL, we need quarterly revenue aggregate
-          const quarterStart = new Date(revenueDate);
-          const quarter = Math.floor(quarterStart.getMonth() / 3);
-          quarterStart.setMonth(quarter * 3, 1);
-          const quarterEnd = new Date(quarterStart.getFullYear(), quarter * 3 + 3, 0);
-          
-          // Get all revenue for the quarter for this property
-          const quarterRevenue = await db.select({
-            amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`
-          }).from(transactions)
-            .where(
-              and(
-                eq(transactions.userId, userId),
-                eq(transactions.propertyId, propertyId),
-                eq(transactions.type, 'revenue'),
-                gte(transactions.date, quarterStart.toISOString().split('T')[0]),
-                lte(transactions.date, quarterEnd.toISOString().split('T')[0])
-              )
-            );
-          
-          const totalQuarterRevenue = quarterRevenue.reduce((sum, t) => sum + t.amount, 0) + revenueAmount;
-          const presumedProfit = totalQuarterRevenue * 0.32; // 32% para serviços
-          
-          taxAmount = presumedProfit * TAX_RATES.IRPJ;
-          
-          // Additional 10% if exceeds R$ 60,000/quarter
-          if (presumedProfit > 60000) {
-            taxAmount += (presumedProfit - 60000) * TAX_RATES.IRPJ_ADDITIONAL;
-          }
-          
-          description = `IRPJ - ${competencyPeriod} (calculado automaticamente)`;
-        } else if (taxType === 'CSLL') {
-          // Similar to IRPJ
-          const quarterStart = new Date(revenueDate);
-          const quarter = Math.floor(quarterStart.getMonth() / 3);
-          quarterStart.setMonth(quarter * 3, 1);
-          const quarterEnd = new Date(quarterStart.getFullYear(), quarter * 3 + 3, 0);
-          
-          const quarterRevenue = await db.select({
-            amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`
-          }).from(transactions)
-            .where(
-              and(
-                eq(transactions.userId, userId),
-                eq(transactions.propertyId, propertyId),
-                eq(transactions.type, 'revenue'),
-                gte(transactions.date, quarterStart.toISOString().split('T')[0]),
-                lte(transactions.date, quarterEnd.toISOString().split('T')[0])
-              )
-            );
-          
-          const totalQuarterRevenue = quarterRevenue.reduce((sum, t) => sum + t.amount, 0) + revenueAmount;
-          const presumedProfit = totalQuarterRevenue * 0.32; // 32% para serviços
-          
-          taxAmount = presumedProfit * TAX_RATES.CSLL;
-          description = `CSLL - ${competencyPeriod} (calculado automaticamente)`;
-        }
-        
-        // Create tax transaction if amount > 0
-        if (taxAmount > 0.01) { // Only create if >= R$ 0.01
-          await storage.createTransaction({
-            userId,
-            propertyId,
-            type: 'expense',
-            category: 'taxes',
-            amount: taxAmount.toString(),
-            description,
-            date: dueDate,
-            currency: 'BRL',
-            isAutoTax: true,
-            competencyPeriod,
-            basedOnRevenue: revenueAmount.toString()
-          });
-          
-          console.log(`📊 Created auto tax: ${taxType} = R$ ${taxAmount.toFixed(2)} (due: ${dueDate})`);
-        }
-      }
-      
-    } catch (error) {
-      console.error('Error calculating automatic taxes:', error);
-    }
-  };
-
-  // Helper function to calculate competency period based on competency month/quarter
-  const parseCompetencyPeriod = (competencyMonth: string) => {
-    let competencyStart: Date, competencyEnd: Date;
-    
-    if (competencyMonth.startsWith('Q')) {
-      // Quarter format: Q1/2025
-      const [quarterStr, yearStr] = competencyMonth.split('/');
-      const quarter = parseInt(quarterStr.substring(1)) - 1; // Convert Q1-Q4 to 0-3
-      const year = parseInt(yearStr);
-      
-      competencyStart = new Date(year, quarter * 3, 1); // Start of quarter
-      competencyEnd = new Date(year, (quarter + 1) * 3, 0); // End of quarter
-    } else {
-      // Month format: MM/YYYY
-      const [month, year] = competencyMonth.split('/');
-      competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
-      competencyEnd = new Date(parseInt(year), parseInt(month), 0);
-    }
-    
-    return { competencyStart, competencyEnd };
-  };
-
-  // Helper function to calculate automatic installments for IRPJ/CSLL
-  const calculateInstallments = (totalAmount: number, taxType: string) => {
-    const MIN_TOTAL_FOR_INSTALLMENTS = 2000; // R$ 2.000
-    const MIN_INSTALLMENT_VALUE = 1000; // R$ 1.000
-    const INTEREST_RATE = 0.01; // 1% per month
-    
-    // If total is less than R$ 2.000, must pay in single installment
-    if (totalAmount < MIN_TOTAL_FOR_INSTALLMENTS) {
-      return [{
-        installmentNumber: 1,
-        amount: totalAmount,
-        baseAmount: totalAmount,
-        interest: 0
-      }];
-    }
-    
-    // For amounts >= R$ 2.000, automatically divide into 3 installments
-    const baseAmount = totalAmount / 3;
-    
-    // Check if each installment would be >= R$ 1.000
-    if (baseAmount < MIN_INSTALLMENT_VALUE) {
-      // If individual installments would be too small, pay in single installment
-      return [{
-        installmentNumber: 1,
-        amount: totalAmount,
-        baseAmount: totalAmount,
-        interest: 0
-      }];
-    }
-    
-    // Calculate 3 installments with interest
-    return [
-      {
-        installmentNumber: 1,
-        amount: baseAmount,
-        baseAmount: baseAmount,
-        interest: 0
-      },
-      {
-        installmentNumber: 2,
-        amount: baseAmount * (1 + INTEREST_RATE),
-        baseAmount: baseAmount,
-        interest: baseAmount * INTEREST_RATE
-      },
-      {
-        installmentNumber: 3,
-        amount: baseAmount * (1 + INTEREST_RATE),
-        baseAmount: baseAmount,
-        interest: baseAmount * INTEREST_RATE
-      }
-    ];
-  };
-
   app.post('/api/taxes/preview', isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
       const { taxType, competencyMonth, amount, paymentDate, selectedPropertyIds, cota1, cota2, cota3 } = req.body;
       
-      // Parse competency period from the form (Lucro Presumido: use the period itself)
-      const { competencyStart, competencyEnd } = parseCompetencyPeriod(competencyMonth);
+      // Parse competency period - handle both month (MM/YYYY) and quarter (Q1/2025) formats
+      let competencyStart: Date, competencyEnd: Date;
+      
+      if (competencyMonth.startsWith('Q')) {
+        // Quarter format: Q1/2025
+        const [quarterStr, yearStr] = competencyMonth.split('/');
+        const quarter = parseInt(quarterStr.substring(1)) - 1; // Convert Q1-Q4 to 0-3
+        const year = parseInt(yearStr);
+        
+        competencyStart = new Date(year, quarter * 3, 1); // Start of quarter
+        competencyEnd = new Date(year, (quarter + 1) * 3, 0); // End of quarter
+      } else {
+        // Month format: MM/YYYY
+        const [month, year] = competencyMonth.split('/');
+        competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
+        competencyEnd = new Date(parseInt(year), parseInt(month), 0);
+      }
       
       // Get gross revenue for selected properties in competency period
       const transactionData = await db.select({
@@ -4386,7 +4142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Calculate total revenue by property
       const propertyRevenues = new Map<number, number>();
-      periodTransactions.forEach(transaction => {
+      transactionData.forEach(transaction => {
         const current = propertyRevenues.get(transaction.propertyId) || 0;
         propertyRevenues.set(transaction.propertyId, current + transaction.amount);
       });
@@ -4418,19 +4174,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       });
       
-      // Calculate automatic installments for quarterly taxes (IRPJ/CSLL)
+      // Add quota information to response for quarterly taxes
       const isQuarterlyTax = taxType === 'CSLL' || taxType === 'IRPJ';
-      let installments = null;
-      let finalTotal = totalTaxAmount;
-      
-      if (isQuarterlyTax) {
-        // Count selected quotas
-        const selectedCotas = [(cota1 ? 'Cota 1' : null), (cota2 ? 'Cota 2' : null), (cota3 ? 'Cota 3' : null)].filter(Boolean);
-        finalTotal = totalTaxAmount * selectedCotas.length;
-        
-        // Calculate automatic installments
-        installments = calculateInstallments(finalTotal, taxType);
-      }
+      const selectedCotas = isQuarterlyTax ? 
+        [(cota1 ? 'Cota 1' : null), (cota2 ? 'Cota 2' : null), (cota3 ? 'Cota 3' : null)].filter(Boolean) : 
+        [];
       
       res.json({
         success: true,
@@ -4440,15 +4188,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         totalRevenue,
         breakdown,
-        total: finalTotal,
-        isQuarterlyTax,
-        installments: installments,
-        paymentInfo: {
-          canInstall: isQuarterlyTax && finalTotal >= 2000,
-          minimumForInstallment: 2000,
-          minimumPerInstallment: 1000,
-          automaticInstallments: installments ? installments.length : 1
-        }
+        total: totalTaxAmount,
+        selectedCotas: selectedCotas,
+        cotasTotal: isQuarterlyTax ? totalTaxAmount * selectedCotas.length : totalTaxAmount
       });
       
     } catch (error) {
@@ -4456,219 +4198,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         success: false, 
         message: 'Erro ao calcular prévia dos impostos' 
-      });
-    }
-  });
-
-  // GET endpoint for monthly revenue data (for tax pro-rata calculations)
-  app.get('/api/analytics/monthly-revenue', isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      const { month, year } = req.query;
-      
-      if (!month || !year) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Month and year parameters are required' 
-        });
-      }
-      
-      console.log(`📊 Fetching monthly revenue for ${month}/${year}`);
-      
-      // Calculate start and end dates for the month
-      const startDate = new Date(parseInt(year as string), parseInt(month as string) - 1, 1);
-      const endDate = new Date(parseInt(year as string), parseInt(month as string), 0);
-      
-      // Get revenue transactions for the month grouped by property
-      const monthlyRevenue = await db.select({
-        propertyId: transactions.propertyId,
-        propertyName: properties.name,
-        totalRevenue: sql<number>`CAST(SUM(${transactions.amount}) AS DECIMAL)`
-      }).from(transactions)
-        .innerJoin(properties, eq(transactions.propertyId, properties.id))
-        .where(
-          and(
-            eq(transactions.userId, userId),
-            eq(transactions.type, 'revenue'),
-            gte(transactions.date, startDate.toISOString().split('T')[0]),
-            lte(transactions.date, endDate.toISOString().split('T')[0]),
-            eq(transactions.isHistorical, false) // Exclude historical transactions
-          )
-        )
-        .groupBy(transactions.propertyId, properties.name);
-      
-      res.json(monthlyRevenue);
-      
-    } catch (error) {
-      console.error('Error fetching monthly revenue:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'Erro ao buscar receitas mensais' 
-      });
-    }
-  });
-
-  // GET endpoint for quarterly revenue data (for quarterly tax pro-rata calculations)
-  app.get('/api/analytics/quarterly-revenue', isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      const { quarter, year } = req.query;
-      
-      if (!quarter || !year) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Quarter and year parameters are required' 
-        });
-      }
-      
-      console.log(`📊 Fetching quarterly revenue for Q${quarter}/${year}`);
-      
-      // Calculate start and end dates for the quarter
-      const quarterNum = parseInt(quarter as string);
-      const yearNum = parseInt(year as string);
-      const startDate = new Date(yearNum, (quarterNum - 1) * 3, 1);
-      const endDate = new Date(yearNum, quarterNum * 3, 0);
-      
-      // Get revenue transactions for the quarter grouped by property
-      const quarterlyRevenue = await db.select({
-        propertyId: transactions.propertyId,
-        propertyName: properties.name,
-        totalRevenue: sql<number>`CAST(SUM(${transactions.amount}) AS DECIMAL)`
-      }).from(transactions)
-        .innerJoin(properties, eq(transactions.propertyId, properties.id))
-        .where(
-          and(
-            eq(transactions.userId, userId),
-            eq(transactions.type, 'revenue'),
-            gte(transactions.date, startDate.toISOString().split('T')[0]),
-            lte(transactions.date, endDate.toISOString().split('T')[0]),
-            eq(transactions.isHistorical, false) // Exclude historical transactions
-          )
-        )
-        .groupBy(transactions.propertyId, properties.name);
-      
-      res.json(quarterlyRevenue);
-      
-    } catch (error) {
-      console.error('Error fetching quarterly revenue:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'Erro ao buscar receitas trimestrais' 
-      });
-    }
-  });
-
-  // GET endpoint to list automatic taxes for easy rectification
-  app.get('/api/taxes/automatic', isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      const { month, year, propertyId } = req.query;
-      
-      console.log(`📋 Listing automatic taxes for ${month}/${year}`);
-      
-      let whereConditions = [
-        eq(transactions.userId, userId),
-        eq(transactions.type, 'expense'),
-        eq(transactions.category, 'taxes'),
-        eq(transactions.isAutoTax, true)
-      ];
-      
-      // Filter by property if specified
-      if (propertyId) {
-        whereConditions.push(eq(transactions.propertyId, parseInt(propertyId as string)));
-      }
-      
-      // Filter by month/year if specified
-      if (month && year) {
-        const startDate = new Date(parseInt(year as string), parseInt(month as string) - 1, 1);
-        const endDate = new Date(parseInt(year as string), parseInt(month as string), 0);
-        whereConditions.push(
-          gte(transactions.date, startDate.toISOString().split('T')[0]),
-          lte(transactions.date, endDate.toISOString().split('T')[0])
-        );
-      }
-      
-      const autoTaxes = await db.select({
-        id: transactions.id,
-        propertyId: transactions.propertyId,
-        amount: transactions.amount,
-        description: transactions.description,
-        date: transactions.date,
-        competencyPeriod: transactions.competencyPeriod,
-        basedOnRevenue: transactions.basedOnRevenue,
-        createdAt: transactions.createdAt
-      }).from(transactions)
-        .innerJoin(properties, eq(transactions.propertyId, properties.id))
-        .where(and(...whereConditions))
-        .orderBy(desc(transactions.date));
-      
-      res.json({
-        success: true,
-        autoTaxes: autoTaxes.map(tax => ({
-          ...tax,
-          taxType: tax.description.includes('PIS') ? 'PIS' : 
-                   tax.description.includes('COFINS') ? 'COFINS' :
-                   tax.description.includes('IRPJ') ? 'IRPJ' : 'CSLL',
-          canRectify: true,
-          calculationDate: tax.createdAt
-        }))
-      });
-      
-    } catch (error) {
-      console.error('Error fetching automatic taxes:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'Erro ao listar impostos automáticos' 
-      });
-    }
-  });
-
-  // PUT endpoint to rectify automatic tax amounts (simple edit)
-  app.put('/api/taxes/automatic/:id/rectify', isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      const taxId = parseInt(req.params.id);
-      const { newAmount, note } = req.body;
-      
-      console.log(`🔧 Rectifying automatic tax ${taxId} to R$ ${newAmount}`);
-      
-      // Verify this is actually an auto tax transaction
-      const [existingTax] = await db.select()
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.id, taxId),
-            eq(transactions.userId, userId),
-            eq(transactions.isAutoTax, true)
-          )
-        );
-      
-      if (!existingTax) {
-        return res.status(404).json({
-          success: false,
-          message: 'Imposto automático não encontrado'
-        });
-      }
-      
-      // Update the amount and add rectification note
-      const newDescription = `${existingTax.description} [RETIFICADO: R$ ${parseFloat(existingTax.amount).toFixed(2)} → R$ ${parseFloat(newAmount).toFixed(2)}${note ? ` - ${note}` : ''}]`;
-      
-      const updatedTax = await storage.updateTransaction(taxId, {
-        amount: newAmount.toString(),
-        description: newDescription
-      }, userId);
-      
-      res.json({
-        success: true,
-        message: 'Imposto retificado com sucesso!',
-        transaction: updatedTax
-      });
-      
-    } catch (error) {
-      console.error('Error rectifying automatic tax:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'Erro ao retificar imposto automático' 
       });
     }
   });
@@ -4685,8 +4214,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         enableInstallment
       } = req.body;
       
-      // Parse competency period from the form (Lucro Presumido: use the period itself)
-      const { competencyStart, competencyEnd } = parseCompetencyPeriod(competencyMonth);
+      // Parse competency month (format: MM/YYYY)
+      const [month, year] = competencyMonth.split('/');
+      const competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const competencyEnd = new Date(parseInt(year), parseInt(month), 0);
       
       // Get gross revenue for selected properties in competency period
       const transactionData = await db.select({
@@ -4706,7 +4237,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Calculate total revenue by property
       const propertyRevenues = new Map<number, number>();
-      periodTransactions.forEach(transaction => {
+      transactionData.forEach(transaction => {
         const current = propertyRevenues.get(transaction.propertyId) || 0;
         propertyRevenues.set(transaction.propertyId, current + transaction.amount);
       });
@@ -4715,70 +4246,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const totalTaxAmount = parseFloat(amount) / 100; // Convert from centavos to reais
       
-      // Calculate automatic installments (for IRPJ/CSLL only)
-      const isQuarterlyTax = taxType === 'CSLL' || taxType === 'IRPJ';
-      const installments = isQuarterlyTax ? calculateInstallments(totalTaxAmount, taxType) : [{
-        installmentNumber: 1,
-        amount: totalTaxAmount,
-        baseAmount: totalTaxAmount,
-        interest: 0
-      }];
-      
-      const createdTransactions = [];
-      
-      // Create installment records and distributed transactions
-      for (let i = 0; i < installments.length; i++) {
-        const installment = installments[i];
-        const installmentDate = new Date(paymentDate);
-        installmentDate.setMonth(installmentDate.getMonth() + i);
+      if (enableInstallment && (taxType === 'CSLL' || taxType === 'IRPJ')) {
+        // Create 3 installments
+        const baseAmount = totalTaxAmount / 3;
+        const installmentAmount2 = baseAmount + (totalTaxAmount * 0.01); // 1/3 + 1%
+        const installmentAmount3 = baseAmount + (totalTaxAmount * 0.01); // 1/3 + 1%
         
-        // Store tax payment record
-        const taxPaymentRecord = await db.insert(taxPayments).values({
+        // Store main tax record
+        const [mainTaxRecord] = await db.insert(taxPayments).values({
           userId,
           taxType,
-          totalAmount: installment.amount.toString(),
-          paymentDate: installmentDate.toISOString().split('T')[0],
+          totalAmount: totalTaxAmount.toString(),
+          paymentDate,
           competencyPeriodStart: competencyStart.toISOString().split('T')[0],
           competencyPeriodEnd: competencyEnd.toISOString().split('T')[0],
           selectedPropertyIds: JSON.stringify(selectedPropertyIds),
-          isInstallment: installments.length > 1,
-          installmentNumber: installment.installmentNumber,
-          baseAmount: installment.baseAmount.toString(),
-          interestAmount: installment.interest.toString()
+          isInstallment: true
         }).returning();
+        
+        // Create installment records and distributed transactions
+        const installmentAmounts = [baseAmount, installmentAmount2, installmentAmount3];
+        
+        for (let i = 0; i < 3; i++) {
+          const installmentDate = new Date(paymentDate);
+          installmentDate.setMonth(installmentDate.getMonth() + i);
+          
+          await db.insert(taxPayments).values({
+            userId,
+            taxType,
+            totalAmount: installmentAmounts[i].toString(),
+            paymentDate: installmentDate.toISOString().split('T')[0],
+            competencyPeriodStart: competencyStart.toISOString().split('T')[0],
+            competencyPeriodEnd: competencyEnd.toISOString().split('T')[0],
+            selectedPropertyIds: JSON.stringify(selectedPropertyIds),
+            isInstallment: true,
+            installmentNumber: i + 1,
+            parentTaxPaymentId: mainTaxRecord.id
+          });
+          
+          // Create distributed transactions for each property
+          for (const propertyId of selectedPropertyIds) {
+            const propertyRevenue = propertyRevenues.get(propertyId) || 0;
+            const proportion = totalRevenue > 0 ? propertyRevenue / totalRevenue : 1 / selectedPropertyIds.length;
+            const propertyTaxAmount = installmentAmounts[i] * proportion;
+            
+            if (propertyTaxAmount > 0) {
+              await storage.createTransaction({
+                userId,
+                propertyId,
+                type: 'expense',
+                category: 'taxes',
+                amount: propertyTaxAmount.toString(),
+                description: `${taxType} - Parcela ${i + 1}/3 (${(proportion * 100).toFixed(1)}% do total)`,
+                date: installmentDate.toISOString().split('T')[0],
+                currency: 'BRL'
+              });
+            }
+          }
+        }
+        
+      } else {
+        // Single payment
+        await db.insert(taxPayments).values({
+          userId,
+          taxType,
+          totalAmount: totalTaxAmount.toString(),
+          paymentDate,
+          competencyPeriodStart: competencyStart.toISOString().split('T')[0],
+          competencyPeriodEnd: competencyEnd.toISOString().split('T')[0],
+          selectedPropertyIds: JSON.stringify(selectedPropertyIds),
+          isInstallment: false
+        });
         
         // Create distributed transactions for each property
         for (const propertyId of selectedPropertyIds) {
           const propertyRevenue = propertyRevenues.get(propertyId) || 0;
           const proportion = totalRevenue > 0 ? propertyRevenue / totalRevenue : 1 / selectedPropertyIds.length;
-          const propertyTaxAmount = installment.amount * proportion;
+          const propertyTaxAmount = totalTaxAmount * proportion;
           
           if (propertyTaxAmount > 0) {
-            const description = installments.length > 1 
-              ? `${taxType} - Parcela ${installment.installmentNumber}/${installments.length} (${(proportion * 100).toFixed(1)}% do total)${installment.interest > 0 ? ' + Juros 1%' : ''}`
-              : `${taxType} - ${competencyMonth} (${(proportion * 100).toFixed(1)}% do total)`;
-              
-            const transaction = await storage.createTransaction({
+            await storage.createTransaction({
               userId,
               propertyId,
               type: 'expense',
               category: 'taxes',
               amount: propertyTaxAmount.toString(),
-              description: description,
-              date: installmentDate.toISOString().split('T')[0],
+              description: `${taxType} - ${competencyMonth} (${(proportion * 100).toFixed(1)}% do total)`,
+              date: paymentDate,
               currency: 'BRL'
             });
-            createdTransactions.push(transaction);
           }
         }
       }
       
       res.json({
         success: true,
-        message: `Impostos cadastrados com sucesso! ${installments.length > 1 ? `Criadas ${installments.length} parcelas` : 'Pagamento único'}`,
-        installmentsCreated: installments.length,
-        totalAmount: totalTaxAmount,
-        transactions: createdTransactions
+        message: 'Impostos cadastrados e rateados com sucesso!'
       });
       
     } catch (error) {
