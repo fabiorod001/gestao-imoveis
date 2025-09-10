@@ -66,6 +66,7 @@ function Router() {
           <Route path="/expenses/condominium" component={CondominiumExpenses} />
           <Route path="/expenses/others" component={OtherExpenses} />
           <Route path="/expenses/category/:category" component={CategoryDetailPage} />
+          <Route path="/expenses/taxes" component={TaxesDetailPage} />
           <Route path="/expenses/taxes-detail" component={TaxesDetailPage} />
           <Route path="/expenses/condominium-detail" component={CondominiumDetailPage} />
           <Route path="/expenses/management-detail" component={ManagementDetailPage} />
