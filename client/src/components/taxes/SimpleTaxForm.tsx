@@ -230,7 +230,7 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {/* Tax Type Selection */}
+        {/* Tax Type Selection - Always First */}
         <FormField
           control={form.control}
           name="taxType"
@@ -255,7 +255,7 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
           )}
         />
 
-        {/* Competency Period */}
+        {/* Competency Period - Second */}
         <FormField
           control={form.control}
           name="competencyMonth"
@@ -294,7 +294,72 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
           )}
         />
 
-        {/* Amount */}
+        {/* Quota Options - Third (only for CSLL and IRPJ) */}
+        {isQuarterlyTax && (
+          <div className="space-y-2">
+            <FormLabel>Cotas de Pagamento</FormLabel>
+            <div className="rounded-md border p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <FormField
+                  control={form.control}
+                  name="cota1"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormLabel className="cursor-pointer font-normal">
+                        Cota 1
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cota2"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormLabel className="cursor-pointer font-normal">
+                        Cota 2
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cota3"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormLabel className="cursor-pointer font-normal">
+                        Cota 3
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+            <FormDescription>
+              Selecione as cotas que deseja pagar. Cada cota criará uma despesa separada.
+            </FormDescription>
+          </div>
+        )}
+
+        {/* Amount - Fourth */}
         <FormField
           control={form.control}
           name="amount"
@@ -323,7 +388,7 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
           )}
         />
 
-        {/* Payment Date */}
+        {/* Payment Date - Fifth */}
         <FormField
           control={form.control}
           name="paymentDate"
@@ -373,76 +438,7 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
           )}
         />
 
-        {/* Quota Options (only for CSLL and IRPJ) */}
-        {isQuarterlyTax && (
-          <div className="space-y-2">
-            <FormLabel>Cotas de Pagamento</FormLabel>
-            <div className="rounded-md border p-4 space-y-3">
-              <FormField
-                control={form.control}
-                name="cota1"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel className="cursor-pointer">
-                        Cota 1
-                      </FormLabel>
-                    </div>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="cota2"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel className="cursor-pointer">
-                        Cota 2
-                      </FormLabel>
-                    </div>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="cota3"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel className="cursor-pointer">
-                        Cota 3
-                      </FormLabel>
-                    </div>
-                  </FormItem>
-                )}
-              />
-            </div>
-            <FormDescription>
-              Selecione as cotas que deseja pagar. Cada cota criará uma despesa separada.
-            </FormDescription>
-          </div>
-        )}
-
-        {/* Property Selection */}
+        {/* Property Selection - Last */}
         <FormField
           control={form.control}
           name="selectedPropertyIds"
