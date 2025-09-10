@@ -1,5 +1,5 @@
 # QUICK START - RentManager
-**Última atualização: 09/09/2025**
+**Última atualização: 10/09/2025**
 
 ## 🎯 O que é este projeto?
 Sistema completo de gestão financeira para imóveis de aluguel com:
@@ -63,7 +63,10 @@ Sistema completo de gestão financeira para imóveis de aluguel com:
 ### 6. Relatórios
 - Dashboard com visão geral
 - Análise por propriedade individual
-- Fluxo de caixa detalhado
+- **Fluxo de caixa detalhado** ✅ CORRIGIDO!
+  - Exibição de saldos, entradas e saídas funcionando
+  - Botões de Entradas/Saídas ativos por padrão
+  - Dados reais do sistema (R$ 2.378.257,29)
 - Cálculo de ocupação e diária média (quando há datas de hospedagem)
 - Exportação para Excel/PDF
 
@@ -167,8 +170,9 @@ Arquivo: `server/cleaningPdfParser.ts`
 - **Checkpoints** salvam automaticamente
 - **Categorias de receita**: Use "Airbnb" para importações, "Booking" para outras plataformas
 
-## 📌 Status Atual (09/09/2025)
+## 📌 Status Atual (10/09/2025)
 - ✅ Sistema 100% funcional
+- ✅ **Fluxo de Caixa** completamente funcional e exibindo dados reais
 - ✅ Importação com detecção de período e datas de hospedagem
 - ✅ Preservação inteligente (só sobrescreve Airbnb do período)
 - ✅ Interface responsiva e intuitiva
@@ -181,10 +185,35 @@ Arquivo: `server/cleaningPdfParser.ts`
 - ✅ **Sistema de Múltiplas Contas** com visualização detalhada
 - ✅ **Lançamentos Históricos** separados do fluxo de caixa
 - ✅ **Categoria "Ajuste de Saldo"** para marcos financeiros
+- ✅ **Sistema de Impostos** com seleção automática de período atual
 
-## 🔄 Última Atualização (09/09/2025 - 22:00)
+## 🔄 Atualizações Recentes
 
-### 🆕 Novas Funcionalidades Implementadas Hoje:
+### 📅 10/09/2025 - Correções Críticas
+
+#### ✅ Fluxo de Caixa - PROBLEMA RESOLVIDO
+- **Problema**: APIs retornavam erro "transactionData is not defined"
+- **Causa**: Variáveis incorretas nas rotas de cash flow no servidor
+- **Solução**: Corrigidas todas as referências de variáveis nas APIs
+- **Resultado**: 
+  - Fluxo de caixa exibindo saldo real: **R$ 2.378.257,29**
+  - Entradas e saídas visíveis por padrão
+  - Tabela de evolução diária funcionando
+  - Gráfico de linha funcionando
+
+#### ✅ Sistema de Impostos - Melhorias
+- **Seleção Automática**: Formulário pré-seleciona período atual (setembro 2025)
+- **Calendário Futuro**: Permite agendar pagamentos para datas futuras
+- **CSLL/IRPJ**: Sistema de cotas trimestrais funcionando
+- **PIS/COFINS**: Sistema mensal funcionando
+
+#### ✅ Interface de Usuário
+- **Botões de Filtro**: Entradas e Saídas agora ficam ativos por padrão
+- **Experiência Melhorada**: Dados são exibidos imediatamente ao acessar
+
+### 📅 09/09/2025 - Implementações Anteriores
+
+#### 🆕 Funcionalidades Implementadas (09/09):
 
 - **Lançamentos Históricos (Reformulado)**
   - Checkbox simples e discreto em TODOS os formulários de receitas e despesas
