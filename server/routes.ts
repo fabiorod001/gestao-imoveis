@@ -4209,7 +4209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { taxType, competencyMonth, selectedPropertyIds } = req.body;
       
       // Tax rates for Lucro Presumido
-      const TAX_RATES = {
+      const TAX_RATES: Record<string, number> = {
         PIS: 0.0065, // 0.65%
         COFINS: 0.03, // 3.00%
       };
@@ -4241,7 +4241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(
             and(
               eq(transactions.userId, userId),
-              or(...selectedPropertyIds.map(id => eq(transactions.propertyId, id))),
+              or(...selectedPropertyIds.map((id: number) => eq(transactions.propertyId, id))),
               eq(transactions.type, 'revenue'),
               gte(transactions.date, competencyStart.toISOString().split('T')[0]),
               lte(transactions.date, competencyEnd.toISOString().split('T')[0])
@@ -4256,7 +4256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(
             and(
               eq(transactions.userId, userId),
-              or(...selectedPropertyIds.map(id => eq(transactions.propertyId, id))),
+              or(...selectedPropertyIds.map((id: number) => eq(transactions.propertyId, id))),
               eq(transactions.type, 'revenue'),
               eq(transactions.status, 'pending'),
               gte(transactions.accommodationStartDate, competencyStart.toISOString().split('T')[0]),
@@ -4287,7 +4287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const calculatedAmount = totalRevenue * taxRate;
       
       // Calculate breakdown by property
-      const propertyBreakdown = selectedPropertyIds.map(propertyId => {
+      const propertyBreakdown = selectedPropertyIds.map((propertyId: number) => {
         const revenue = propertyRevenues.get(propertyId) || 0;
         const proportion = totalRevenue > 0 ? revenue / totalRevenue : 1 / selectedPropertyIds.length;
         const taxAmount = calculatedAmount * proportion;
