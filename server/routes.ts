@@ -3437,7 +3437,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process daily cash flow
       const dailyData: { [key: string]: { revenue: number; expenses: number; } } = {};
       
-      transactionData.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         // Skip parent transactions in cash flow
         if (transaction.isCompositeParent) {
           return;
@@ -3565,7 +3565,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process daily cash flow
       const dailyData: { [key: string]: { revenue: number; expenses: number; } } = {};
       
-      transactionData.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         // Skip parent transactions in cash flow
         if (transaction.isCompositeParent) {
           return;
@@ -4073,7 +4073,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Calculate total revenue by property
       const propertyRevenues = new Map<number, number>();
-      transactionData.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         const current = propertyRevenues.get(transaction.propertyId) || 0;
         propertyRevenues.set(transaction.propertyId, current + transaction.amount);
       });
@@ -4386,7 +4386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Calculate total revenue by property
       const propertyRevenues = new Map<number, number>();
-      transactionData.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         const current = propertyRevenues.get(transaction.propertyId) || 0;
         propertyRevenues.set(transaction.propertyId, current + transaction.amount);
       });
@@ -4608,7 +4608,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Calculate total revenue by property
       const propertyRevenues = new Map<number, number>();
-      transactionData.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         const current = propertyRevenues.get(transaction.propertyId) || 0;
         propertyRevenues.set(transaction.propertyId, current + transaction.amount);
       });
