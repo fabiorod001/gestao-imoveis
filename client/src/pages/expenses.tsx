@@ -160,18 +160,22 @@ export default function ExpensesPage() {
     }
   });
 
-  // Fetch expense transactions - optimized endpoint
+  // Fetch expense transactions - optimized endpoint - FIXED TO PREVENT INFINITE LOOP
   const { data: expenses = [], isLoading } = useQuery({
-    queryKey: ['/api/expenses/dashboard'],
+    queryKey: ['/api/expenses/dashboard', 'expenses-page'],
     queryFn: async () => {
       const res = await fetch('/api/expenses/dashboard', { credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       return res.json();
     },
-    staleTime: 30000, // 30 seconds - prevent excessive refetching
+    staleTime: 5 * 60 * 1000, // 5 minutes - much longer cache
+    gcTime: 10 * 60 * 1000, // 10 minutes in cache
     refetchOnWindowFocus: false,
     refetchInterval: false,
-    refetchOnMount: true
+    refetchOnMount: false, // Don't refetch on mount
+    refetchOnReconnect: false,
+    enabled: true, // Only run once initially
+    retry: 1 // Only retry once if it fails
   });
 
   // Handle expense completion from AdvancedExpenseManager
