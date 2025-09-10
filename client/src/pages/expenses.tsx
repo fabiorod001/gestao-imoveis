@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -208,7 +208,7 @@ export default function ExpensesPage() {
     return options;
   };
 
-  const monthOptions = generateMonthOptions();
+  const monthOptions = useMemo(() => generateMonthOptions(), []);
 
 
 
@@ -308,7 +308,7 @@ export default function ExpensesPage() {
     };
   };
 
-  const pivotData = generatePivotData();
+  const pivotData = useMemo(() => generatePivotData(), [expenses, selectedMonths, selectedProperties, selectedExpenseTypes]);
 
   // Sorting logic
   const sortData = (data: PivotRow[]) => {
@@ -338,14 +338,16 @@ export default function ExpensesPage() {
     });
   };
 
-  // Sort data by category order if no other sort is applied
-  const sortedByCategory = pivotData.rows.sort((a, b) => {
-    const indexA = CATEGORY_ORDER.indexOf(a.category);
-    const indexB = CATEGORY_ORDER.indexOf(b.category);
-    return indexA - indexB;
-  });
-  
-  const sortedData = sortData(sortedByCategory);
+  // Sort data by category order if no other sort is applied - MEMOIZED
+  const sortedData = useMemo(() => {
+    const sortedByCategory = pivotData.rows.sort((a, b) => {
+      const indexA = CATEGORY_ORDER.indexOf(a.category);
+      const indexB = CATEGORY_ORDER.indexOf(b.category);
+      return indexA - indexB;
+    });
+    
+    return sortData(sortedByCategory);
+  }, [pivotData.rows, sortConfig]);
 
   // Column resizing
   const handleMouseDown = (column: string) => (e: React.MouseEvent) => {
