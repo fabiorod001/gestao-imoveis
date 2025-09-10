@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import ExpenseTypeSelector from "./ExpenseTypeSelector";
 import CondominiumExpenseForm from "./CondominiumExpenseForm";
-import TaxPaymentForm from "../taxes/TaxPaymentForm";
+import TaxExpenseForm from "./TaxExpenseForm";
 import ManagementExpenseForm from "./ManagementExpenseForm";
 import SingleExpenseForm from "./SingleExpenseForm";
 import RecurringExpenseForm from "./RecurringExpenseForm";
@@ -203,7 +203,10 @@ export default function AdvancedExpenseManager() {
         );
       case 'taxes':
         return (
-          <TaxPaymentForm />
+          <TaxExpenseForm
+            onComplete={handleExpenseComplete}
+            onCancel={handleBack}
+          />
         );
       case 'management':
         return (

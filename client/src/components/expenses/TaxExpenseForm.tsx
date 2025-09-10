@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -8,14 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
-import { Calculator, TrendingDown, AlertCircle, Building } from "lucide-react";
+import { Calculator, TrendingDown, AlertCircle, Building, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Property } from "@shared/schema";
 import { z } from "zod";
 import ConsolidatedExpenseTable from './ConsolidatedExpenseTable';
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const taxFormSchema = z.object({
   taxType: z.enum(['PIS', 'COFINS', 'CSLL', 'IRPJ']),
@@ -46,6 +47,8 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
   const queryClient = useQueryClient();
   const [proRataCalculation, setProRataCalculation] = useState<PropertyRevenue[]>([]);
   const [dataUpdateTrigger, setDataUpdateTrigger] = useState(0);
+  const [calculatedAmount, setCalculatedAmount] = useState<number | null>(null);
+  const [isCalculating, setIsCalculating] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(taxFormSchema),
@@ -63,12 +66,58 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     queryKey: ['/api/properties'],
   });
 
-  // Buscar receitas do mês de competência para cálculo pro-rata
+  const taxType = form.watch('taxType');
+  const selectedProperties = form.watch('selectedProperties');
+  const competencyMonth = form.watch('competencyMonth');
+  const isPisCofins = taxType === 'PIS' || taxType === 'COFINS';
+
+  // Calcular PIS/COFINS automaticamente
+  useEffect(() => {
+    if (isPisCofins && competencyMonth && selectedProperties.length > 0) {
+      calculatePisCofins();
+    }
+  }, [taxType, competencyMonth, selectedProperties, isPisCofins]);
+
+  const calculatePisCofins = async () => {
+    if (!isPisCofins || !competencyMonth || selectedProperties.length === 0) return;
+
+    setIsCalculating(true);
+    try {
+      const response = await fetch('/api/taxes/calculate-pis-cofins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taxType,
+          competencyMonth,
+          selectedPropertyIds: selectedProperties.map(id => parseInt(id)),
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setCalculatedAmount(data.calculatedAmount);
+        form.setValue('totalAmount', data.calculatedAmount.toFixed(2));
+        setProRataCalculation(data.propertyBreakdown.map((item: any) => ({
+          propertyId: item.propertyId,
+          propertyName: item.propertyName,
+          totalRevenue: item.revenue,
+          percentage: item.percentage,
+          allocatedAmount: item.taxAmount,
+        })));
+      }
+    } catch (error) {
+      console.error('Error calculating PIS/COFINS:', error);
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  // Buscar receitas do mês de competência para cálculo pro-rata (CSLL/IRPJ)
   const { data: revenueData = [] } = useQuery({
-    queryKey: ['/api/analytics/monthly-revenue', form.watch('competencyMonth')],
-    enabled: !!form.watch('competencyMonth'),
+    queryKey: ['/api/analytics/monthly-revenue', competencyMonth],
+    enabled: !!competencyMonth && !isPisCofins,
     queryFn: async () => {
-      const month = form.watch('competencyMonth');
+      const month = competencyMonth;
       if (!month) return [];
       
       const [year, monthNum] = month.split('-');
@@ -111,12 +160,14 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     },
   });
 
-  // Calcular rateio pro-rata quando dados mudarem
-  useState(() => {
-    const selectedProps = form.watch('selectedProperties');
+  // Calcular rateio pro-rata quando dados mudarem (para CSLL/IRPJ)
+  useEffect(() => {
+    if (isPisCofins) return; // PIS/COFINS já calculado automaticamente
+    
+    const selectedProps = selectedProperties;
     const totalAmount = parseFloat(form.watch('totalAmount')) || 0;
     
-    if (selectedProps.length > 0 && totalAmount > 0 && revenueData.length > 0) {
+    if (selectedProps.length > 0 && totalAmount > 0 && Array.isArray(revenueData) && revenueData.length > 0) {
       const selectedRevenueData = revenueData.filter((rev: any) => 
         selectedProps.includes(rev.propertyId.toString())
       );
@@ -144,7 +195,7 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     } else {
       setProRataCalculation([]);
     }
-  }, [form.watch('selectedProperties'), form.watch('totalAmount'), revenueData]);
+  }, [selectedProperties, form.watch('totalAmount'), revenueData, isPisCofins]);
 
   const onSubmit = async (data: FormData) => {
     if (proRataCalculation.length === 0) {
@@ -192,11 +243,15 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     }
   };
 
-  const monthOptions = [
-    { value: `${new Date().getFullYear()}-${String(new Date().getMonth()).padStart(2, '0')}`, label: 'Mês Anterior' },
-    { value: `${new Date().getFullYear()}-${String(new Date().getMonth() - 1).padStart(2, '0')}`, label: '2 Meses Atrás' },
-    { value: `${new Date().getFullYear()}-${String(new Date().getMonth() - 2).padStart(2, '0')}`, label: '3 Meses Atrás' },
-  ];
+  const monthOptions: { value: string; label: string }[] = [];
+  const currentDate = new Date();
+  for (let i = 1; i <= 6; i++) {
+    const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+    const value = `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+    const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const labelShort = i === 1 ? 'Mês Anterior' : label;
+    monthOptions.push({ value, label: labelShort });
+  }
 
   const totalCalculated = proRataCalculation.reduce((sum, calc) => sum + calc.allocatedAmount, 0);
 
@@ -209,7 +264,9 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
             Cadastro de Impostos (Pro-Rata)
           </CardTitle>
           <p className="text-muted-foreground">
-            Os valores serão distribuídos proporcionalmente baseado no faturamento do mês de competência.
+            {isPisCofins 
+              ? 'PIS e COFINS são calculados automaticamente com base nas receitas do mês anterior (Lucro Presumido)'
+              : 'Os valores serão distribuídos proporcionalmente baseado no faturamento do mês de competência.'}
           </p>
         </CardHeader>
       <CardContent>
@@ -230,8 +287,8 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="PIS">PIS</SelectItem>
-                        <SelectItem value="COFINS">COFINS</SelectItem>
+                        <SelectItem value="PIS">PIS (0,65%)</SelectItem>
+                        <SelectItem value="COFINS">COFINS (3,00%)</SelectItem>
                         <SelectItem value="CSLL">CSLL</SelectItem>
                         <SelectItem value="IRPJ">IRPJ</SelectItem>
                       </SelectContent>
@@ -241,24 +298,47 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="totalAmount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valor Total da Guia (R$)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="1.500,00"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              <FormItem>
+                <FormLabel>Valor Total da Guia (R$)</FormLabel>
+                {isPisCofins ? (
+                  <div className="space-y-2">
+                    {isCalculating ? (
+                      <div className="h-10 flex items-center px-3 bg-gray-50 rounded-md border">
+                        <span className="text-sm text-gray-600">Calculando...</span>
+                      </div>
+                    ) : calculatedAmount !== null ? (
+                      <div className="h-10 flex items-center px-3 bg-blue-50 rounded-md border border-blue-200">
+                        <span className="text-sm font-medium text-blue-900">
+                          R$ {calculatedAmount.toFixed(2)}
+                        </span>
+                        <span className="text-xs text-blue-700 ml-2">
+                          ({taxType === 'PIS' ? '0,65%' : '3,00%'} sobre as receitas)
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="h-10 flex items-center px-3 bg-gray-50 rounded-md border">
+                        <span className="text-sm text-gray-600">Selecione o mês e propriedades</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="totalAmount"
+                    render={({ field }) => (
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="1.500,00"
+                          {...field}
+                        />
+                      </FormControl>
+                    )}
+                  />
                 )}
-              />
+                <FormMessage />
+              </FormItem>
 
               <FormField
                 control={form.control}
@@ -281,7 +361,9 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
               name="competencyMonth"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Mês de Competência (base para cálculo)</FormLabel>
+                  <FormLabel>
+                    Mês de Competência {isPisCofins && '(fato gerador)'}
+                  </FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -296,6 +378,11 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
                       ))}
                     </SelectContent>
                   </Select>
+                  {isPisCofins && (
+                    <FormDescription>
+                      Receitas deste mês geram o imposto para pagamento no mês seguinte (Lucro Presumido)
+                    </FormDescription>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -304,6 +391,11 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
             {/* Property Selection */}
             <div className="space-y-4">
               <FormLabel>Propriedades para Rateio</FormLabel>
+              {isPisCofins && (
+                <FormDescription>
+                  O rateio será feito proporcionalmente às receitas (incluindo pendentes) de cada propriedade
+                </FormDescription>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {properties.map(property => (
                   <FormField
@@ -334,6 +426,20 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
               </div>
               <FormMessage />
             </div>
+
+            {/* Info Alert for PIS/COFINS */}
+            {isPisCofins && calculatedAmount !== null && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Lucro Presumido - Cálculo Automático</strong>
+                  <br />
+                  Alíquota: {taxType === 'PIS' ? '0,65%' : '3,00%'}
+                  <br />
+                  Inclui receitas realizadas e pendentes/futuras do mês de competência
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Pro-Rata Calculation Display */}
             {proRataCalculation.length > 0 && (
