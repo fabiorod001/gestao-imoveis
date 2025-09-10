@@ -83,7 +83,7 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
   });
 
   // Detectar se é imposto mensal ou trimestral
-  const taxType = useWatch({ control: form.control, name: 'taxType' });
+  const taxType = form.watch('taxType');
   const isMonthlyTax = ['PIS', 'COFINS'].includes(taxType);
   const isQuarterlyTax = ['CSLL', 'IRPJ'].includes(taxType);
 
@@ -97,9 +97,7 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
   });
 
   // Buscar receitas do mês/trimestre de competência para cálculo pro-rata
-  const competencyMonth = useWatch({ control: form.control, name: 'competencyMonth' });
-  const competencyQuarter = useWatch({ control: form.control, name: 'competencyQuarter' });
-  const competencyPeriod = isMonthlyTax ? competencyMonth : competencyQuarter;
+  const competencyPeriod = isMonthlyTax ? form.watch('competencyMonth') : form.watch('competencyQuarter');
   const { data: revenueData = [] } = useQuery({
     queryKey: ['period-revenue', competencyPeriod, taxType],
     enabled: !!competencyPeriod,
@@ -170,14 +168,10 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     },
   });
 
-  // Usar useWatch para evitar loops infinitos
-  const selectedProperties = useWatch({ control: form.control, name: 'selectedProperties' });
-  const totalAmount = useWatch({ control: form.control, name: 'totalAmount' });
-
-  // Calcular rateio pro-rata quando dados mudarem
-  useEffect(() => {
-    const selectedProps = selectedProperties || [];
-    const amount = parseFloat(totalAmount || '0') || 0;
+  // Função para calcular pro-rata sem dependencias reativas
+  const calculateProRata = () => {
+    const selectedProps = form.getValues('selectedProperties') || [];
+    const amount = parseFloat(form.getValues('totalAmount') || '0') || 0;
     
     if (selectedProps.length > 0 && amount > 0 && revenueData.length > 0) {
       const selectedRevenueData = revenueData.filter((rev: any) => 
@@ -203,11 +197,18 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
         });
 
         setProRataCalculation(calculation);
+      } else {
+        setProRataCalculation([]);
       }
     } else {
       setProRataCalculation([]);
     }
-  }, [selectedProperties, totalAmount, revenueData]);
+  };
+
+  // Calcular apenas quando dados de receita mudam
+  useEffect(() => {
+    calculateProRata();
+  }, [revenueData]);
 
   const onSubmit = async (data: FormData) => {
     if (proRataCalculation.length === 0) {
@@ -406,6 +407,10 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
                         step="0.01"
                         placeholder="1.500,00"
                         {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          setTimeout(calculateProRata, 100);
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
@@ -575,9 +580,11 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
                           <Checkbox
                             checked={field.value?.includes(property.id.toString())}
                             onCheckedChange={(checked) => {
-                              return checked
-                                ? field.onChange([...field.value, property.id.toString()])
-                                : field.onChange(field.value?.filter((value) => value !== property.id.toString()))
+                              const newValue = checked
+                                ? [...field.value, property.id.toString()]
+                                : field.value?.filter((value) => value !== property.id.toString());
+                              field.onChange(newValue);
+                              setTimeout(calculateProRata, 100);
                             }}
                           />
                         </FormControl>
@@ -629,11 +636,11 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
                   </div>
                 </div>
 
-                {Math.abs(totalCalculated - parseFloat(totalAmount || '0')) > 0.01 && (
+                {Math.abs(totalCalculated - parseFloat(form.watch('totalAmount') || '0')) > 0.01 && (
                   <div className="flex items-center gap-2 text-amber-600">
                     <AlertCircle className="h-4 w-4" />
                     <span className="text-sm">
-                      Diferença de R$ {Math.abs(totalCalculated - parseFloat(totalAmount || '0')).toFixed(2)} 
+                      Diferença de R$ {Math.abs(totalCalculated - parseFloat(form.watch('totalAmount') || '0')).toFixed(2)} 
                       devido a arredondamentos
                     </span>
                   </div>
