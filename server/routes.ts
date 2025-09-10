@@ -4101,28 +4101,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper function to calculate competency period based on tax type and payment date
+  const calculateCompetencyPeriod = (taxType: string, paymentDate: string) => {
+    const payment = new Date(paymentDate);
+    let competencyStart: Date, competencyEnd: Date;
+    
+    if (taxType === 'PIS' || taxType === 'COFINS') {
+      // PIS/COFINS: Use revenue from previous month
+      const prevMonth = new Date(payment.getFullYear(), payment.getMonth() - 1, 1);
+      competencyStart = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), 1);
+      competencyEnd = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0);
+    } else if (taxType === 'CSLL' || taxType === 'IRPJ') {
+      // CSLL/IRPJ: Use revenue from previous quarter
+      const paymentMonth = payment.getMonth(); // 0-based (0=Jan, 11=Dec)
+      const paymentYear = payment.getFullYear();
+      
+      // Calculate previous quarter
+      let quarterStartMonth: number;
+      if (paymentMonth >= 0 && paymentMonth <= 2) { // Q1 payment (Jan-Mar)
+        // Previous quarter is Q4 of previous year
+        quarterStartMonth = 9; // October (0-based)
+        competencyStart = new Date(paymentYear - 1, quarterStartMonth, 1);
+        competencyEnd = new Date(paymentYear, 0, 0); // End of December previous year
+      } else if (paymentMonth >= 3 && paymentMonth <= 5) { // Q2 payment (Apr-Jun)
+        // Previous quarter is Q1 of current year
+        quarterStartMonth = 0; // January (0-based)
+        competencyStart = new Date(paymentYear, quarterStartMonth, 1);
+        competencyEnd = new Date(paymentYear, 3, 0); // End of March
+      } else if (paymentMonth >= 6 && paymentMonth <= 8) { // Q3 payment (Jul-Sep)
+        // Previous quarter is Q2 of current year
+        quarterStartMonth = 3; // April (0-based)
+        competencyStart = new Date(paymentYear, quarterStartMonth, 1);
+        competencyEnd = new Date(paymentYear, 6, 0); // End of June
+      } else { // Q4 payment (Oct-Dec)
+        // Previous quarter is Q3 of current year
+        quarterStartMonth = 6; // July (0-based)
+        competencyStart = new Date(paymentYear, quarterStartMonth, 1);
+        competencyEnd = new Date(paymentYear, 9, 0); // End of September
+      }
+    } else {
+      throw new Error('Invalid tax type');
+    }
+    
+    return { competencyStart, competencyEnd };
+  };
+
   app.post('/api/taxes/preview', isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
       const { taxType, competencyMonth, amount, paymentDate, selectedPropertyIds, cota1, cota2, cota3 } = req.body;
       
-      // Parse competency period - handle both month (MM/YYYY) and quarter (Q1/2025) formats
-      let competencyStart: Date, competencyEnd: Date;
-      
-      if (competencyMonth.startsWith('Q')) {
-        // Quarter format: Q1/2025
-        const [quarterStr, yearStr] = competencyMonth.split('/');
-        const quarter = parseInt(quarterStr.substring(1)) - 1; // Convert Q1-Q4 to 0-3
-        const year = parseInt(yearStr);
-        
-        competencyStart = new Date(year, quarter * 3, 1); // Start of quarter
-        competencyEnd = new Date(year, (quarter + 1) * 3, 0); // End of quarter
-      } else {
-        // Month format: MM/YYYY
-        const [month, year] = competencyMonth.split('/');
-        competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
-        competencyEnd = new Date(parseInt(year), parseInt(month), 0);
-      }
+      // Calculate correct competency period based on tax type and payment date
+      const { competencyStart, competencyEnd } = calculateCompetencyPeriod(taxType, paymentDate);
       
       // Get gross revenue for selected properties in competency period
       const transactionData = await db.select({
@@ -4214,10 +4244,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         enableInstallment
       } = req.body;
       
-      // Parse competency month (format: MM/YYYY)
-      const [month, year] = competencyMonth.split('/');
-      const competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
-      const competencyEnd = new Date(parseInt(year), parseInt(month), 0);
+      // Calculate correct competency period based on tax type and payment date
+      const { competencyStart, competencyEnd } = calculateCompetencyPeriod(taxType, paymentDate);
       
       // Get gross revenue for selected properties in competency period
       const transactionData = await db.select({
