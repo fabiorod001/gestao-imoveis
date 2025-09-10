@@ -4460,6 +4460,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET endpoint for monthly revenue data (for tax pro-rata calculations)
+  app.get('/api/analytics/monthly-revenue', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { month, year } = req.query;
+      
+      if (!month || !year) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Month and year parameters are required' 
+        });
+      }
+      
+      console.log(`📊 Fetching monthly revenue for ${month}/${year}`);
+      
+      // Calculate start and end dates for the month
+      const startDate = new Date(parseInt(year as string), parseInt(month as string) - 1, 1);
+      const endDate = new Date(parseInt(year as string), parseInt(month as string), 0);
+      
+      // Get revenue transactions for the month grouped by property
+      const monthlyRevenue = await db.select({
+        propertyId: transactions.propertyId,
+        propertyName: properties.name,
+        totalRevenue: sql<number>`CAST(SUM(${transactions.amount}) AS DECIMAL)`
+      }).from(transactions)
+        .innerJoin(properties, eq(transactions.propertyId, properties.id))
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            eq(transactions.type, 'revenue'),
+            gte(transactions.date, startDate.toISOString().split('T')[0]),
+            lte(transactions.date, endDate.toISOString().split('T')[0]),
+            eq(transactions.isHistorical, false) // Exclude historical transactions
+          )
+        )
+        .groupBy(transactions.propertyId, properties.name);
+      
+      res.json(monthlyRevenue);
+      
+    } catch (error) {
+      console.error('Error fetching monthly revenue:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao buscar receitas mensais' 
+      });
+    }
+  });
+
   // GET endpoint to list automatic taxes for easy rectification
   app.get('/api/taxes/automatic', isAuthenticated, async (req, res) => {
     try {
