@@ -170,7 +170,7 @@ export const cashFlowSettings = pgTable("cash_flow_settings", {
 });
 
 // Tax payments table - for PIS, COFINS, CSLL, IRPJ
-export const taxPayments: any = pgTable("tax_payments", {
+export const taxPayments = pgTable("tax_payments", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   taxType: varchar("tax_type").notNull(), // PIS, COFINS, CSLL, IRPJ
@@ -182,6 +182,8 @@ export const taxPayments: any = pgTable("tax_payments", {
   isInstallment: boolean("is_installment").default(false), // Para CSLL e IRPJ - se é parcelado
   installmentNumber: integer("installment_number"), // 1, 2, 3 (para pagamentos parcelados)
   parentTaxPaymentId: integer("parent_tax_payment_id").references(() => taxPayments.id), // Referência ao pagamento principal
+  baseAmount: decimal("base_amount", { precision: 12, scale: 2 }), // Base amount without interest
+  interestAmount: decimal("interest_amount", { precision: 12, scale: 2 }), // Interest amount (1% for 2nd and 3rd installments)
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
