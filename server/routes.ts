@@ -9,7 +9,7 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import * as fs from "fs";
 import { db } from "./db";
-import { eq, and, gte, lte, lt, asc, desc, sql, inArray, or, isNull } from "drizzle-orm";
+import { eq, and, gte, lte, lt, asc, desc, sql, inArray, or, isNull, like } from "drizzle-orm";
 import { parseAirbnbCSV, mapListingToProperty } from "./csvParser";
 import { parseCleaningPdf } from "./cleaningPdfParser";
 import { format } from "date-fns";
