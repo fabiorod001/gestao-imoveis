@@ -65,15 +65,22 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
 
   // Buscar receitas do mês de competência para cálculo pro-rata
   const { data: revenueData = [] } = useQuery({
-    queryKey: ['/api/analytics/monthly-revenue', form.watch('competencyMonth')],
+    queryKey: ['monthly-revenue', form.watch('competencyMonth')],
     enabled: !!form.watch('competencyMonth'),
     queryFn: async () => {
       const month = form.watch('competencyMonth');
       if (!month) return [];
       
       const [year, monthNum] = month.split('-');
-      const response = await apiRequest(`/api/analytics/monthly-revenue?month=${monthNum}&year=${year}`);
-      return response;
+      const response = await fetch(`/api/analytics/monthly-revenue?month=${monthNum}&year=${year}`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
     }
   });
 

@@ -70,11 +70,32 @@ export const getQueryFn: <T>(options: {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: Infinity,
       retry: false,
+      queryFn: async ({ queryKey }) => {
+        // Default fetch function for queries that use URL in queryKey[0]
+        const url = queryKey[0] as string;
+        if (typeof url === 'string' && url.startsWith('/api/')) {
+          const res = await fetch(url, {
+            credentials: "include",
+          });
+          
+          if (res.status === 401) {
+            throw new Error(`401: Unauthorized`);
+          }
+          
+          if (!res.ok) {
+            const text = (await res.text()) || res.statusText;
+            throw new Error(`${res.status}: ${text}`);
+          }
+          
+          return await res.json();
+        }
+        
+        throw new Error('Invalid query - must provide queryFn or use API URL in queryKey[0]');
+      },
     },
     mutations: {
       retry: false,
