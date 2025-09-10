@@ -4101,49 +4101,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Helper function to calculate competency period based on tax type and payment date
-  const calculateCompetencyPeriod = (taxType: string, paymentDate: string) => {
-    const payment = new Date(paymentDate);
+  // Helper function to calculate competency period based on competency month/quarter
+  const parseCompetencyPeriod = (competencyMonth: string) => {
     let competencyStart: Date, competencyEnd: Date;
     
-    if (taxType === 'PIS' || taxType === 'COFINS') {
-      // PIS/COFINS: Use revenue from previous month
-      const prevMonth = new Date(payment.getFullYear(), payment.getMonth() - 1, 1);
-      competencyStart = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), 1);
-      competencyEnd = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0);
-    } else if (taxType === 'CSLL' || taxType === 'IRPJ') {
-      // CSLL/IRPJ: Use revenue from previous quarter
-      const paymentMonth = payment.getMonth(); // 0-based (0=Jan, 11=Dec)
-      const paymentYear = payment.getFullYear();
+    if (competencyMonth.startsWith('Q')) {
+      // Quarter format: Q1/2025
+      const [quarterStr, yearStr] = competencyMonth.split('/');
+      const quarter = parseInt(quarterStr.substring(1)) - 1; // Convert Q1-Q4 to 0-3
+      const year = parseInt(yearStr);
       
-      // Calculate previous quarter
-      let quarterStartMonth: number;
-      if (paymentMonth >= 0 && paymentMonth <= 2) { // Q1 payment (Jan-Mar)
-        // Previous quarter is Q4 of previous year
-        quarterStartMonth = 9; // October (0-based)
-        competencyStart = new Date(paymentYear - 1, quarterStartMonth, 1);
-        competencyEnd = new Date(paymentYear, 0, 0); // End of December previous year
-      } else if (paymentMonth >= 3 && paymentMonth <= 5) { // Q2 payment (Apr-Jun)
-        // Previous quarter is Q1 of current year
-        quarterStartMonth = 0; // January (0-based)
-        competencyStart = new Date(paymentYear, quarterStartMonth, 1);
-        competencyEnd = new Date(paymentYear, 3, 0); // End of March
-      } else if (paymentMonth >= 6 && paymentMonth <= 8) { // Q3 payment (Jul-Sep)
-        // Previous quarter is Q2 of current year
-        quarterStartMonth = 3; // April (0-based)
-        competencyStart = new Date(paymentYear, quarterStartMonth, 1);
-        competencyEnd = new Date(paymentYear, 6, 0); // End of June
-      } else { // Q4 payment (Oct-Dec)
-        // Previous quarter is Q3 of current year
-        quarterStartMonth = 6; // July (0-based)
-        competencyStart = new Date(paymentYear, quarterStartMonth, 1);
-        competencyEnd = new Date(paymentYear, 9, 0); // End of September
-      }
+      competencyStart = new Date(year, quarter * 3, 1); // Start of quarter
+      competencyEnd = new Date(year, (quarter + 1) * 3, 0); // End of quarter
     } else {
-      throw new Error('Invalid tax type');
+      // Month format: MM/YYYY
+      const [month, year] = competencyMonth.split('/');
+      competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
+      competencyEnd = new Date(parseInt(year), parseInt(month), 0);
     }
     
     return { competencyStart, competencyEnd };
+  };
+
+  // Helper function to calculate automatic installments for IRPJ/CSLL
+  const calculateInstallments = (totalAmount: number, taxType: string) => {
+    const MIN_TOTAL_FOR_INSTALLMENTS = 2000; // R$ 2.000
+    const MIN_INSTALLMENT_VALUE = 1000; // R$ 1.000
+    const INTEREST_RATE = 0.01; // 1% per month
+    
+    // If total is less than R$ 2.000, must pay in single installment
+    if (totalAmount < MIN_TOTAL_FOR_INSTALLMENTS) {
+      return [{
+        installmentNumber: 1,
+        amount: totalAmount,
+        baseAmount: totalAmount,
+        interest: 0
+      }];
+    }
+    
+    // For amounts >= R$ 2.000, automatically divide into 3 installments
+    const baseAmount = totalAmount / 3;
+    
+    // Check if each installment would be >= R$ 1.000
+    if (baseAmount < MIN_INSTALLMENT_VALUE) {
+      // If individual installments would be too small, pay in single installment
+      return [{
+        installmentNumber: 1,
+        amount: totalAmount,
+        baseAmount: totalAmount,
+        interest: 0
+      }];
+    }
+    
+    // Calculate 3 installments with interest
+    return [
+      {
+        installmentNumber: 1,
+        amount: baseAmount,
+        baseAmount: baseAmount,
+        interest: 0
+      },
+      {
+        installmentNumber: 2,
+        amount: baseAmount * (1 + INTEREST_RATE),
+        baseAmount: baseAmount,
+        interest: baseAmount * INTEREST_RATE
+      },
+      {
+        installmentNumber: 3,
+        amount: baseAmount * (1 + INTEREST_RATE),
+        baseAmount: baseAmount,
+        interest: baseAmount * INTEREST_RATE
+      }
+    ];
   };
 
   app.post('/api/taxes/preview', isAuthenticated, async (req, res) => {
@@ -4151,8 +4181,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const { taxType, competencyMonth, amount, paymentDate, selectedPropertyIds, cota1, cota2, cota3 } = req.body;
       
-      // Calculate correct competency period based on tax type and payment date
-      const { competencyStart, competencyEnd } = calculateCompetencyPeriod(taxType, paymentDate);
+      // Parse competency period from the form (Lucro Presumido: use the period itself)
+      const { competencyStart, competencyEnd } = parseCompetencyPeriod(competencyMonth);
       
       // Get gross revenue for selected properties in competency period
       const transactionData = await db.select({
@@ -4204,11 +4234,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       });
       
-      // Add quota information to response for quarterly taxes
+      // Calculate automatic installments for quarterly taxes (IRPJ/CSLL)
       const isQuarterlyTax = taxType === 'CSLL' || taxType === 'IRPJ';
-      const selectedCotas = isQuarterlyTax ? 
-        [(cota1 ? 'Cota 1' : null), (cota2 ? 'Cota 2' : null), (cota3 ? 'Cota 3' : null)].filter(Boolean) : 
-        [];
+      let installments = null;
+      let finalTotal = totalTaxAmount;
+      
+      if (isQuarterlyTax) {
+        // Count selected quotas
+        const selectedCotas = [(cota1 ? 'Cota 1' : null), (cota2 ? 'Cota 2' : null), (cota3 ? 'Cota 3' : null)].filter(Boolean);
+        finalTotal = totalTaxAmount * selectedCotas.length;
+        
+        // Calculate automatic installments
+        installments = calculateInstallments(finalTotal, taxType);
+      }
       
       res.json({
         success: true,
@@ -4218,9 +4256,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         totalRevenue,
         breakdown,
-        total: totalTaxAmount,
-        selectedCotas: selectedCotas,
-        cotasTotal: isQuarterlyTax ? totalTaxAmount * selectedCotas.length : totalTaxAmount
+        total: finalTotal,
+        isQuarterlyTax,
+        installments: installments,
+        paymentInfo: {
+          canInstall: isQuarterlyTax && finalTotal >= 2000,
+          minimumForInstallment: 2000,
+          minimumPerInstallment: 1000,
+          automaticInstallments: installments ? installments.length : 1
+        }
       });
       
     } catch (error) {
@@ -4244,8 +4288,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         enableInstallment
       } = req.body;
       
-      // Calculate correct competency period based on tax type and payment date
-      const { competencyStart, competencyEnd } = calculateCompetencyPeriod(taxType, paymentDate);
+      // Parse competency period from the form (Lucro Presumido: use the period itself)
+      const { competencyStart, competencyEnd } = parseCompetencyPeriod(competencyMonth);
       
       // Get gross revenue for selected properties in competency period
       const transactionData = await db.select({
@@ -4274,102 +4318,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const totalTaxAmount = parseFloat(amount) / 100; // Convert from centavos to reais
       
-      if (enableInstallment && (taxType === 'CSLL' || taxType === 'IRPJ')) {
-        // Create 3 installments
-        const baseAmount = totalTaxAmount / 3;
-        const installmentAmount2 = baseAmount + (totalTaxAmount * 0.01); // 1/3 + 1%
-        const installmentAmount3 = baseAmount + (totalTaxAmount * 0.01); // 1/3 + 1%
+      // Calculate automatic installments (for IRPJ/CSLL only)
+      const isQuarterlyTax = taxType === 'CSLL' || taxType === 'IRPJ';
+      const installments = isQuarterlyTax ? calculateInstallments(totalTaxAmount, taxType) : [{
+        installmentNumber: 1,
+        amount: totalTaxAmount,
+        baseAmount: totalTaxAmount,
+        interest: 0
+      }];
+      
+      const createdTransactions = [];
+      
+      // Create installment records and distributed transactions
+      for (let i = 0; i < installments.length; i++) {
+        const installment = installments[i];
+        const installmentDate = new Date(paymentDate);
+        installmentDate.setMonth(installmentDate.getMonth() + i);
         
-        // Store main tax record
-        const [mainTaxRecord] = await db.insert(taxPayments).values({
+        // Store tax payment record
+        const taxPaymentRecord = await db.insert(taxPayments).values({
           userId,
           taxType,
-          totalAmount: totalTaxAmount.toString(),
-          paymentDate,
+          totalAmount: installment.amount.toString(),
+          paymentDate: installmentDate.toISOString().split('T')[0],
           competencyPeriodStart: competencyStart.toISOString().split('T')[0],
           competencyPeriodEnd: competencyEnd.toISOString().split('T')[0],
           selectedPropertyIds: JSON.stringify(selectedPropertyIds),
-          isInstallment: true
+          isInstallment: installments.length > 1,
+          installmentNumber: installment.installmentNumber,
+          baseAmount: installment.baseAmount.toString(),
+          interestAmount: installment.interest.toString()
         }).returning();
-        
-        // Create installment records and distributed transactions
-        const installmentAmounts = [baseAmount, installmentAmount2, installmentAmount3];
-        
-        for (let i = 0; i < 3; i++) {
-          const installmentDate = new Date(paymentDate);
-          installmentDate.setMonth(installmentDate.getMonth() + i);
-          
-          await db.insert(taxPayments).values({
-            userId,
-            taxType,
-            totalAmount: installmentAmounts[i].toString(),
-            paymentDate: installmentDate.toISOString().split('T')[0],
-            competencyPeriodStart: competencyStart.toISOString().split('T')[0],
-            competencyPeriodEnd: competencyEnd.toISOString().split('T')[0],
-            selectedPropertyIds: JSON.stringify(selectedPropertyIds),
-            isInstallment: true,
-            installmentNumber: i + 1,
-            parentTaxPaymentId: mainTaxRecord.id
-          });
-          
-          // Create distributed transactions for each property
-          for (const propertyId of selectedPropertyIds) {
-            const propertyRevenue = propertyRevenues.get(propertyId) || 0;
-            const proportion = totalRevenue > 0 ? propertyRevenue / totalRevenue : 1 / selectedPropertyIds.length;
-            const propertyTaxAmount = installmentAmounts[i] * proportion;
-            
-            if (propertyTaxAmount > 0) {
-              await storage.createTransaction({
-                userId,
-                propertyId,
-                type: 'expense',
-                category: 'taxes',
-                amount: propertyTaxAmount.toString(),
-                description: `${taxType} - Parcela ${i + 1}/3 (${(proportion * 100).toFixed(1)}% do total)`,
-                date: installmentDate.toISOString().split('T')[0],
-                currency: 'BRL'
-              });
-            }
-          }
-        }
-        
-      } else {
-        // Single payment
-        await db.insert(taxPayments).values({
-          userId,
-          taxType,
-          totalAmount: totalTaxAmount.toString(),
-          paymentDate,
-          competencyPeriodStart: competencyStart.toISOString().split('T')[0],
-          competencyPeriodEnd: competencyEnd.toISOString().split('T')[0],
-          selectedPropertyIds: JSON.stringify(selectedPropertyIds),
-          isInstallment: false
-        });
         
         // Create distributed transactions for each property
         for (const propertyId of selectedPropertyIds) {
           const propertyRevenue = propertyRevenues.get(propertyId) || 0;
           const proportion = totalRevenue > 0 ? propertyRevenue / totalRevenue : 1 / selectedPropertyIds.length;
-          const propertyTaxAmount = totalTaxAmount * proportion;
+          const propertyTaxAmount = installment.amount * proportion;
           
           if (propertyTaxAmount > 0) {
-            await storage.createTransaction({
+            const description = installments.length > 1 
+              ? `${taxType} - Parcela ${installment.installmentNumber}/${installments.length} (${(proportion * 100).toFixed(1)}% do total)${installment.interest > 0 ? ' + Juros 1%' : ''}`
+              : `${taxType} - ${competencyMonth} (${(proportion * 100).toFixed(1)}% do total)`;
+              
+            const transaction = await storage.createTransaction({
               userId,
               propertyId,
               type: 'expense',
               category: 'taxes',
               amount: propertyTaxAmount.toString(),
-              description: `${taxType} - ${competencyMonth} (${(proportion * 100).toFixed(1)}% do total)`,
-              date: paymentDate,
+              description: description,
+              date: installmentDate.toISOString().split('T')[0],
               currency: 'BRL'
             });
+            createdTransactions.push(transaction);
           }
         }
       }
       
       res.json({
         success: true,
-        message: 'Impostos cadastrados e rateados com sucesso!'
+        message: `Impostos cadastrados com sucesso! ${installments.length > 1 ? `Criadas ${installments.length} parcelas` : 'Pagamento único'}`,
+        installmentsCreated: installments.length,
+        totalAmount: totalTaxAmount,
+        transactions: createdTransactions
       });
       
     } catch (error) {
