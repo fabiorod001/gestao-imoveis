@@ -26,8 +26,8 @@ interface CashFlowStats {
 
 export default function CashFlowPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('3d');
-  const [showEntradas, setShowEntradas] = useState(false);
-  const [showSaidas, setShowSaidas] = useState(false);
+  const [showEntradas, setShowEntradas] = useState(true);
+  const [showSaidas, setShowSaidas] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showAccountBreakdown, setShowAccountBreakdown] = useState(false);
