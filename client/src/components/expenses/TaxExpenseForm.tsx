@@ -83,7 +83,7 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
   });
 
   // Detectar se é imposto mensal ou trimestral
-  const taxType = form.watch('taxType');
+  const taxType = useWatch({ control: form.control, name: 'taxType' });
   const isMonthlyTax = ['PIS', 'COFINS'].includes(taxType);
   const isQuarterlyTax = ['CSLL', 'IRPJ'].includes(taxType);
 
@@ -629,11 +629,11 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
                   </div>
                 </div>
 
-                {Math.abs(totalCalculated - parseFloat(form.watch('totalAmount') || '0')) > 0.01 && (
+                {Math.abs(totalCalculated - parseFloat(totalAmount || '0')) > 0.01 && (
                   <div className="flex items-center gap-2 text-amber-600">
                     <AlertCircle className="h-4 w-4" />
                     <span className="text-sm">
-                      Diferença de R$ {Math.abs(totalCalculated - parseFloat(form.watch('totalAmount') || '0')).toFixed(2)} 
+                      Diferença de R$ {Math.abs(totalCalculated - parseFloat(totalAmount || '0')).toFixed(2)} 
                       devido a arredondamentos
                     </span>
                   </div>
