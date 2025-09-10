@@ -440,7 +440,7 @@ export default function TaxesDetailPage() {
       }
       
       rowData.push(-row.total);
-      data.push(rowData);
+      data.push(rowData.map(String));
     });
     
     const totalsRow = [
@@ -453,7 +453,7 @@ export default function TaxesDetailPage() {
     }
     
     totalsRow.push(-taxDetailData.grandTotal);
-    data.push(totalsRow);
+    data.push(totalsRow.map(String));
     
     const ws = XLSX.utils.aoa_to_sheet(data);
     const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
