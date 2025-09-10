@@ -49,23 +49,7 @@ export async function apiRequest(
   return res;
 }
 
-type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: {
-  on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const res = await fetch(queryKey[0] as string, {
-      credentials: "include",
-    });
-
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
-    }
-
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
+// Removed old getQueryFn - now using inline function in QueryClient
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,28 +58,7 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: Infinity,
       retry: false,
-      queryFn: async ({ queryKey }) => {
-        // Default fetch function for queries that use URL in queryKey[0]
-        const url = queryKey[0] as string;
-        if (typeof url === 'string' && url.startsWith('/api/')) {
-          const res = await fetch(url, {
-            credentials: "include",
-          });
-          
-          if (res.status === 401) {
-            throw new Error(`401: Unauthorized`);
-          }
-          
-          if (!res.ok) {
-            const text = (await res.text()) || res.statusText;
-            throw new Error(`${res.status}: ${text}`);
-          }
-          
-          return await res.json();
-        }
-        
-        throw new Error('Invalid query - must provide queryFn or use API URL in queryKey[0]');
-      },
+      // Removemos o queryFn padrão - todas as queries devem ter sua própria queryFn
     },
     mutations: {
       retry: false,
