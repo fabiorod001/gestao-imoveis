@@ -4508,6 +4508,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET endpoint for quarterly revenue data (for quarterly tax pro-rata calculations)
+  app.get('/api/analytics/quarterly-revenue', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { quarter, year } = req.query;
+      
+      if (!quarter || !year) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Quarter and year parameters are required' 
+        });
+      }
+      
+      console.log(`📊 Fetching quarterly revenue for Q${quarter}/${year}`);
+      
+      // Calculate start and end dates for the quarter
+      const quarterNum = parseInt(quarter as string);
+      const yearNum = parseInt(year as string);
+      const startDate = new Date(yearNum, (quarterNum - 1) * 3, 1);
+      const endDate = new Date(yearNum, quarterNum * 3, 0);
+      
+      // Get revenue transactions for the quarter grouped by property
+      const quarterlyRevenue = await db.select({
+        propertyId: transactions.propertyId,
+        propertyName: properties.name,
+        totalRevenue: sql<number>`CAST(SUM(${transactions.amount}) AS DECIMAL)`
+      }).from(transactions)
+        .innerJoin(properties, eq(transactions.propertyId, properties.id))
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            eq(transactions.type, 'revenue'),
+            gte(transactions.date, startDate.toISOString().split('T')[0]),
+            lte(transactions.date, endDate.toISOString().split('T')[0]),
+            eq(transactions.isHistorical, false) // Exclude historical transactions
+          )
+        )
+        .groupBy(transactions.propertyId, properties.name);
+      
+      res.json(quarterlyRevenue);
+      
+    } catch (error) {
+      console.error('Error fetching quarterly revenue:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao buscar receitas trimestrais' 
+      });
+    }
+  });
+
   // GET endpoint to list automatic taxes for easy rectification
   app.get('/api/taxes/automatic', isAuthenticated, async (req, res) => {
     try {

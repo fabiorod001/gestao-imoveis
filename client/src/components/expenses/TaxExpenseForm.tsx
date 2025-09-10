@@ -107,6 +107,7 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
       if (isMonthlyTax) {
         // Para impostos mensais (PIS/COFINS)
         const [year, monthNum] = competencyPeriod.split('-');
+        console.log('📊 Fetching monthly revenue for', `${monthNum}/${year}`);
         const response = await fetch(`/api/analytics/monthly-revenue?month=${monthNum}&year=${year}`, {
           credentials: 'include'
         });
@@ -117,8 +118,9 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
         
         return await response.json();
       } else {
-        // Para impostos trimestrais (CSLL/IRPJ)
+        // Para impostos trimestrais (CSLL/IRPJ) 
         const [year, quarter] = competencyPeriod.split('-Q');
+        console.log('📊 Fetching quarterly revenue for', `Q${quarter}/${year}`);
         const response = await fetch(`/api/analytics/quarterly-revenue?quarter=${quarter}&year=${year}`, {
           credentials: 'include'
         });
@@ -318,6 +320,8 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     return options;
   };
 
+  const monthOptions = generateMonthOptions();
+
   // Generate quarter options for quarterly taxes (CSLL/IRPJ)
   const generateQuarterOptions = () => {
     const currentDate = new Date();
@@ -344,8 +348,6 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
 
     return options.sort((a, b) => b.value.localeCompare(a.value));
   };
-
-  const monthOptions = generateMonthOptions();
 
   const totalCalculated = proRataCalculation.reduce((sum, calc) => sum + calc.allocatedAmount, 0);
 
