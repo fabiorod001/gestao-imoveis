@@ -3417,7 +3417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process daily cash flow
       const dailyData: { [key: string]: { revenue: number; expenses: number; } } = {};
       
-      transactionData.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         // Skip parent transactions in cash flow
         if (transaction.isCompositeParent) {
           return;
@@ -3545,7 +3545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process daily cash flow
       const dailyData: { [key: string]: { revenue: number; expenses: number; } } = {};
       
-      transactionData.forEach(transaction => {
+      periodTransactions.forEach(transaction => {
         // Skip parent transactions in cash flow
         if (transaction.isCompositeParent) {
           return;
