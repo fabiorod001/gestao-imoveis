@@ -327,7 +327,9 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
                     <SelectContent>
                       {monthOptions.map(option => (
                         <SelectItem key={option.value} value={option.value}>
-                          {option.label}
+                          <span className={option.isCurrent ? "font-bold" : ""}>
+                            {option.label}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
