@@ -112,7 +112,7 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
   });
 
   // Calcular rateio pro-rata quando dados mudarem
-  useState(() => {
+  useEffect(() => {
     const selectedProps = form.watch('selectedProperties');
     const totalAmount = parseFloat(form.watch('totalAmount')) || 0;
     
