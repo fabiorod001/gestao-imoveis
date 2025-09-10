@@ -18,6 +18,11 @@ export default function Properties() {
 
   const { data: fetchedProperties = [], isLoading } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
+    queryFn: async () => {
+      const res = await fetch('/api/properties', { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      return res.json();
+    }
   });
   
   const [properties, setProperties] = useState<Property[]>([]);

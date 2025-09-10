@@ -153,11 +153,21 @@ export default function ExpensesPage() {
   // Fetch all properties for filters
   const { data: allProperties = [] } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
+    queryFn: async () => {
+      const res = await fetch('/api/properties', { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      return res.json();
+    }
   });
 
   // Fetch expense transactions - optimized endpoint
   const { data: expenses = [], isLoading } = useQuery({
     queryKey: ['/api/expenses/dashboard'],
+    queryFn: async () => {
+      const res = await fetch('/api/expenses/dashboard', { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      return res.json();
+    }
   });
 
   // Handle expense completion from AdvancedExpenseManager

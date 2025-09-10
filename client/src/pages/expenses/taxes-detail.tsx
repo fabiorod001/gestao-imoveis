@@ -85,10 +85,20 @@ export default function TaxesDetailPage() {
   // Fetch data
   const { data: allTransactions = [], isLoading: isLoadingTransactions } = useQuery<Transaction[]>({
     queryKey: ['/api/expenses/dashboard'],
+    queryFn: async () => {
+      const res = await fetch('/api/expenses/dashboard', { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      return res.json();
+    }
   });
 
   const { data: allProperties = [], isLoading: isLoadingProperties } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
+    queryFn: async () => {
+      const res = await fetch('/api/properties', { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      return res.json();
+    }
   });
 
   const isLoading = isLoadingTransactions || isLoadingProperties;

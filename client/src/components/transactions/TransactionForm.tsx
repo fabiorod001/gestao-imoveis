@@ -88,6 +88,11 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
 
   const { data: properties = [] } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
+    queryFn: async () => {
+      const res = await fetch('/api/properties', { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      return res.json();
+    }
   });
 
   const form = useForm<FormData>({
