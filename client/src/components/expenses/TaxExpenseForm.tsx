@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -97,7 +97,9 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
   });
 
   // Buscar receitas do mês/trimestre de competência para cálculo pro-rata
-  const competencyPeriod = isMonthlyTax ? form.watch('competencyMonth') : form.watch('competencyQuarter');
+  const competencyMonth = useWatch({ control: form.control, name: 'competencyMonth' });
+  const competencyQuarter = useWatch({ control: form.control, name: 'competencyQuarter' });
+  const competencyPeriod = isMonthlyTax ? competencyMonth : competencyQuarter;
   const { data: revenueData = [] } = useQuery({
     queryKey: ['period-revenue', competencyPeriod, taxType],
     enabled: !!competencyPeriod,
@@ -168,12 +170,16 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     },
   });
 
+  // Usar useWatch para evitar loops infinitos
+  const selectedProperties = useWatch({ control: form.control, name: 'selectedProperties' });
+  const totalAmount = useWatch({ control: form.control, name: 'totalAmount' });
+
   // Calcular rateio pro-rata quando dados mudarem
   useEffect(() => {
-    const selectedProps = form.watch('selectedProperties');
-    const totalAmount = parseFloat(form.watch('totalAmount')) || 0;
+    const selectedProps = selectedProperties || [];
+    const amount = parseFloat(totalAmount || '0') || 0;
     
-    if (selectedProps.length > 0 && totalAmount > 0 && revenueData.length > 0) {
+    if (selectedProps.length > 0 && amount > 0 && revenueData.length > 0) {
       const selectedRevenueData = revenueData.filter((rev: any) => 
         selectedProps.includes(rev.propertyId.toString())
       );
@@ -185,7 +191,7 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
       if (totalSelectedRevenue > 0) {
         const calculation = selectedRevenueData.map((rev: any) => {
           const percentage = (rev.totalRevenue / totalSelectedRevenue) * 100;
-          const allocatedAmount = (rev.totalRevenue / totalSelectedRevenue) * totalAmount;
+          const allocatedAmount = (rev.totalRevenue / totalSelectedRevenue) * amount;
           
           return {
             propertyId: rev.propertyId,
@@ -201,11 +207,7 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     } else {
       setProRataCalculation([]);
     }
-  }, [
-    form.watch('selectedProperties'), 
-    form.watch('totalAmount'), 
-    revenueData
-  ]);
+  }, [selectedProperties, totalAmount, revenueData]);
 
   const onSubmit = async (data: FormData) => {
     if (proRataCalculation.length === 0) {
