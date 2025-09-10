@@ -4202,6 +4202,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Calculate PIS/COFINS based on previous month revenue (Lucro Presumido)
+  app.post('/api/taxes/calculate-pis-cofins', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { taxType, competencyMonth, selectedPropertyIds } = req.body;
+      
+      // Tax rates for Lucro Presumido
+      const TAX_RATES = {
+        PIS: 0.0065, // 0.65%
+        COFINS: 0.03, // 3.00%
+      };
+      
+      if (!TAX_RATES[taxType]) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Tipo de imposto inválido. Use PIS ou COFINS.' 
+        });
+      }
+      
+      // Parse competency month (format: MM/YYYY)
+      const [month, year] = competencyMonth.split('/');
+      const competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const competencyEnd = new Date(parseInt(year), parseInt(month), 0);
+      
+      // Get properties info
+      const properties = await storage.getProperties(userId);
+      const propertyMap = new Map(properties.map(p => [p.id, p.name]));
+      
+      // Get all revenues for selected properties in competency period
+      // Include both actual revenues and pending/future revenues
+      const [actualRevenues, pendingRevenues] = await Promise.all([
+        // Actual revenues (already received)
+        db.select({
+          propertyId: transactions.propertyId,
+          amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        }).from(transactions)
+          .where(
+            and(
+              eq(transactions.userId, userId),
+              or(...selectedPropertyIds.map(id => eq(transactions.propertyId, id))),
+              eq(transactions.type, 'revenue'),
+              gte(transactions.date, competencyStart.toISOString().split('T')[0]),
+              lte(transactions.date, competencyEnd.toISOString().split('T')[0])
+            )
+          ),
+        
+        // Pending/future revenues (from Airbnb imports or manual entries)
+        db.select({
+          propertyId: transactions.propertyId,
+          amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        }).from(transactions)
+          .where(
+            and(
+              eq(transactions.userId, userId),
+              or(...selectedPropertyIds.map(id => eq(transactions.propertyId, id))),
+              eq(transactions.type, 'revenue'),
+              eq(transactions.status, 'pending'),
+              gte(transactions.accommodationStartDate, competencyStart.toISOString().split('T')[0]),
+              lte(transactions.accommodationStartDate, competencyEnd.toISOString().split('T')[0])
+            )
+          )
+      ]);
+      
+      // Combine and calculate total revenue by property
+      const propertyRevenues = new Map<number, number>();
+      
+      // Add actual revenues
+      actualRevenues.forEach(transaction => {
+        const current = propertyRevenues.get(transaction.propertyId) || 0;
+        propertyRevenues.set(transaction.propertyId, current + transaction.amount);
+      });
+      
+      // Add pending revenues
+      pendingRevenues.forEach(transaction => {
+        const current = propertyRevenues.get(transaction.propertyId) || 0;
+        propertyRevenues.set(transaction.propertyId, current + transaction.amount);
+      });
+      
+      const totalRevenue = Array.from(propertyRevenues.values()).reduce((sum, amount) => sum + amount, 0);
+      
+      // Calculate tax amount
+      const taxRate = TAX_RATES[taxType];
+      const calculatedAmount = totalRevenue * taxRate;
+      
+      // Calculate breakdown by property
+      const propertyBreakdown = selectedPropertyIds.map(propertyId => {
+        const revenue = propertyRevenues.get(propertyId) || 0;
+        const proportion = totalRevenue > 0 ? revenue / totalRevenue : 1 / selectedPropertyIds.length;
+        const taxAmount = calculatedAmount * proportion;
+        
+        return {
+          propertyId,
+          propertyName: propertyMap.get(propertyId) || 'Unknown',
+          revenue,
+          taxAmount,
+          percentage: proportion * 100
+        };
+      });
+      
+      res.json({
+        success: true,
+        taxType,
+        competencyMonth,
+        totalRevenue,
+        calculatedAmount,
+        rate: taxRate,
+        propertyBreakdown,
+        competencyPeriod: {
+          start: competencyStart.toISOString().split('T')[0],
+          end: competencyEnd.toISOString().split('T')[0]
+        },
+        includesPendingRevenues: pendingRevenues.length > 0
+      });
+      
+    } catch (error) {
+      console.error('Error calculating PIS/COFINS:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao calcular PIS/COFINS' 
+      });
+    }
+  });
+
   app.post('/api/taxes/payments', isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
