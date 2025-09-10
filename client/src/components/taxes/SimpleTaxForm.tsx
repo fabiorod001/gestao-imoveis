@@ -171,20 +171,38 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
     },
   });
 
-  // Generate last 12 months options
+  // Generate last 12 months options (future to past, current in bold)
   const getMonthOptions = () => {
     const options = [];
     const today = new Date();
-    for (let i = 0; i < 12; i++) {
+    const currentMonth = format(today, 'MM/yyyy');
+    
+    // Add future months (next 3 months)
+    for (let i = 3; i >= 1; i--) {
+      const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+      const value = format(date, 'MM/yyyy');
+      const label = format(date, 'MMMM yyyy', { locale: ptBR });
+      options.push({ value, label, isCurrent: false });
+    }
+    
+    // Add current month
+    const currentDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    const currentValue = format(currentDate, 'MM/yyyy');
+    const currentLabel = format(currentDate, 'MMMM yyyy', { locale: ptBR });
+    options.push({ value: currentValue, label: currentLabel, isCurrent: true });
+    
+    // Add past months (last 8 months)
+    for (let i = 1; i <= 8; i++) {
       const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
       const value = format(date, 'MM/yyyy');
       const label = format(date, 'MMMM yyyy', { locale: ptBR });
-      options.push({ value, label });
+      options.push({ value, label, isCurrent: false });
     }
+    
     return options;
   };
 
-  // Generate quarter options (3 previous + current + 3 future)
+  // Generate quarter options (future to past, current in bold)
   const getQuarterOptions = () => {
     const options = [];
     const today = new Date();
@@ -192,16 +210,12 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
     const currentYear = today.getFullYear();
     const currentQuarter = Math.floor(currentMonth / 3);
     
-    // Calculate quarters from -3 to +3 relative to current
-    for (let i = -3; i <= 3; i++) {
+    // Add future quarters (next 3 quarters)
+    for (let i = 3; i >= 1; i--) {
       let quarter = currentQuarter + i;
       let year = currentYear;
       
       // Adjust year and quarter for overflow
-      while (quarter < 0) {
-        quarter += 4;
-        year--;
-      }
       while (quarter > 3) {
         quarter -= 4;
         year++;
@@ -210,7 +224,30 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
       const quarterNumber = quarter + 1; // Convert 0-3 to 1-4
       const value = `Q${quarterNumber}/${year}`;
       const label = `${quarterNumber}º Trim. ${year}`;
-      options.push({ value, label });
+      options.push({ value, label, isCurrent: false });
+    }
+    
+    // Add current quarter
+    const currentQuarterNumber = currentQuarter + 1;
+    const currentValue = `Q${currentQuarterNumber}/${currentYear}`;
+    const currentLabel = `${currentQuarterNumber}º Trim. ${currentYear}`;
+    options.push({ value: currentValue, label: currentLabel, isCurrent: true });
+    
+    // Add past quarters (last 3 quarters)
+    for (let i = 1; i <= 3; i++) {
+      let quarter = currentQuarter - i;
+      let year = currentYear;
+      
+      // Adjust year and quarter for underflow
+      while (quarter < 0) {
+        quarter += 4;
+        year--;
+      }
+      
+      const quarterNumber = quarter + 1; // Convert 0-3 to 1-4
+      const value = `Q${quarterNumber}/${year}`;
+      const label = `${quarterNumber}º Trim. ${year}`;
+      options.push({ value, label, isCurrent: false });
     }
     
     return options;
@@ -277,7 +314,11 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
                 </FormControl>
                 <SelectContent>
                   {(isQuarterlyTax ? getQuarterOptions() : getMonthOptions()).map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
+                    <SelectItem 
+                      key={option.value} 
+                      value={option.value}
+                      className={option.isCurrent ? "font-bold" : ""}
+                    >
                       {option.label}
                     </SelectItem>
                   ))}
