@@ -90,15 +90,10 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
   // Get current month and quarter for default values
   const getCurrentPeriod = () => {
     const today = new Date();
-    console.log('Debug - Current date:', today);
-    console.log('Debug - Month:', today.getMonth());
-    console.log('Debug - Year:', today.getFullYear());
     const currentMonth = format(today, 'MM/yyyy');
-    console.log('Debug - Formatted current month:', currentMonth);
     const currentQuarter = Math.floor(today.getMonth() / 3) + 1;
     const currentYear = today.getFullYear();
     const currentQuarterValue = `Q${currentQuarter}/${currentYear}`;
-    console.log('Debug - Current quarter:', currentQuarterValue);
     return { currentMonth, currentQuarterValue };
   };
 
@@ -489,9 +484,12 @@ export function SimpleTaxForm({ onSuccess }: SimpleTaxFormProps) {
                       field.onChange(date);
                       setPaymentDateOpen(false);
                     }}
-                    disabled={(date) =>
-                      date > new Date() || date < new Date("1900-01-01")
-                    }
+                    disabled={(date) => {
+                      const today = new Date();
+                      const oneYearAgo = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+                      const twoYearsFromNow = new Date(today.getFullYear() + 2, today.getMonth(), today.getDate());
+                      return date < oneYearAgo || date > twoYearsFromNow;
+                    }}
                     locale={ptBR}
                     initialFocus
                   />
