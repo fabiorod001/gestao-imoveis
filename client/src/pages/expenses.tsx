@@ -167,7 +167,11 @@ export default function ExpensesPage() {
       const res = await fetch('/api/expenses/dashboard', { credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       return res.json();
-    }
+    },
+    staleTime: 30000, // 30 seconds - prevent excessive refetching
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    refetchOnMount: true
   });
 
   // Handle expense completion from AdvancedExpenseManager
