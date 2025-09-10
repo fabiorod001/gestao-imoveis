@@ -73,7 +73,7 @@ const CATEGORY_ORDER = [
   'Despesas Gerais'
 ];
 
-const EXPENSE_CATEGORY_LABELS = {
+const EXPENSE_CATEGORY_LABELS: { [key: string]: string } = {
   'taxes': 'Impostos',
   'maintenance': 'Manutenção',
   'condominium': 'Condomínio',
@@ -583,10 +583,7 @@ export default function ExpensesPage() {
       {/* Advanced Expense Manager - MOVED TO TOP */}
       {isAddingExpense && (
         <div className="mb-6">
-          <AdvancedExpenseManager 
-            onComplete={handleExpenseComplete}
-            onCancel={() => setIsAddingExpense(false)}
-          />
+          <AdvancedExpenseManager />
         </div>
       )}
 
