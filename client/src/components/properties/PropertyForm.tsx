@@ -192,7 +192,7 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
                 <FormItem>
                   <FormLabel>Apelido (aparece na aplicação)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ex: Málaga M0" {...field} />
+                    <Input placeholder="Ex: Málaga M0" {...field} value={field.value || ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -254,7 +254,7 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Tipo de Aluguel</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} defaultValue={field.value || ''}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione o tipo" />

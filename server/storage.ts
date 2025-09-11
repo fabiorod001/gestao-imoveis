@@ -225,7 +225,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
-    const [newTransaction] = await db.insert(transactions).values(transaction).returning();
+    const result = await db.insert(transactions).values(transaction).returning();
+    const [newTransaction] = result as Transaction[];
     return newTransaction;
   }
 
@@ -663,7 +664,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Create parent transaction
-    const parentTransaction = await this.db
+    const parentTransactionResult = await this.db
       .insert(transactions)
       .values({
         userId: data.userId,
@@ -680,13 +681,14 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
 
+    const parentTransaction = parentTransactionResult as Transaction[];
     const parentId = parentTransaction[0].id;
 
     // Create component transactions
     const componentTransactions = [];
     for (const component of data.components) {
       if (parseFloat(component.amount) > 0) {
-        const componentTransaction = await this.db
+        const componentTransactionResult = await this.db
           .insert(transactions)
           .values({
             userId: data.userId,
@@ -704,6 +706,7 @@ export class DatabaseStorage implements IStorage {
           })
           .returning();
         
+        const componentTransaction = componentTransactionResult as Transaction[];
         componentTransactions.push(componentTransaction[0]);
       }
     }
@@ -738,7 +741,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTaxSettings(settings: InsertTaxSettings): Promise<TaxSettings> {
-    const [newSettings] = await this.db.insert(taxSettings).values(settings).returning();
+    const result = await this.db.insert(taxSettings).values(settings).returning();
+    const [newSettings] = result as TaxSettings[];
     return newSettings;
   }
 
@@ -789,7 +793,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTaxProjection(projection: InsertTaxProjection): Promise<TaxProjection> {
-    const [newProjection] = await this.db.insert(taxProjections).values(projection).returning();
+    const result = await this.db.insert(taxProjections).values(projection).returning();
+    const [newProjection] = result as TaxProjection[];
     return newProjection;
   }
 
@@ -811,7 +816,8 @@ export class DatabaseStorage implements IStorage {
 
   // Batch operations for tax projections
   async createTaxProjections(projections: InsertTaxProjection[]): Promise<TaxProjection[]> {
-    return await this.db.insert(taxProjections).values(projections).returning();
+    const result = await this.db.insert(taxProjections).values(projections).returning();
+    return result as TaxProjection[];
   }
 
   async deleteProjectionsForMonth(userId: string, referenceMonth: string): Promise<boolean> {

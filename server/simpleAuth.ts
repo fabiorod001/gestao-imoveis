@@ -2,6 +2,13 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 
+// Adicionar tipagem para session
+declare module 'express-session' {
+  interface SessionData {
+    userId?: string;
+  }
+}
+
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);

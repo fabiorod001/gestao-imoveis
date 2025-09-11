@@ -12,10 +12,19 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { Transaction, Property } from "@shared/schema";
-import { DistributedExpenseForm } from "@/components/expenses/DistributedExpenseForm";
+import DistributedExpenseForm from "@/components/expenses/DistributedExpenseForm";
 import TransactionDetailModal from "@/components/expenses/TransactionDetailModal";
 import CleaningExpenseForm from "@/components/expenses/CleaningExpenseForm";
-import type { CleaningDetailData } from "@/types";
+// Type definitions
+interface CleaningDetailData {
+  propertyId: number;
+  propertyName: string;
+  months: { [key: string]: number };
+  totals: {
+    current: number;
+    historical: number;
+  };
+}
 
 // Generate month options for the last 24 months and next 12 months
 function generateMonthOptions() {

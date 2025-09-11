@@ -2,12 +2,19 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 
+interface User {
+  id?: string;
+  email?: string;
+  firstName?: string;
+  profileImageUrl?: string;
+}
+
 interface HeaderProps {
   onMenuClick: () => void;
 }
 
 export default function Header({ onMenuClick }: HeaderProps) {
-  const { user } = useAuth();
+  const { user } = useAuth() as { user: User | null };
 
   const handleLogout = () => {
     window.location.href = '/api/logout';

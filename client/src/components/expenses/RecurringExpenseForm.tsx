@@ -57,7 +57,7 @@ export default function RecurringExpenseForm({
   const queryClient = useQueryClient();
   const [dataUpdateTrigger, setDataUpdateTrigger] = useState(0);
   
-  const config = expenseTypeConfig[expenseType] || expenseTypeConfig.internet;
+  const config = expenseTypeConfig[expenseType as keyof typeof expenseTypeConfig] || expenseTypeConfig.internet;
   const Icon = config.icon;
 
   const form = useForm<FormData>({

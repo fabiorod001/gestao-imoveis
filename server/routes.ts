@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
@@ -6,6 +6,7 @@ import { ServiceFactory } from "./services";
 import { z } from "zod";
 import multer from "multer";
 import * as fs from "fs";
+import { format, addDays } from "date-fns";
 
 // Import validation middleware and error handlers
 import { validate, validateMultiple } from "./middleware/validation";
@@ -34,7 +35,6 @@ import {
   analyticsQuerySchema,
   monthlyAnalyticsSchema,
   pivotTableQuerySchema,
-  cashFlowQuerySchema,
   cashFlowSettingsSchema,
   createAccountSchema,
   updateAccountSchema,
@@ -136,7 +136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
   // ==================== AUTH ROUTES ====================
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const user = await storage.getUser(userId);
@@ -148,7 +148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== PROPERTY ROUTES ====================
-  app.get('/api/properties', isAuthenticated, async (req: any, res) => {
+  app.get('/api/properties', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const properties = await propertyService.getProperties(userId);
@@ -162,7 +162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/properties/:id', 
     isAuthenticated,
     validateMultiple({ params: z.object({ id: idSchema }) }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const propertyId = req.params.id;
       const property = await propertyService.getProperty(propertyId, userId);
@@ -178,7 +178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/properties', 
     isAuthenticated,
     validate(createPropertySchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const property = await propertyService.createProperty(userId, req.body);
       res.status(201).json(property);
@@ -191,7 +191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       params: z.object({ id: idSchema }),
       body: updatePropertySchema 
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const propertyId = req.params.id;
       const property = await propertyService.updateProperty(propertyId, userId, req.body);
@@ -207,7 +207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/properties/:id', 
     isAuthenticated,
     validateMultiple({ params: z.object({ id: idSchema }) }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const propertyId = req.params.id;
       const deleted = await propertyService.deleteProperty(propertyId, userId);
@@ -221,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // Property return rate calculation
-  app.get('/api/properties/:id/return-rate/:month/:year', isAuthenticated, async (req: any, res) => {
+  app.get('/api/properties/:id/return-rate/:month/:year', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const propertyId = parseInt(req.params.id);
@@ -237,7 +237,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Property expense components
-  app.get('/api/properties/:id/expense-components', isAuthenticated, async (req: any, res) => {
+  app.get('/api/properties/:id/expense-components', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const propertyId = parseInt(req.params.id);
@@ -249,7 +249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/properties/:id/expense-components', isAuthenticated, async (req: any, res) => {
+  app.post('/api/properties/:id/expense-components', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const propertyId = parseInt(req.params.id);
@@ -262,7 +262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Copy expense template
-  app.post('/api/properties/:id/copy-expense-template', isAuthenticated, async (req: any, res) => {
+  app.post('/api/properties/:id/copy-expense-template', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const sourcePropertyId = parseInt(req.params.id);
@@ -285,7 +285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: z.enum(["revenue", "expense"]).optional()
       })
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const { limit, type } = req.query;
       const transactions = await transactionService.getTransactions(userId, type, limit);
@@ -296,7 +296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/transactions/property/:propertyId', 
     isAuthenticated,
     validateMultiple({ params: z.object({ propertyId: idSchema }) }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const propertyId = req.params.propertyId;
       const transactions = await transactionService.getTransactionsByProperty(propertyId, userId);
@@ -307,7 +307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/properties/:id/transactions', 
     isAuthenticated,
     validateMultiple({ params: z.object({ id: idSchema }) }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const propertyId = req.params.id;
       const transactions = await transactionService.getTransactionsByProperty(propertyId, userId);
@@ -318,7 +318,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/transactions', 
     isAuthenticated,
     validate(createTransactionSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const transaction = await transactionService.createTransaction(userId, req.body);
       res.status(201).json(transaction);
@@ -331,7 +331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       params: z.object({ id: idSchema }),
       body: updateTransactionSchema 
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const transactionId = req.params.id;
       const transaction = await transactionService.updateTransaction(transactionId, userId, req.body);
@@ -347,7 +347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/transactions/:id', 
     isAuthenticated,
     validateMultiple({ params: z.object({ id: idSchema }) }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const transactionId = req.params.id;
       const deleted = await transactionService.deleteTransaction(transactionId, userId);
@@ -364,7 +364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/transactions/composite', 
     isAuthenticated,
     validate(createCompositeExpenseSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const result = await transactionService.createCompositeExpense({ ...req.body, userId });
       res.json(result);
@@ -375,7 +375,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/cleanup/transactions', 
     isAuthenticated,
     validate(cleanupTransactionsSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const { propertyIds } = req.body;
       const result = await transactionService.cleanupTransactions(userId, propertyIds);
@@ -384,7 +384,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // ==================== EXPENSE ROUTES ====================
-  app.get('/api/expenses/dashboard', isAuthenticated, async (req: any, res) => {
+  app.get('/api/expenses/dashboard', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const expenseData = await transactionService.getExpenseDashboardData(userId);
@@ -399,7 +399,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/expenses/management/:id', 
     isAuthenticated,
     validateMultiple({ params: z.object({ id: idSchema }) }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const transactionId = req.params.id;
       const expense = await transactionService.getManagementExpense(transactionId, userId);
@@ -413,7 +413,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/expenses/management', 
     isAuthenticated,
     validate(createManagementExpenseSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const result = await transactionService.createManagementExpense(userId, req.body);
       res.json(result);
@@ -426,7 +426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       params: z.object({ id: idSchema }),
       body: updateManagementExpenseSchema 
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const transactionId = req.params.id;
       const result = await transactionService.updateManagementExpense(transactionId, userId, req.body);
@@ -438,7 +438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/expenses/distributed', 
     isAuthenticated,
     validate(createDistributedExpenseSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const result = await transactionService.createDistributedExpense(userId, req.body);
       res.json(result);
@@ -448,7 +448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/expenses/distributed/preview', 
     isAuthenticated,
     validate(createDistributedExpenseSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const preview = await transactionService.generateDistributedExpensePreview(userId, req.body);
       res.json(preview);
@@ -459,7 +459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/expenses/company', 
     isAuthenticated,
     validate(createCompanyExpenseSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const transaction = await transactionService.createCompanyExpense(userId, req.body);
       res.json(transaction);
@@ -470,14 +470,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/expenses/cleaning-batch', 
     isAuthenticated,
     validate(createCleaningBatchSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const result = await transactionService.createCleaningBatch(userId, req.body);
       res.json(result);
     })
   );
 
-  app.post('/api/expenses/cleaning-detailed', isAuthenticated, async (req: any, res) => {
+  app.post('/api/expenses/cleaning-detailed', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const result = await importService.importDetailedCleaningExpenses(userId, req.body);
@@ -497,7 +497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD").optional()
       })
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const { startDate, endDate } = req.query;
       const summary = await analyticsService.getFinancialSummary(userId, startDate, endDate);
@@ -512,7 +512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         year: z.coerce.number().int().min(2020).max(2100) 
       }) 
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const year = req.params.year;
       const monthlyData = await analyticsService.getMonthlyData(userId, year);
@@ -522,7 +522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/analytics/property-distribution', 
     isAuthenticated,
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const distribution = await analyticsService.getPropertyStatusDistribution(userId);
       res.json(distribution);
@@ -534,7 +534,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     validateMultiple({ 
       query: pivotTableQuerySchema
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const { month, year } = req.query;
       const pivotData = await analyticsService.getPivotTableData(userId, month, year);
@@ -542,7 +542,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
   );
 
-  app.get('/api/analytics/transactions-by-periods', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/transactions-by-periods', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const { months, propertyIds, transactionTypes, categories } = req.query;
@@ -560,7 +560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/analytics/available-months', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/available-months', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const months = await analyticsService.getAvailableMonths(userId);
@@ -571,7 +571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/analytics/pivot-with-ipca', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/pivot-with-ipca', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const { months, propertyIds } = req.query;
@@ -587,7 +587,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/analytics/single-month-detailed', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/single-month-detailed', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const { month } = req.query;
@@ -605,7 +605,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // IPCA calculation
-  app.get('/api/ipca/calculate', async (req: any, res) => {
+  app.get('/api/ipca/calculate', async (req: any, res: Response) => {
     try {
       const { fromDate, toDate, value } = req.query;
       
@@ -624,48 +624,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== CASH FLOW ROUTES ====================
   app.get('/api/analytics/cash-flow', 
     isAuthenticated,
-    validateMultiple({ query: cashFlowQuerySchema }),
-    asyncHandler(async (req: any, res) => {
-      const userId = getUserId(req);
-      const { startDate, endDate } = req.query;
-      const cashFlow = await cashFlowService.getDailyCashFlow(userId, startDate, endDate);
-      res.json(cashFlow);
-    })
+    async (req: any, res: Response) => {
+      try {
+        const userId = getUserId(req);
+        const { period, startDate: queryStartDate, endDate: queryEndDate } = req.query;
+        
+        let startDate: string;
+        let endDate: string;
+        
+        if (period) {
+          // Convert period to date range
+          const today = new Date();
+          let daysToShow = 5; // Default
+          
+          if (period === '1d') daysToShow = 1;
+          else if (period === '2d') daysToShow = 2;
+          else if (period === '3d') daysToShow = 3;
+          else if (period === '4d') daysToShow = 4;
+          else if (period === '5d') daysToShow = 5;
+          else if (period === '1m') daysToShow = 30;
+          else if (period === '2m') daysToShow = 60;
+          
+          startDate = format(today, 'yyyy-MM-dd');
+          endDate = format(addDays(today, daysToShow - 1), 'yyyy-MM-dd');
+        } else if (queryStartDate && queryEndDate) {
+          startDate = queryStartDate as string;
+          endDate = queryEndDate as string;
+        } else {
+          // Default to 5 days from today
+          const today = new Date();
+          startDate = format(today, 'yyyy-MM-dd');
+          endDate = format(addDays(today, 4), 'yyyy-MM-dd');
+        }
+        
+        const cashFlow = await cashFlowService.getDailyCashFlow(userId, startDate, endDate);
+        res.json(cashFlow);
+      } catch (error) {
+        console.error('Error fetching cash flow:', error);
+        res.status(500).json({ message: 'Failed to fetch cash flow' });
+      }
+    }
   );
 
   app.get('/api/analytics/cash-flow-stats', 
     isAuthenticated,
-    validateMultiple({ 
-      query: z.object({
-        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD").optional(),
-        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD").optional()
-      })
-    }),
-    asyncHandler(async (req: any, res) => {
-      const userId = getUserId(req);
-      const { startDate, endDate } = req.query;
-      const period = startDate && endDate ? { startDate, endDate } : undefined;
-      const stats = await cashFlowService.getCashFlowStats(userId, period);
-      res.json(stats);
-    })
+    async (req: any, res: Response) => {
+      try {
+        const userId = getUserId(req);
+        const { period, startDate: queryStartDate, endDate: queryEndDate } = req.query;
+        
+        let startDate: string | undefined;
+        let endDate: string | undefined;
+        
+        if (period) {
+          // Convert period to date range
+          const today = new Date();
+          let daysToShow = 5; // Default
+          
+          if (period === '1d') daysToShow = 1;
+          else if (period === '2d') daysToShow = 2;
+          else if (period === '3d') daysToShow = 3;
+          else if (period === '4d') daysToShow = 4;
+          else if (period === '5d') daysToShow = 5;
+          else if (period === '1m') daysToShow = 30;
+          else if (period === '2m') daysToShow = 60;
+          
+          startDate = format(today, 'yyyy-MM-dd');
+          endDate = format(addDays(today, daysToShow - 1), 'yyyy-MM-dd');
+        } else if (queryStartDate && queryEndDate) {
+          startDate = queryStartDate as string;
+          endDate = queryEndDate as string;
+        }
+        
+        const periodParam = startDate && endDate ? { startDate, endDate } : undefined;
+        const stats = await cashFlowService.getCashFlowStats(userId, periodParam);
+        res.json(stats);
+      } catch (error) {
+        console.error('Error fetching cash flow stats:', error);
+        res.status(500).json({ message: 'Failed to fetch cash flow stats' });
+      }
+    }
   );
 
   app.get('/api/analytics/cash-flow-projection', 
     isAuthenticated,
-    validateMultiple({ 
-      query: z.object({
-        months: z.coerce.number().int().min(1).max(24).default(3)
-      })
-    }),
-    asyncHandler(async (req: any, res) => {
-      const userId = getUserId(req);
-      const { months } = req.query;
-      const projection = await cashFlowService.projectCashFlow(userId, months);
-      res.json(projection);
-    })
+    async (req: any, res: Response) => {
+      try {
+        const userId = getUserId(req);
+        const months = parseInt(req.query.months as string) || 3;
+        // Validar range manualmente
+        const validMonths = Math.min(Math.max(months, 1), 24);
+        const projection = await cashFlowService.projectCashFlow(userId, validMonths);
+        res.json(projection);
+      } catch (error) {
+        console.error('Error fetching cash flow projection:', error);
+        res.status(500).json({ message: 'Failed to fetch cash flow projection' });
+      }
+    }
   );
 
-  app.get('/api/analytics/cash-flow-health', isAuthenticated, async (req: any, res) => {
+  app.get('/api/analytics/cash-flow-health', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const health = await cashFlowService.analyzeCashFlowHealth(userId);
@@ -680,7 +738,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/taxes/simple', 
     isAuthenticated,
     validate(createTaxPaymentSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const result = await taxService.recordSimpleTaxPayment(userId, req.body);
       res.json(result);
@@ -690,14 +748,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/taxes/preview', 
     isAuthenticated,
     validate(createTaxPaymentSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const preview = await taxService.generateTaxPreview(userId, req.body);
       res.json(preview);
     })
   );
 
-  app.post('/api/taxes/calculate-pis-cofins', isAuthenticated, async (req: any, res) => {
+  app.post('/api/taxes/calculate-pis-cofins', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const calculation = await taxService.calculatePisCofins(userId, req.body);
@@ -711,14 +769,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/taxes/payments', 
     isAuthenticated,
     validate(createTaxPaymentSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const result = await taxService.recordTaxPayment(userId, req.body);
       res.json(result);
     })
   );
 
-  app.get('/api/taxes/payments', isAuthenticated, async (req: any, res) => {
+  app.get('/api/taxes/payments', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const payments = await taxService.getTaxPayments(userId, req.query);
@@ -732,7 +790,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/taxes/payments/:id/pay', 
     isAuthenticated,
     validateMultiple({ params: z.object({ id: idSchema }) }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const paymentId = req.params.id;
       const result = await taxService.markTaxPaymentAsPaid(userId, paymentId);
@@ -747,7 +805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         year: z.coerce.number().int().min(2020).max(2100) 
       }) 
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const year = req.params.year;
       const summary = await taxService.getTaxSummary(userId, year);
@@ -760,7 +818,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize tax settings for user
   app.post('/api/taxes/initialize', 
     isAuthenticated,
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       await taxService.initializeTaxSettings(userId);
       res.json({ success: true, message: 'Tax settings initialized' });
@@ -770,7 +828,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get tax settings
   app.get('/api/taxes/settings', 
     isAuthenticated,
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const { taxType, effectiveDate } = req.query;
       const settings = await taxService.getTaxSettings(
@@ -799,7 +857,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         installmentCount: z.number().optional()
       })
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const { taxType } = req.params;
       const settings = await taxService.updateTaxSettings(userId, taxType, req.body);
@@ -814,7 +872,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       referenceMonth: z.string().regex(/^\d{4}-\d{2}$/),
       propertyIds: z.array(z.number()).optional()
     })),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const { referenceMonth, propertyIds } = req.body;
       const projections = await taxService.calculateTaxProjections(userId, referenceMonth, propertyIds);
@@ -829,7 +887,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get tax projections
   app.get('/api/taxes/projections', 
     isAuthenticated,
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const { startDate, endDate, taxType, status } = req.query;
       const projections = await taxService.getTaxProjections(userId, {
@@ -852,7 +910,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         notes: z.string().optional()
       })
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const projectionId = req.params.id;
       const projection = await taxService.updateTaxProjection(userId, projectionId, req.body);
@@ -870,7 +928,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     validateMultiple({
       params: z.object({ id: idSchema })
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const projectionId = req.params.id;
       const result = await taxService.confirmTaxProjection(userId, projectionId);
@@ -888,7 +946,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     validate(z.object({
       referenceMonth: z.string().regex(/^\d{4}-\d{2}$/)
     })),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const { referenceMonth } = req.body;
       await taxService.recalculateProjectionsForMonth(userId, referenceMonth);
@@ -902,7 +960,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get tax projections for cash flow
   app.get('/api/taxes/cash-flow-projections', 
     isAuthenticated,
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const { startDate, endDate } = req.query;
       
@@ -930,7 +988,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         year: z.coerce.number().int().min(2020).max(2100) 
       })
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const year = req.params.year;
       const report = await taxService.generateTaxReport(userId, year);
@@ -939,7 +997,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // ==================== IMPORT ROUTES ====================
-  app.post('/api/import/historical', isAuthenticated, upload.single('excel'), async (req: any, res) => {
+  app.post('/api/import/historical', isAuthenticated, upload.single('excel'), async (req: any, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({
@@ -968,7 +1026,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Airbnb CSV import routes
-  app.post('/api/import/airbnb-csv/analyze', isAuthenticated, uploadCSV.single('file'), async (req: any, res) => {
+  app.post('/api/import/airbnb-csv/analyze', isAuthenticated, uploadCSV.single('file'), async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const csvContent = req.file!.buffer.toString('utf-8').replace(/^\uFEFF/, '');
@@ -983,7 +1041,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/import/airbnb-csv', isAuthenticated, uploadCSV.single('file'), async (req: any, res) => {
+  app.post('/api/import/airbnb-csv', isAuthenticated, uploadCSV.single('file'), async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const csvContent = req.file!.buffer.toString('utf-8').replace(/^\uFEFF/, '');
@@ -998,7 +1056,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/import/airbnb-pending', isAuthenticated, async (req: any, res) => {
+  app.post('/api/import/airbnb-pending', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const result = await importService.importPendingReservations(userId, req.body.reservations);
@@ -1013,7 +1071,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Cleaning PDF import routes
-  app.post('/api/cleaning/parse-pdf', uploadPDF.single('file'), async (req: any, res) => {
+  app.post('/api/cleaning/parse-pdf', uploadPDF.single('file'), async (req: any, res: Response) => {
     try {
       const pdfBuffer = req.file!.buffer;
       const result = await importService.parseCleaningPDF(pdfBuffer);
@@ -1027,7 +1085,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/cleaning/import-pdf', isAuthenticated, async (req: any, res) => {
+  app.post('/api/cleaning/import-pdf', isAuthenticated, async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const { entries, period } = req.body;
@@ -1047,7 +1105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get active Marco Zero
   app.get('/api/marco-zero/active', 
     isAuthenticated,
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const activeMarco = await marcoZeroService.getActiveMarco(userId);
       res.json(activeMarco);
@@ -1057,7 +1115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get Marco Zero history
   app.get('/api/marco-zero/history', 
     isAuthenticated,
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const history = await marcoZeroService.getMarcoHistory(userId);
       res.json(history);
@@ -1068,7 +1126,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/marco-zero', 
     isAuthenticated,
     validate(setMarcoZeroSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const { marcoDate, accountBalances, notes } = req.body;
       
@@ -1095,7 +1153,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get reconciliation adjustments
   app.get('/api/reconciliation', 
     isAuthenticated,
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const marcoZeroId = req.query.marcoZeroId ? parseInt(req.query.marcoZeroId as string) : undefined;
       const adjustments = await marcoZeroService.getReconciliationAdjustments(userId, marcoZeroId);
@@ -1107,7 +1165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/reconciliation', 
     isAuthenticated,
     validate(createReconciliationAdjustmentSchema),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const adjustment = await marcoZeroService.createReconciliationAdjustment(userId, req.body);
       res.json({
@@ -1124,7 +1182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     validateMultiple({
       params: z.object({ id: idSchema })
     }),
-    asyncHandler(async (req: any, res) => {
+    asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
       const id = parseInt(req.params.id);
       const success = await marcoZeroService.deleteReconciliationAdjustment(id, userId);

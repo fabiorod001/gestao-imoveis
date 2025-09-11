@@ -24,6 +24,15 @@ interface TransactionData {
   amount: number;
 }
 
+interface PivotTableData {
+  propertyName: string;
+  revenue: number;
+  expenses: number;
+  netResult: number;
+  profitPercentage: number;
+  purchasePrice: number;
+}
+
 interface PivotCell {
   propertyName: string;
   monthlyData: { [key: string]: number }; // key format: "MM/YYYY"
@@ -32,10 +41,14 @@ interface PivotCell {
 
 export default function PivotTable() {
   const currentDate = new Date();
+  const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
   const [selectedMonths, setSelectedMonths] = useState<string[]>([`${String(currentDate.getMonth() + 1).padStart(2, '0')}/${currentDate.getFullYear()}`]);
-  const [selectedProperties, setSelectedProperties] = useState<number[]>([]);
+  const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
   const [selectedTransactionTypes, setSelectedTransactionTypes] = useState<string[]>(['revenue', 'expense']);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [showRevenueOnly, setShowRevenueOnly] = useState<boolean>(false);
+  const [showExpensesOnly, setShowExpensesOnly] = useState<boolean>(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
   // Fetch all properties for filters

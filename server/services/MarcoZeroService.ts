@@ -50,17 +50,19 @@ export class MarcoZeroService extends BaseService {
       });
 
       // Create new marco zero
-      const [newMarco] = await db
+      const result = await db
         .insert(marcoZero)
         .values({
           userId,
           marcoDate,
           accountBalances: processedBalances,
-          totalBalance: totalBalance.toDecimal(),
-          notes,
+          totalBalance: totalBalance.toDecimal() as any,
+          notes: notes || null,
           isActive: true
         })
         .returning();
+      
+      const [newMarco] = result as MarcoZero[];
 
       // Mark transactions before marco date as is_before_marco
       await this.markTransactionsBeforeMarco(userId, marcoDate);
@@ -130,19 +132,21 @@ export class MarcoZeroService extends BaseService {
       // Parse amount using Money
       const amountMoney = ServerMoneyUtils.parseUserInput(adjustmentData.amount);
 
-      const [adjustment] = await db
+      const result = await db
         .insert(reconciliationAdjustments)
         .values({
           userId,
-          marcoZeroId: adjustmentData.marcoZeroId,
-          accountId: adjustmentData.accountId,
+          marcoZeroId: adjustmentData.marcoZeroId || null,
+          accountId: adjustmentData.accountId || null,
           adjustmentDate: adjustmentData.adjustmentDate,
-          amount: amountMoney.toDecimal(),
+          amount: amountMoney.toDecimal() as any,
           type: adjustmentData.type,
           description: adjustmentData.description,
-          bankReference: adjustmentData.bankReference
+          bankReference: adjustmentData.bankReference || null
         })
         .returning();
+      
+      const [adjustment] = result as ReconciliationAdjustment[];
 
       return adjustment;
     } catch (error) {
@@ -156,19 +160,17 @@ export class MarcoZeroService extends BaseService {
    */
   async getReconciliationAdjustments(userId: string, marcoZeroId?: number): Promise<ReconciliationAdjustment[]> {
     try {
-      let query = db
-        .select()
-        .from(reconciliationAdjustments)
-        .where(eq(reconciliationAdjustments.userId, userId));
+      let conditions = [eq(reconciliationAdjustments.userId, userId)];
 
       if (marcoZeroId) {
-        query = query.where(and(
-          eq(reconciliationAdjustments.userId, userId),
-          eq(reconciliationAdjustments.marcoZeroId, marcoZeroId)
-        ));
+        conditions.push(eq(reconciliationAdjustments.marcoZeroId, marcoZeroId));
       }
 
-      const adjustments = await query.orderBy(desc(reconciliationAdjustments.adjustmentDate));
+      const adjustments = await db
+        .select()
+        .from(reconciliationAdjustments)
+        .where(and(...conditions))
+        .orderBy(desc(reconciliationAdjustments.adjustmentDate));
       return adjustments;
     } catch (error) {
       console.error("Error getting reconciliation adjustments:", error);
@@ -306,8 +308,8 @@ export class MarcoZeroService extends BaseService {
         await db
           .update(accounts)
           .set({
-            initialBalance: balanceMoney.toDecimal(),
-            currentBalance: balanceMoney.toDecimal(),
+            initialBalance: balanceMoney.toDecimal() as any,
+            currentBalance: balanceMoney.toDecimal() as any,
             updatedAt: new Date()
           })
           .where(and(

@@ -49,6 +49,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 
+interface Property {
+  id: number;
+  name: string;
+  status: string;
+}
+
 interface Transaction {
   id: number;
   propertyId: number;
@@ -112,7 +118,7 @@ export default function EditTransactionDialog({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Fetch properties
-  const { data: properties = [] } = useQuery({
+  const { data: properties = [] } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
   });
 
@@ -302,7 +308,7 @@ export default function EditTransactionDialog({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {properties.map((property: any) => (
+                          {properties.map((property) => (
                             <SelectItem
                               key={property.id}
                               value={property.id.toString()}

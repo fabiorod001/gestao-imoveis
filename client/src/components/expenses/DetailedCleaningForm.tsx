@@ -38,6 +38,12 @@ const cleaningFormSchema = z.object({
 type CleaningFormData = z.infer<typeof cleaningFormSchema>;
 type CleaningDetail = z.infer<typeof cleaningDetailSchema>;
 
+interface Property {
+  id: number;
+  name: string;
+  status: string;
+}
+
 export function DetailedCleaningForm() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -61,11 +67,11 @@ export function DetailedCleaningForm() {
     },
   });
 
-  const { data: properties = [] } = useQuery({
+  const { data: properties = [] } = useQuery<Property[]>({
     queryKey: ["/api/properties"],
   });
 
-  const activeProperties = properties.filter((p: any) => p.status === "active");
+  const activeProperties = properties.filter((p) => p.status === "active");
 
   const createCleaningMutation = useMutation({
     mutationFn: async (data: CleaningFormData) => {

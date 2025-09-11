@@ -139,12 +139,12 @@ export default function TaxSettings() {
   ];
 
   // Query para buscar configurações de impostos
-  const { data: taxSettings = defaultTaxes, isLoading } = useQuery({
+  const { data: taxSettings = defaultTaxes, isLoading } = useQuery<TaxSetting[]>({
     queryKey: ['/api/taxes/settings'],
     queryFn: async () => {
       try {
         const response = await apiRequest('/api/taxes/settings', 'GET');
-        return response || defaultTaxes;
+        return (Array.isArray(response) ? response as TaxSetting[] : defaultTaxes);
       } catch {
         return defaultTaxes;
       }
@@ -223,27 +223,29 @@ export default function TaxSettings() {
     const preview: TaxPreviewItem[] = [];
     const currentDate = new Date();
     
-    taxSettings.forEach((tax) => {
-      if (!tax.isActive) return;
-      
-      let taxAmount = 0;
-      let baseAmount = revenue;
-      
-      if (tax.baseCalculation === 'presumed_profit' && tax.presumedProfitRate) {
-        baseAmount = revenue * (tax.presumedProfitRate / 100);
-      }
-      
-      taxAmount = baseAmount * (tax.rate / 100);
-      
-      // Calcular data de vencimento
-      const dueDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, tax.dueDay);
-      
-      preview.push({
-        name: tax.name,
-        amount: taxAmount,
-        dueDate: format(dueDate, 'dd/MM/yyyy'),
+    if (Array.isArray(taxSettings)) {
+      taxSettings.forEach((tax: TaxSetting) => {
+        if (!tax.isActive) return;
+        
+        let taxAmount = 0;
+        let baseAmount = revenue;
+        
+        if (tax.baseCalculation === 'presumed_profit' && tax.presumedProfitRate) {
+          baseAmount = revenue * (tax.presumedProfitRate / 100);
+        }
+        
+        taxAmount = baseAmount * (tax.rate / 100);
+        
+        // Calcular data de vencimento
+        const dueDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, tax.dueDay);
+        
+        preview.push({
+          name: tax.name,
+          amount: taxAmount,
+          dueDate: format(dueDate, 'dd/MM/yyyy'),
+        });
       });
-    });
+    }
     
     return preview;
   };
@@ -353,7 +355,7 @@ export default function TaxSettings() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {taxSettings.map((tax) => (
+                {Array.isArray(taxSettings) && taxSettings.map((tax: TaxSetting) => (
                   <TableRow key={tax.id}>
                     {editingTax === tax.id ? (
                       <>

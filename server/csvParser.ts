@@ -98,7 +98,7 @@ export function parseAirbnbCSV(content: string): ParseResult {
       trim: true,
       relax_quotes: true,
       relax_column_count: true,
-    });
+    }) as Record<string, string>[];
     
     if (!records || records.length === 0) {
       return {
@@ -111,7 +111,7 @@ export function parseAirbnbCSV(content: string): ParseResult {
     }
     
     // Get headers from first record
-    const headers = Object.keys(records[0]);
+    const headers = Object.keys(records[0] as Record<string, string>);
     
     // Detect format based on columns
     const hasPaidColumn = headers.some(h => h === 'Pago');

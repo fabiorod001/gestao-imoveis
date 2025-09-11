@@ -274,7 +274,7 @@ export const taxProjections = pgTable("tax_projections", {
   // Controle de parcelamento
   isInstallment: boolean("is_installment").default(false),
   installmentNumber: integer("installment_number"), // 1, 2, 3
-  parentProjectionId: integer("parent_projection_id").references(() => taxProjections.id),
+  parentProjectionId: integer("parent_projection_id"),
   
   // Rateio por propriedade
   propertyDistribution: jsonb("property_distribution"), // Array com {propertyId, propertyName, revenue, taxAmount}

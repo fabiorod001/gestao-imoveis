@@ -22,6 +22,13 @@ export class Money {
   }
 
   /**
+   * Getter para acessar o valor em centavos
+   */
+  get getCents(): number {
+    return this.cents;
+  }
+
+  /**
    * Cria Money a partir de centavos
    */
   static fromCents(cents: number): Money {
@@ -380,7 +387,7 @@ export class MoneyUtils {
    * Ordena valores Money (crescente)
    */
   static sort(values: Money[], descending: boolean = false): Money[] {
-    const sorted = [...values].sort((a, b) => a.cents - b.cents);
+    const sorted = [...values].sort((a, b) => a.getCents - b.getCents);
     return descending ? sorted.reverse() : sorted;
   }
 

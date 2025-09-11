@@ -401,8 +401,9 @@ export const pivotTableQuerySchema = z.object({
  */
 
 export const cashFlowQuerySchema = z.object({
-  startDate: dateSchema,
-  endDate: dateSchema,
+  period: z.string().optional(), // '1d', '2d', '3d', '4d', '5d', '1m', '2m'
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
   accountIds: z.array(idSchema).optional(),
   propertyIds: z.array(idSchema).optional(),
   includeProjections: z.boolean().default(false),

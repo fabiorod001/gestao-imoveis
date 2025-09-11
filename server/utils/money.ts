@@ -7,7 +7,7 @@ import { Money, MoneyUtils, MoneyValidator, MoneyValue, toMoney } from '@shared/
 import { Decimal } from 'decimal.js';
 
 // Re-export all shared Money utilities
-export { Money, MoneyUtils, MoneyValidator, MONEY_ZERO, toMoney };
+export { Money, MoneyUtils, MoneyValidator, toMoney };
 export type { MoneyValue };
 
 /**
@@ -242,7 +242,7 @@ export class ServerMoneyUtils {
     
     for (const field of moneyFields) {
       const value = obj[field];
-      if (value instanceof Money) {
+      if (value && typeof (value as any).toCents === 'function') {
         (result as any)[field] = ServerMoneyUtils.toApiResponse(value);
       } else if (typeof value === 'number' || typeof value === 'string') {
         (result as any)[field] = ServerMoneyUtils.toApiResponse(
@@ -263,8 +263,8 @@ export class ServerMoneyUtils {
     const aggregated = new Map<string, Money>();
     
     for (const transaction of transactions) {
-      const amount = transaction.amount instanceof Money 
-        ? transaction.amount 
+      const amount = (transaction.amount && typeof (transaction.amount as any).toCents === 'function')
+        ? transaction.amount as Money
         : ServerMoneyUtils.parseUserInput(transaction.amount);
       
       const current = aggregated.get(transaction.category) || Money.zero();

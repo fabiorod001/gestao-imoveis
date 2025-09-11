@@ -130,6 +130,9 @@ const formSchema = z.object({
   registrationNumber: z.string().optional(),
   iptuCode: z.string().optional(),
   airbnbName: z.string().optional(),
+  // Financing fields
+  isFullyPaid: z.boolean().optional(),
+  financingAmount: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -197,6 +200,9 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
       registrationNumber: '',
       iptuCode: '',
       airbnbName: '',
+      // Financing fields
+      isFullyPaid: false,
+      financingAmount: '',
     },
   });
 
@@ -238,6 +244,9 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
         registrationNumber: property.registrationNumber || '',
         iptuCode: property.iptuCode || '',
         airbnbName: property.airbnbName || '',
+        // Financing fields
+        isFullyPaid: property.isFullyPaid || false,
+        financingAmount: formatToBrazilianCurrency(property.financingAmount || ''),
       });
     }
   }, [property, form]);
@@ -717,7 +726,7 @@ export default function PropertyEditForm({ propertyId, onSuccess }: PropertyEdit
                     )}
                   />
                   
-                  {!form.watch("isFullyPaid") && (
+                  {!form.watch("isFullyPaid" as const) && (
                     <FormField
                       control={form.control}
                       name="financingAmount"

@@ -65,19 +65,19 @@ export default function MarcoZeroPage() {
   });
 
   // Queries
-  const { data: activeMarco, isLoading: loadingMarco } = useQuery({
+  const { data: activeMarco, isLoading: loadingMarco } = useQuery<MarcoZero | null>({
     queryKey: ['/api/marco-zero/active'],
   });
 
-  const { data: marcoHistory } = useQuery({
+  const { data: marcoHistory } = useQuery<MarcoZero[]>({
     queryKey: ['/api/marco-zero/history'],
   });
 
-  const { data: reconciliations } = useQuery({
+  const { data: reconciliations } = useQuery<ReconciliationAdjustment[]>({
     queryKey: ['/api/reconciliation'],
   });
 
-  const { data: accounts } = useQuery({
+  const { data: accounts } = useQuery<any[]>({
     queryKey: ['/api/accounts'],
   });
 

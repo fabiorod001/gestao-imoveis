@@ -78,7 +78,7 @@ export default function SingleExpenseForm({
   const queryClient = useQueryClient();
   const [dataUpdateTrigger, setDataUpdateTrigger] = useState(0);
   
-  const config = expenseTypeConfig[expenseType] || expenseTypeConfig.utilities;
+  const config = expenseTypeConfig[expenseType as keyof typeof expenseTypeConfig] || expenseTypeConfig.utilities;
   const Icon = config.icon;
 
   const form = useForm<FormData>({

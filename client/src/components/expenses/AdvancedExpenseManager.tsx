@@ -210,10 +210,7 @@ export default function AdvancedExpenseManager() {
         );
       case 'management':
         return (
-          <ManagementExpenseForm
-            onComplete={handleExpenseComplete}
-            onCancel={handleBack}
-          />
+          <ManagementExpenseForm />
         );
       case 'utilities':
       case 'financing':

@@ -73,7 +73,7 @@ const CATEGORY_ORDER = [
   'Despesas Gerais'
 ];
 
-const EXPENSE_CATEGORY_LABELS = {
+const EXPENSE_CATEGORY_LABELS: { [key: string]: string } = {
   'taxes': 'Impostos',
   'maintenance': 'Manutenção',
   'condominium': 'Condomínio',
@@ -156,7 +156,7 @@ export default function ExpensesPage() {
   });
 
   // Fetch expense transactions - optimized endpoint
-  const { data: expenses = [], isLoading } = useQuery({
+  const { data: expenses = [], isLoading } = useQuery<Transaction[]>({
     queryKey: ['/api/expenses/dashboard'],
   });
 
@@ -197,7 +197,7 @@ export default function ExpensesPage() {
   // Generate pivot table data
   const generatePivotData = (): PivotTableData => {
     // Filter expenses based on selected filters
-    const filteredExpenses = expenses.filter((expense: Transaction) => {
+    const filteredExpenses = expenses.filter((expense) => {
       const expenseDate = new Date(expense.date);
       const monthKey = `${String(expenseDate.getMonth() + 1).padStart(2, '0')}/${expenseDate.getFullYear()}`;
       
@@ -223,7 +223,7 @@ export default function ExpensesPage() {
 
     // Get unique months from filtered data (sorted)
     const monthsSet = new Set<string>();
-    filteredExpenses.forEach((expense: Transaction) => {
+    filteredExpenses.forEach((expense) => {
       const expenseDate = new Date(expense.date);
       const monthKey = `${String(expenseDate.getMonth() + 1).padStart(2, '0')}/${expenseDate.getFullYear()}`;
       monthsSet.add(monthKey);
@@ -255,7 +255,7 @@ export default function ExpensesPage() {
     });
 
     // Populate data
-    filteredExpenses.forEach((expense: Transaction) => {
+    filteredExpenses.forEach((expense) => {
       const expenseDate = new Date(expense.date);
       const monthKey = `${String(expenseDate.getMonth() + 1).padStart(2, '0')}/${expenseDate.getFullYear()}`;
       // Map utilities to other for compatibility
@@ -360,7 +360,7 @@ export default function ExpensesPage() {
       const wb = XLSX.utils.book_new();
       const wsData = [
         ['Data', 'Propriedade', 'Categoria', 'Descrição', 'Fornecedor', 'Valor'],
-        ...expenses.map((expense: Transaction) => [
+        ...expenses.map((expense) => [
           new Date(expense.date).toLocaleDateString('pt-BR'),
           expense.propertyName || '-',
           EXPENSE_CATEGORY_LABELS[expense.category] || expense.category,
@@ -426,7 +426,7 @@ export default function ExpensesPage() {
       doc.setFontSize(10);
       doc.text(`Exportado em: ${new Date().toLocaleDateString('pt-BR')}`, 14, 28);
       
-      const tableData = expenses.map((expense: Transaction) => [
+      const tableData = expenses.map((expense) => [
         new Date(expense.date).toLocaleDateString('pt-BR'),
         expense.propertyName || '-',
         EXPENSE_CATEGORY_LABELS[expense.category] || expense.category,
@@ -565,10 +565,7 @@ export default function ExpensesPage() {
       {/* Advanced Expense Manager - MOVED TO TOP */}
       {isAddingExpense && (
         <div className="mb-6">
-          <AdvancedExpenseManager 
-            onComplete={handleExpenseComplete}
-            onCancel={() => setIsAddingExpense(false)}
-          />
+          <AdvancedExpenseManager />
         </div>
       )}
 

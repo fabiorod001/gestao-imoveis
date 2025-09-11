@@ -31,7 +31,7 @@ import {
 import { CalendarIcon, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { Property } from "@/types";
+import type { Property } from "@shared/schema";
 import {
   Dialog as PropertyDialog,
   DialogContent as PropertyDialogContent,
@@ -427,7 +427,10 @@ export default function CleaningExpenseForm({ open, onOpenChange }: CleaningExpe
       </PropertyDialog>
 
       {/* Tabela Consolidada de Despesas */}
-      <ConsolidatedExpenseTable refreshTrigger={dataUpdateTrigger} />
+      <ConsolidatedExpenseTable 
+        category="cleaning"
+        onDataUpdate={() => setDataUpdateTrigger(prev => prev + 1)}
+      />
     </>
   );
 }
