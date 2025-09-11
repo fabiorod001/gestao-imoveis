@@ -2,6 +2,12 @@ import dotenv from "dotenv-safe";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { 
+  errorHandler, 
+  sanitizeInput, 
+  requestTimeout,
+  validateContentType 
+} from "./middleware/errorHandler";
 
 // Load and validate environment variables
 dotenv.config({
@@ -10,9 +16,17 @@ dotenv.config({
 });
 
 const app = express();
+
+// Security and optimization middlewares
+app.use(requestTimeout(60)); // 60 second timeout for requests
+app.use(validateContentType("application/json")); // Validate content-type
+
 // Increase payload limits for large CSV files (histórico Airbnb)
 app.use(express.json({ limit: "200mb" }));
 app.use(express.urlencoded({ limit: "200mb", extended: true }));
+
+// Sanitize all input data
+app.use(sanitizeInput);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -47,13 +61,8 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
-  });
+  // Use the professional error handler
+  app.use(errorHandler);
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route

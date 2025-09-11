@@ -7,6 +7,47 @@ import { z } from "zod";
 import multer from "multer";
 import * as fs from "fs";
 
+// Import validation middleware and error handlers
+import { validate, validateMultiple } from "./middleware/validation";
+import { 
+  AppError, 
+  NotFoundError, 
+  BadRequestError,
+  asyncHandler 
+} from "./middleware/errorHandler";
+
+// Import validation schemas
+import {
+  createPropertySchema,
+  updatePropertySchema,
+  createTransactionSchema,
+  updateTransactionSchema,
+  createCompositeExpenseSchema,
+  createManagementExpenseSchema,
+  updateManagementExpenseSchema,
+  createDistributedExpenseSchema,
+  createCleaningBatchSchema,
+  createTaxPaymentSchema,
+  updateTaxPaymentSchema,
+  importAirbnbCSVSchema,
+  importExcelSchema,
+  analyticsQuerySchema,
+  monthlyAnalyticsSchema,
+  pivotTableQuerySchema,
+  cashFlowQuerySchema,
+  cashFlowSettingsSchema,
+  createAccountSchema,
+  updateAccountSchema,
+  createExpenseComponentSchema,
+  updateExpenseComponentSchema,
+  generateReportSchema,
+  cleanupTransactionsSchema,
+  createCompanyExpenseSchema,
+} from "./validation/schemas";
+
+// Import utility validators
+import { idSchema } from "./utils/validators";
+
 // Initialize service factory
 const serviceFactory = new ServiceFactory(storage);
 
@@ -115,73 +156,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/properties/:id', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/properties/:id', 
+    isAuthenticated,
+    validateMultiple({ params: z.object({ id: idSchema }) }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const propertyId = parseInt(req.params.id);
+      const propertyId = req.params.id;
       const property = await propertyService.getProperty(propertyId, userId);
       
       if (!property) {
-        return res.status(404).json({ message: "Property not found" });
+        throw new NotFoundError("Imóvel");
       }
       
       res.json(property);
-    } catch (error) {
-      console.error("Error fetching property:", error);
-      res.status(500).json({ message: "Failed to fetch property" });
-    }
-  });
+    })
+  );
 
-  app.post('/api/properties', isAuthenticated, async (req: any, res) => {
-    try {
+  app.post('/api/properties', 
+    isAuthenticated,
+    validate(createPropertySchema),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const property = await propertyService.createProperty(userId, req.body);
       res.status(201).json(property);
-    } catch (error) {
-      console.error("Error creating property:", error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create property" });
-    }
-  });
+    })
+  );
 
-  app.put('/api/properties/:id', isAuthenticated, async (req: any, res) => {
-    try {
+  app.put('/api/properties/:id', 
+    isAuthenticated,
+    validateMultiple({ 
+      params: z.object({ id: idSchema }),
+      body: updatePropertySchema 
+    }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const propertyId = parseInt(req.params.id);
+      const propertyId = req.params.id;
       const property = await propertyService.updateProperty(propertyId, userId, req.body);
       
       if (!property) {
-        return res.status(404).json({ message: "Property not found" });
+        throw new NotFoundError("Imóvel");
       }
       
       res.json(property);
-    } catch (error) {
-      console.error("Error updating property:", error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to update property" });
-    }
-  });
+    })
+  );
 
-  app.delete('/api/properties/:id', isAuthenticated, async (req: any, res) => {
-    try {
+  app.delete('/api/properties/:id', 
+    isAuthenticated,
+    validateMultiple({ params: z.object({ id: idSchema }) }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const propertyId = parseInt(req.params.id);
+      const propertyId = req.params.id;
       const deleted = await propertyService.deleteProperty(propertyId, userId);
       
       if (!deleted) {
-        return res.status(404).json({ message: "Property not found" });
+        throw new NotFoundError("Imóvel");
       }
       
       res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting property:", error);
-      res.status(500).json({ message: "Failed to delete property" });
-    }
-  });
+    })
+  );
 
   // Property return rate calculation
   app.get('/api/properties/:id/return-rate/:month/:year', isAuthenticated, async (req: any, res) => {
@@ -240,119 +274,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== TRANSACTION ROUTES ====================
-  app.get('/api/transactions', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/transactions', 
+    isAuthenticated,
+    validateMultiple({ 
+      query: z.object({
+        limit: z.coerce.number().int().positive().optional(),
+        type: z.enum(["revenue", "expense"]).optional()
+      })
+    }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const limit = req.query.limit ? parseInt(req.query.limit) : undefined;
-      const type = req.query.type as string | undefined;
-      
+      const { limit, type } = req.query;
       const transactions = await transactionService.getTransactions(userId, type, limit);
       res.json(transactions);
-    } catch (error) {
-      console.error("Error fetching transactions:", error);
-      res.status(500).json({ message: "Failed to fetch transactions" });
-    }
-  });
+    })
+  );
 
-  app.get('/api/transactions/property/:propertyId', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/transactions/property/:propertyId', 
+    isAuthenticated,
+    validateMultiple({ params: z.object({ propertyId: idSchema }) }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const propertyId = parseInt(req.params.propertyId);
+      const propertyId = req.params.propertyId;
       const transactions = await transactionService.getTransactionsByProperty(propertyId, userId);
       res.json(transactions);
-    } catch (error) {
-      console.error("Error fetching property transactions:", error);
-      res.status(500).json({ message: "Failed to fetch property transactions" });
-    }
-  });
+    })
+  );
 
-  app.get('/api/properties/:id/transactions', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/properties/:id/transactions', 
+    isAuthenticated,
+    validateMultiple({ params: z.object({ id: idSchema }) }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const propertyId = parseInt(req.params.id);
+      const propertyId = req.params.id;
       const transactions = await transactionService.getTransactionsByProperty(propertyId, userId);
       res.json(transactions);
-    } catch (error) {
-      console.error("Error fetching property transactions:", error);
-      res.status(500).json({ message: "Failed to fetch property transactions" });
-    }
-  });
+    })
+  );
 
-  app.post('/api/transactions', isAuthenticated, async (req: any, res) => {
-    try {
+  app.post('/api/transactions', 
+    isAuthenticated,
+    validate(createTransactionSchema),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const transaction = await transactionService.createTransaction(userId, req.body);
       res.status(201).json(transaction);
-    } catch (error) {
-      console.error("Error creating transaction:", error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create transaction" });
-    }
-  });
+    })
+  );
 
-  app.put('/api/transactions/:id', isAuthenticated, async (req: any, res) => {
-    try {
+  app.put('/api/transactions/:id', 
+    isAuthenticated,
+    validateMultiple({ 
+      params: z.object({ id: idSchema }),
+      body: updateTransactionSchema 
+    }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const transactionId = parseInt(req.params.id);
+      const transactionId = req.params.id;
       const transaction = await transactionService.updateTransaction(transactionId, userId, req.body);
       
       if (!transaction) {
-        return res.status(404).json({ message: "Transaction not found" });
+        throw new NotFoundError("Transação");
       }
       
       res.json(transaction);
-    } catch (error) {
-      console.error("Error updating transaction:", error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to update transaction" });
-    }
-  });
+    })
+  );
 
-  app.delete('/api/transactions/:id', isAuthenticated, async (req: any, res) => {
-    try {
+  app.delete('/api/transactions/:id', 
+    isAuthenticated,
+    validateMultiple({ params: z.object({ id: idSchema }) }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const transactionId = parseInt(req.params.id);
+      const transactionId = req.params.id;
       const deleted = await transactionService.deleteTransaction(transactionId, userId);
       
       if (!deleted) {
-        return res.status(404).json({ message: "Transaction not found" });
+        throw new NotFoundError("Transação");
       }
       
       res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting transaction:", error);
-      res.status(500).json({ message: "Failed to delete transaction" });
-    }
-  });
+    })
+  );
 
   // Composite transaction
-  app.post('/api/transactions/composite', isAuthenticated, async (req: any, res) => {
-    try {
+  app.post('/api/transactions/composite', 
+    isAuthenticated,
+    validate(createCompositeExpenseSchema),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const result = await transactionService.createCompositeExpense({ ...req.body, userId });
       res.json(result);
-    } catch (error) {
-      console.error("Error creating composite expense:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create composite expense" });
-    }
-  });
+    })
+  );
 
   // Cleanup transactions
-  app.delete('/api/cleanup/transactions', isAuthenticated, async (req: any, res) => {
-    try {
+  app.delete('/api/cleanup/transactions', 
+    isAuthenticated,
+    validate(cleanupTransactionsSchema),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const propertyIds = req.body.propertyIds;
+      const { propertyIds } = req.body;
       const result = await transactionService.cleanupTransactions(userId, propertyIds);
       res.json(result);
-    } catch (error) {
-      console.error("Error cleaning up transactions:", error);
-      res.status(500).json({ message: "Failed to cleanup transactions" });
-    }
-  });
+    })
+  );
 
   // ==================== EXPENSE ROUTES ====================
   app.get('/api/expenses/dashboard', isAuthenticated, async (req: any, res) => {
@@ -367,87 +393,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Management expenses
-  app.get('/api/expenses/management/:id', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/expenses/management/:id', 
+    isAuthenticated,
+    validateMultiple({ params: z.object({ id: idSchema }) }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const transactionId = parseInt(req.params.id);
+      const transactionId = req.params.id;
       const expense = await transactionService.getManagementExpense(transactionId, userId);
+      if (!expense) {
+        throw new NotFoundError("Despesa de gestão");
+      }
       res.json(expense);
-    } catch (error) {
-      console.error("Error fetching management expense:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch management expense" });
-    }
-  });
+    })
+  );
 
-  app.post('/api/expenses/management', isAuthenticated, async (req: any, res) => {
-    try {
+  app.post('/api/expenses/management', 
+    isAuthenticated,
+    validate(createManagementExpenseSchema),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const result = await transactionService.createManagementExpense(userId, req.body);
       res.json(result);
-    } catch (error) {
-      console.error("Error creating management expense:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create management expense" });
-    }
-  });
+    })
+  );
 
-  app.put('/api/expenses/management/:id', isAuthenticated, async (req: any, res) => {
-    try {
+  app.put('/api/expenses/management/:id', 
+    isAuthenticated,
+    validateMultiple({ 
+      params: z.object({ id: idSchema }),
+      body: updateManagementExpenseSchema 
+    }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const transactionId = parseInt(req.params.id);
+      const transactionId = req.params.id;
       const result = await transactionService.updateManagementExpense(transactionId, userId, req.body);
       res.json(result);
-    } catch (error) {
-      console.error("Error updating management expense:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to update management expense" });
-    }
-  });
+    })
+  );
 
   // Distributed expenses
-  app.post('/api/expenses/distributed', isAuthenticated, async (req: any, res) => {
-    try {
+  app.post('/api/expenses/distributed', 
+    isAuthenticated,
+    validate(createDistributedExpenseSchema),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const result = await transactionService.createDistributedExpense(userId, req.body);
       res.json(result);
-    } catch (error) {
-      console.error("Error creating distributed expense:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create distributed expense" });
-    }
-  });
+    })
+  );
 
-  app.post('/api/expenses/distributed/preview', isAuthenticated, async (req: any, res) => {
-    try {
+  app.post('/api/expenses/distributed/preview', 
+    isAuthenticated,
+    validate(createDistributedExpenseSchema),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const preview = await transactionService.generateDistributedExpensePreview(userId, req.body);
       res.json(preview);
-    } catch (error) {
-      console.error("Error generating distributed expense preview:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to generate preview" });
-    }
-  });
+    })
+  );
 
   // Company expenses
-  app.post('/api/expenses/company', isAuthenticated, async (req: any, res) => {
-    try {
+  app.post('/api/expenses/company', 
+    isAuthenticated,
+    validate(createCompanyExpenseSchema),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const transaction = await transactionService.createCompanyExpense(userId, req.body);
       res.json(transaction);
-    } catch (error) {
-      console.error("Error creating company expense:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create company expense" });
-    }
-  });
+    })
+  );
 
   // Cleaning expenses
-  app.post('/api/expenses/cleaning-batch', isAuthenticated, async (req: any, res) => {
-    try {
+  app.post('/api/expenses/cleaning-batch', 
+    isAuthenticated,
+    validate(createCleaningBatchSchema),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const result = await transactionService.createCleaningBatch(userId, req.body);
       res.json(result);
-    } catch (error) {
-      console.error("Error creating cleaning batch:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create cleaning batch" });
-    }
-  });
+    })
+  );
 
   app.post('/api/expenses/cleaning-detailed', isAuthenticated, async (req: any, res) => {
     try {
@@ -461,52 +486,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== ANALYTICS ROUTES ====================
-  app.get('/api/analytics/summary', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/analytics/summary', 
+    isAuthenticated,
+    validateMultiple({ 
+      query: z.object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD").optional(),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD").optional()
+      })
+    }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const { startDate, endDate } = req.query;
-      const summary = await analyticsService.getFinancialSummary(userId, startDate as string, endDate as string);
+      const summary = await analyticsService.getFinancialSummary(userId, startDate, endDate);
       res.json(summary);
-    } catch (error) {
-      console.error("Error fetching financial summary:", error);
-      res.status(500).json({ message: "Failed to fetch financial summary" });
-    }
-  });
+    })
+  );
 
-  app.get('/api/analytics/monthly/:year', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/analytics/monthly/:year', 
+    isAuthenticated,
+    validateMultiple({ 
+      params: z.object({ 
+        year: z.coerce.number().int().min(2020).max(2100) 
+      }) 
+    }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const year = parseInt(req.params.year);
+      const year = req.params.year;
       const monthlyData = await analyticsService.getMonthlyData(userId, year);
       res.json(monthlyData);
-    } catch (error) {
-      console.error("Error fetching monthly data:", error);
-      res.status(500).json({ message: "Failed to fetch monthly data" });
-    }
-  });
+    })
+  );
 
-  app.get('/api/analytics/property-distribution', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/analytics/property-distribution', 
+    isAuthenticated,
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const distribution = await analyticsService.getPropertyStatusDistribution(userId);
       res.json(distribution);
-    } catch (error) {
-      console.error("Error fetching property distribution:", error);
-      res.status(500).json({ message: "Failed to fetch property distribution" });
-    }
-  });
+    })
+  );
 
-  app.get('/api/analytics/pivot-table', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/analytics/pivot-table', 
+    isAuthenticated,
+    validateMultiple({ 
+      query: pivotTableQuerySchema
+    }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const { month, year } = req.query;
-      const pivotData = await analyticsService.getPivotTableData(userId, parseInt(month as string), parseInt(year as string));
+      const pivotData = await analyticsService.getPivotTableData(userId, month, year);
       res.json(pivotData);
-    } catch (error) {
-      console.error("Error fetching pivot table data:", error);
-      res.status(500).json({ message: "Failed to fetch pivot table data" });
-    }
-  });
+    })
+  );
 
   app.get('/api/analytics/transactions-by-periods', isAuthenticated, async (req: any, res) => {
     try {
@@ -588,49 +619,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== CASH FLOW ROUTES ====================
-  app.get('/api/analytics/cash-flow', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/analytics/cash-flow', 
+    isAuthenticated,
+    validateMultiple({ query: cashFlowQuerySchema }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const { startDate, endDate } = req.query;
-      
-      if (!startDate || !endDate) {
-        return res.status(400).json({ error: 'Start date and end date are required' });
-      }
-      
-      const cashFlow = await cashFlowService.getDailyCashFlow(userId, startDate as string, endDate as string);
+      const cashFlow = await cashFlowService.getDailyCashFlow(userId, startDate, endDate);
       res.json(cashFlow);
-    } catch (error) {
-      console.error('Error fetching cash flow:', error);
-      res.status(500).json({ error: 'Failed to fetch cash flow' });
-    }
-  });
+    })
+  );
 
-  app.get('/api/analytics/cash-flow-stats', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/analytics/cash-flow-stats', 
+    isAuthenticated,
+    validateMultiple({ 
+      query: z.object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD").optional(),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD").optional()
+      })
+    }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const { startDate, endDate } = req.query;
-      
-      const period = startDate && endDate ? { startDate: startDate as string, endDate: endDate as string } : undefined;
+      const period = startDate && endDate ? { startDate, endDate } : undefined;
       const stats = await cashFlowService.getCashFlowStats(userId, period);
       res.json(stats);
-    } catch (error) {
-      console.error('Error fetching cash flow stats:', error);
-      res.status(500).json({ error: 'Failed to fetch cash flow stats' });
-    }
-  });
+    })
+  );
 
-  app.get('/api/analytics/cash-flow-projection', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/analytics/cash-flow-projection', 
+    isAuthenticated,
+    validateMultiple({ 
+      query: z.object({
+        months: z.coerce.number().int().min(1).max(24).default(3)
+      })
+    }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const months = req.query.months ? parseInt(req.query.months as string) : 3;
-      
+      const { months } = req.query;
       const projection = await cashFlowService.projectCashFlow(userId, months);
       res.json(projection);
-    } catch (error) {
-      console.error('Error projecting cash flow:', error);
-      res.status(500).json({ error: 'Failed to project cash flow' });
-    }
-  });
+    })
+  );
 
   app.get('/api/analytics/cash-flow-health', isAuthenticated, async (req: any, res) => {
     try {
@@ -644,27 +674,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== TAX ROUTES ====================
-  app.post('/api/taxes/simple', isAuthenticated, async (req: any, res) => {
-    try {
+  app.post('/api/taxes/simple', 
+    isAuthenticated,
+    validate(createTaxPaymentSchema),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const result = await taxService.recordSimpleTaxPayment(userId, req.body);
       res.json(result);
-    } catch (error) {
-      console.error("Error recording tax payment:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to record tax payment" });
-    }
-  });
+    })
+  );
 
-  app.post('/api/taxes/preview', isAuthenticated, async (req: any, res) => {
-    try {
+  app.post('/api/taxes/preview', 
+    isAuthenticated,
+    validate(createTaxPaymentSchema),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const preview = await taxService.generateTaxPreview(userId, req.body);
       res.json(preview);
-    } catch (error) {
-      console.error("Error generating tax preview:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to generate tax preview" });
-    }
-  });
+    })
+  );
 
   app.post('/api/taxes/calculate-pis-cofins', isAuthenticated, async (req: any, res) => {
     try {
@@ -677,16 +705,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/taxes/payments', isAuthenticated, async (req: any, res) => {
-    try {
+  app.post('/api/taxes/payments', 
+    isAuthenticated,
+    validate(createTaxPaymentSchema),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
       const result = await taxService.recordTaxPayment(userId, req.body);
       res.json(result);
-    } catch (error) {
-      console.error("Error recording tax payment:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to record tax payment" });
-    }
-  });
+    })
+  );
 
   app.get('/api/taxes/payments', isAuthenticated, async (req: any, res) => {
     try {
@@ -699,29 +726,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/taxes/payments/:id/pay', isAuthenticated, async (req: any, res) => {
-    try {
+  app.put('/api/taxes/payments/:id/pay', 
+    isAuthenticated,
+    validateMultiple({ params: z.object({ id: idSchema }) }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const paymentId = parseInt(req.params.id);
+      const paymentId = req.params.id;
       const result = await taxService.markTaxPaymentAsPaid(userId, paymentId);
       res.json(result);
-    } catch (error) {
-      console.error("Error marking tax payment as paid:", error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to mark payment as paid" });
-    }
-  });
+    })
+  );
 
-  app.get('/api/taxes/summary/:year', isAuthenticated, async (req: any, res) => {
-    try {
+  app.get('/api/taxes/summary/:year', 
+    isAuthenticated,
+    validateMultiple({ 
+      params: z.object({ 
+        year: z.coerce.number().int().min(2020).max(2100) 
+      }) 
+    }),
+    asyncHandler(async (req: any, res) => {
       const userId = getUserId(req);
-      const year = parseInt(req.params.year);
+      const year = req.params.year;
       const summary = await taxService.getTaxSummary(userId, year);
       res.json(summary);
-    } catch (error) {
-      console.error("Error fetching tax summary:", error);
-      res.status(500).json({ message: "Failed to fetch tax summary" });
-    }
-  });
+    })
+  );
 
   // ==================== IMPORT ROUTES ====================
   app.post('/api/import/historical', isAuthenticated, upload.single('excel'), async (req: any, res) => {
