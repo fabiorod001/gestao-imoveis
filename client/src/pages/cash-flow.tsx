@@ -1,5 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, memo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { queryOptions } from '@/lib/queryClient';
+import { TableSkeleton, LoadingSpinner } from '@/components/ui/skeleton-screens';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -24,7 +26,7 @@ interface CashFlowStats {
   totalExpenses7Days: number;
 }
 
-export default function CashFlowPage() {
+const CashFlowPage = memo(function CashFlowPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('3d');
   const [showEntradas, setShowEntradas] = useState(true);
   const [showSaidas, setShowSaidas] = useState(true);
@@ -33,7 +35,7 @@ export default function CashFlowPage() {
   const [showAccountBreakdown, setShowAccountBreakdown] = useState(false);
   const [showInvestments, setShowInvestments] = useState(false);
 
-  // Fetch cash flow data
+  // Fetch cash flow data com cache otimizado
   const { data: cashFlowData = [], isLoading: isLoadingCashFlow, refetch: refetchCashFlow } = useQuery({
     queryKey: ['/api/analytics/cash-flow', selectedPeriod],
     queryFn: async () => {
@@ -43,7 +45,8 @@ export default function CashFlowPage() {
       const response = await fetch(`/api/analytics/cash-flow?${params}`);
       const data = await response.json();
       return Array.isArray(data) ? data : [];
-    }
+    },
+    ...queryOptions.realtime, // Cache em tempo real para fluxo de caixa
   });
 
   // Fetch cash flow statistics
@@ -482,4 +485,6 @@ export default function CashFlowPage() {
       </Card>
     </div>
   );
-}
+});
+
+export default CashFlowPage;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,7 +12,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Badge } from "@/components/ui/badge";
 import { Calculator, TrendingDown, AlertCircle, Building } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryOptions } from "@/lib/queryClient";
+import { useDebounce } from "@/hooks/useDebounce";
 import type { Property } from "@shared/schema";
 import { z } from "zod";
 import ConsolidatedExpenseTable from './ConsolidatedExpenseTable';
@@ -42,7 +43,7 @@ interface PropertyRevenue {
   allocatedAmount: Money;
 }
 
-export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormProps) {
+const TaxExpenseForm = memo(function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [proRataCalculation, setProRataCalculation] = useState<PropertyRevenue[]>([]);
@@ -62,7 +63,12 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
 
   const { data: properties = [] } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
+    ...queryOptions.stable, // Cache estável para propriedades
   });
+  
+  // Debounce para o valor total (evita recalcular a cada tecla)
+  const debouncedTotalAmount = useDebounce(form.watch('totalAmount'), 300);
+  const debouncedSelectedProperties = useDebounce(form.watch('selectedProperties'), 300);
 
   // Buscar receitas do mês de competência para cálculo pro-rata
   const { data: revenueData = [] } = useQuery({
@@ -468,4 +474,6 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     />
     </>
   );
-}
+});
+
+export default TaxExpenseForm;

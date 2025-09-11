@@ -2,6 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== OTIMIZAÇÕES MOBILE ===== */
+
+/* Performance: GPU acceleration para elementos que se movem */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Smooth scrolling com momentum em iOS */
+.smooth-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Touch targets mínimos para mobile (44x44px) */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Previne seleção de texto acidental em mobile */
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Feedback visual para toques */
+.tap-highlight {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Skeleton animation otimizada */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+/* Safe area para iPhone X+ */
+.safe-area-inset {
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
 :root {
   --background: hsl(0, 0%, 100%);
   --foreground: hsl(20, 14.3%, 4.1%);
@@ -76,6 +133,61 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
     font-family: 'Inter', system-ui, sans-serif;
+    /* Otimizações mobile */
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* Previne zoom em inputs no iOS */
+    touch-action: manipulation;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Previne zoom em inputs no Safari iOS */
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+  
+  /* Otimização de scroll containers */
+  .overflow-auto,
+  .overflow-y-auto,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Botões maiores para touch em mobile */
+  @media (max-width: 768px) {
+    button,
+    .btn,
+    [role="button"] {
+      min-height: 44px;
+      padding: 0.75rem 1rem;
+    }
+    
+    /* Reduz animações em mobile para performance */
+    * {
+      animation-duration: 0.2s !important;
+      transition-duration: 0.2s !important;
+    }
+    
+    /* Remove sombras complexas em mobile */
+    .shadow-lg {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Tabelas responsivas com scroll horizontal */
+    .table-container {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
   }
 
   h1, h2, h3, h4, h5, h6 {
