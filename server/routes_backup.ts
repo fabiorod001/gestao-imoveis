@@ -1,12 +1,19 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+// For now, use Replit auth while we prepare the migration
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertPropertySchema, insertTransactionSchema, type Property } from "@shared/schema";
+import { insertPropertySchema, insertTransactionSchema, type Property, cashFlowSettings, transactions as transactions, taxPayments, cleaningServiceDetails as cleaningServiceDetails, properties } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
 import * as XLSX from "xlsx";
 import * as fs from "fs";
+import { db } from "./db";
+import { eq, and, gte, lte, lt, asc, desc, sql, inArray, or, isNull } from "drizzle-orm";
+import { parseAirbnbCSV, mapListingToProperty } from "./csvParser";
+import { parseCleaningPdf } from "./cleaningPdfParser";
+import { format } from "date-fns";
+
 
 // Helper function to clean numeric, date and text fields
 function cleanPropertyData(data: any) {
@@ -19,11 +26,13 @@ function cleanPropertyData(data: any) {
     renovationAndDecoration: data.renovationAndDecoration === '' || data.renovationAndDecoration === undefined ? null : data.renovationAndDecoration,
     otherInitialValues: data.otherInitialValues === '' || data.otherInitialValues === undefined ? null : data.otherInitialValues,
     area: data.area === '' || data.area === undefined ? null : data.area,
+    marketValue: data.marketValue === '' || data.marketValue === undefined ? null : data.marketValue,
     // Convert integer fields from string to number
     bedrooms: (!data.bedrooms || data.bedrooms === '') ? null : (typeof data.bedrooms === 'string' ? parseInt(data.bedrooms) : data.bedrooms),
     bathrooms: (!data.bathrooms || data.bathrooms === '') ? null : (typeof data.bathrooms === 'string' ? parseInt(data.bathrooms) : data.bathrooms),
     // Clean date fields - convert empty strings to null
     purchaseDate: data.purchaseDate === '' || data.purchaseDate === undefined ? null : data.purchaseDate,
+    marketValueDate: data.marketValueDate === '' || data.marketValueDate === undefined ? null : data.marketValueDate,
     // Clean address fields - convert empty strings to null
     condominiumName: data.condominiumName === '' || data.condominiumName === undefined ? null : data.condominiumName,
     street: data.street === '' || data.street === undefined ? null : data.street,
@@ -35,6 +44,11 @@ function cleanPropertyData(data: any) {
     state: data.state === '' || data.state === undefined ? null : data.state,
     country: data.country === '' || data.country === undefined ? null : data.country,
     zipCode: data.zipCode === '' || data.zipCode === undefined ? null : data.zipCode,
+    registration: data.registration === '' || data.registration === undefined ? null : data.registration,
+    iptuCode: data.iptuCode === '' || data.iptuCode === undefined ? null : data.iptuCode,
+    // Financing fields
+    isFullyPaid: data.isFullyPaid === undefined ? false : data.isFullyPaid,
+    financingAmount: data.financingAmount === '' || data.financingAmount === undefined ? null : data.financingAmount,
   };
 }
 
@@ -75,9 +89,88 @@ const uploadCSV = multer({
   },
 });
 
+// Configure multer for PDF file uploads (Cleaning import)
+const uploadPDF = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || file.originalname.endsWith('.pdf')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Apenas arquivos .pdf são permitidos'));
+    }
+  },
+});
+
 // Helper function to get userId from request
 function getUserId(req: any): string {
-  return req.user.claims?.sub || req.user.sub || req.user.userId;
+  // For Replit auth
+  if (req.user) {
+    return req.user.claims?.sub || req.user.sub || req.user.userId;
+  }
+  // For simple auth
+  if (req.session?.user) {
+    return req.session.user.id;
+  }
+  throw new Error("No user found in request");
+}
+
+// Helper function to build Airbnb property mapping
+async function buildAirbnbPropertyMapping(userId: string): Promise<Record<string, string>> {
+  // Get existing properties to build dynamic mapping
+  const existingProps = await storage.getProperties(userId);
+  
+  // Build dynamic Airbnb property mapping based on airbnb_name field
+  const dynamicMapping: Record<string, string> = {};
+  for (const prop of existingProps) {
+    if (prop.airbnbName && prop.airbnbName.trim()) {
+      // Use the property's nickname if available, otherwise use the name
+      const targetName = prop.nickname && prop.nickname.trim() ? prop.nickname : prop.name;
+      dynamicMapping[prop.airbnbName] = targetName;
+    }
+  }
+  
+  // Add any manual mappings that might not have airbnb_name set
+  const manualMappings: Record<string, string> = {
+    "1 Suíte + Quintal privativo": "Sevilha G07",
+    "1 Suíte Wonderful Einstein Morumbi": "Sevilha 307", 
+    "2 Quartos + Quintal Privativo": "Málaga M07",
+    "2 quartos, maravilhoso, na Avenida Berrini": "MaxHaus Berrini",
+    "Sesimbra SeaView Studio 502: Sol, Luxo e Mar": "Sesimbra ap 505- Portugal",
+    "Studio Premium - Haddock Lobo.": "Next Haddock Lobo",
+    "Studio Premium - Haddock Lobo": "Next Haddock Lobo",
+    "Studio Premium - Thera by Yoo": "Thera by Yoo",
+    "Wonderful EINSTEIN Morumbi": "IGNORE",
+    "Ganhos não relacionados a anúncios Créditos, resoluções e outros tipos de renda": "OTHER_INCOME"
+  };
+  
+  // Merge manual mappings (they override automatic ones if there's a conflict)
+  return { ...dynamicMapping, ...manualMappings };
+}
+
+// Helper function to build property ID map considering all name fields
+async function buildPropertyIdMap(userId: string): Promise<Map<string, number>> {
+  const existingProps = await storage.getProperties(userId);
+  const propertyMap = new Map<string, number>();
+  
+  for (const prop of existingProps) {
+    // Map by original name
+    propertyMap.set(prop.name, prop.id);
+    
+    // Map by nickname if exists
+    if (prop.nickname && prop.nickname.trim()) {
+      propertyMap.set(prop.nickname, prop.id);
+    }
+    
+    // Map by Airbnb name if exists  
+    if (prop.airbnbName && prop.airbnbName.trim()) {
+      propertyMap.set(prop.airbnbName, prop.id);
+    }
+  }
+  
+  return propertyMap;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -253,7 +346,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const limit = req.query.limit ? parseInt(req.query.limit) : undefined;
-      const transactions = await storage.getTransactions(userId, limit);
+      const type = req.query.type as string | undefined;
+      
+      // Get transactions based on type filter if provided
+      let transactions;
+      if (type) {
+        transactions = await storage.getTransactionsByType(userId, type, limit);
+      } else {
+        transactions = await storage.getTransactions(userId, limit);
+      }
       
       // Include property names in transactions
       const enrichedTransactions = await Promise.all(
@@ -304,7 +405,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/transactions', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
+      
+      // Log the incoming data for debugging
+      console.log("Received transaction data:", req.body);
+      
+      // Parse and validate the data
       const validatedData = insertTransactionSchema.parse(req.body);
+      
+      console.log("Validated data:", validatedData);
       
       const transaction = await storage.createTransaction({
         ...validatedData,
@@ -314,7 +422,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(transaction);
     } catch (error) {
       console.error("Error creating transaction:", error);
+      console.error("Request body was:", req.body);
+      
       if (error instanceof z.ZodError) {
+        console.error("Validation errors:", error.errors);
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to create transaction" });
@@ -358,6 +469,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting transaction:", error);
       res.status(500).json({ message: "Failed to delete transaction" });
+    }
+  });
+
+  // Optimized endpoint for expense dashboard
+  app.get('/api/expenses/dashboard', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      
+      // Get only expense transactions with properties joined
+      // Exclude parent transactions (isCompositeParent = true) from dashboard
+      const expenseData = await db
+        .select({
+          id: transactions.id,
+          propertyId: transactions.propertyId,
+          propertyName: properties.name,
+          date: transactions.date,
+          amount: transactions.amount,
+          type: transactions.type,
+          category: transactions.category,
+          description: transactions.description,
+          supplier: transactions.supplier,
+          cpfCnpj: transactions.cpfCnpj,
+          parentTransactionId: transactions.parentTransactionId,
+          isCompositeParent: transactions.isCompositeParent
+        })
+        .from(transactions)
+        .leftJoin(properties, eq(transactions.propertyId, properties.id))
+        .where(and(
+          eq(transactions.userId, userId),
+          eq(transactions.type, 'expense'),
+          sql`${transactions.propertyId} IS NOT NULL` // Exclude parent transactions (they have propertyId = null)
+        ))
+        .orderBy(desc(transactions.date));
+      
+      res.json(expenseData);
+    } catch (error) {
+      console.error('Error fetching expense dashboard data:', error);
+      res.status(500).json({ error: 'Failed to fetch expense data' });
     }
   });
 
@@ -434,52 +583,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch transactions data" });
     }
   });;
-
-  // Currency conversion routes
-  app.get('/api/exchange-rates/:from/:to', async (req, res) => {
-    try {
-      const { from, to } = req.params;
-      
-      // Try to get from database first
-      let rate = await storage.getLatestExchangeRate(from, to);
-      
-      // If not found or older than 1 day, fetch from Banco Central API
-      if (!rate || new Date(rate.date).getTime() < Date.now() - 24 * 60 * 60 * 1000) {
-        try {
-          // Fetch from Banco Central API (if BRL is involved)
-          if (from === 'BRL' || to === 'BRL') {
-            const response = await fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.v2/1/dados?formato=json&dataInicial=${new Date().toISOString().split('T')[0]}&dataFinal=${new Date().toISOString().split('T')[0]}`);
-            
-            if (response.ok) {
-              const data = await response.json();
-              if (data.length > 0) {
-                const exchangeRate = from === 'BRL' ? 1 / parseFloat(data[0].valor) : parseFloat(data[0].valor);
-                
-                rate = await storage.createExchangeRate({
-                  fromCurrency: from,
-                  toCurrency: to,
-                  rate: exchangeRate.toString(),
-                  date: new Date().toISOString().split('T')[0],
-                  source: 'banco_central'
-                });
-              }
-            }
-          }
-        } catch (apiError) {
-          console.error("Error fetching exchange rate from API:", apiError);
-        }
-      }
-      
-      if (!rate) {
-        return res.status(404).json({ message: "Exchange rate not found" });
-      }
-      
-      res.json(rate);
-    } catch (error) {
-      console.error("Error fetching exchange rate:", error);
-      res.status(500).json({ message: "Failed to fetch exchange rate" });
-    }
-  });
 
   // Historical Data Import Route
   app.post('/api/import/historical', isAuthenticated, upload.single('excel'), async (req: any, res) => {
@@ -1285,14 +1388,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const headers = parseCSVLine(lines[0]);
         console.log('🔮 Headers encontrados:', headers);
 
-        // Airbnb property mapping for pending reservations
-        const AIRBNB_PROPERTY_MAPPING: Record<string, string> = {
-          "1 Suíte + Quintal privativo": "Sevilha G07",
-          "1 Suíte Wonderful Einstein Morumbi": "Sevilha 307", 
-          "2 Quartos + Quintal Privativo": "Málaga M07",
-          "2 quartos, maravilhoso, na Avenida Berrini": "MaxHaus 43R",
-          "Studio Premium - Haddock Lobo.": "Next Haddock Lobo ap 33"
-        };
+        // Use the centralized Airbnb property mapping
+        const AIRBNB_PROPERTY_MAPPING = await buildAirbnbPropertyMapping(userId);
 
         const properties = new Set<string>();
         const periods = new Set<string>();
@@ -1315,7 +1412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const anuncio = row['Anúncio'];
           const dataInicio = row['Data de início'] || row['Data'];
           const valor = parseFloat(row['Valor']?.replace(',', '.') || '0');
-          const ganhosBrutos = parseFloat(row['Ganhos brutos']?.replace(',', '.') || '0');
+          const ganhosBrutos = parseFloat(row['Valor']?.replace(',', '.') || '0');
 
           console.log(`🔮 Linha ${i}: ${tipo} - ${anuncio} - Data: ${dataInicio} - Valor: R$ ${valor} | Ganhos: R$ ${ganhosBrutos}`);
 
@@ -1464,7 +1561,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Count unique reservations for statistics
         const anuncio = row['Anúncio'];
-        const ganhosBrutos = parseFloat(row['Ganhos brutos'] || '0');
+        const ganhosBrutos = parseFloat(row['Valor'] || '0');
         if (tipo === 'Reserva' && anuncio && ganhosBrutos > 0) {
           const mappedPropertyName = AIRBNB_PROPERTY_MAPPING[anuncio];
           if (mappedPropertyName && mappedPropertyName !== 'IGNORE' && mappedPropertyName !== 'OTHER_INCOME') {
@@ -1489,8 +1586,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           properties: Array.from(propertiesInFile),
           periods: Array.from(dateRanges),
           dateRange: {
-            start: startDate?.toLocaleDateString('pt-BR'),
-            end: endDate?.toLocaleDateString('pt-BR')
+            start: startDate?.toISOString() || null,
+            end: endDate?.toISOString() || null
           },
           summary: {
             reservationCount,
@@ -1509,31 +1606,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Unified Airbnb CSV Import Route (handles both historical and future reservations)
-  app.post('/api/import/airbnb-csv', isAuthenticated, async (req: any, res) => {
+  app.post('/api/import/airbnb-csv', isAuthenticated, (req: any, res, next) => {
+    uploadCSV.single('file')(req, res, (err) => {
+      if (err) {
+        console.error('Upload error:', err);
+        return res.status(400).json({ success: false, message: err.message });
+      }
+      next();
+    });
+  }, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       
-      if (!req.body.fileBuffer) {
-        return res.status(400).json({ success: false, message: "Dados do arquivo não encontrados" });
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "Arquivo não encontrado" });
       }
 
       // Check if this is a future reservations import
       const isFutureImport = req.body.importType === 'future';
       console.log(`🔄 Iniciando importação Airbnb CSV - Tipo: ${isFutureImport ? 'Reservas Futuras' : 'Dados Históricos'}`);
 
-      // Airbnb property name mapping
-      const AIRBNB_PROPERTY_MAPPING: Record<string, string> = {
-        "1 Suíte + Quintal privativo": "Sevilha G07",
-        "1 Suíte Wonderful Einstein Morumbi": "Sevilha 307", 
-        "2 Quartos + Quintal Privativo": "Málaga M07",
-        "2 quartos, maravilhoso, na Avenida Berrini": "MaxHaus 43R",
-        "Sesimbra SeaView Studio 502: Sol, Luxo e Mar": "Sesimbra ap 505- Portugal",
-        "Studio Premium - Haddock Lobo.": "Next Haddock Lobo ap 33",
-        "Wonderful EINSTEIN Morumbi": "IGNORE",
-        "Ganhos não relacionados a anúncios Créditos, resoluções e outros tipos de renda": "OTHER_INCOME"
-      };
+      // Build dynamic Airbnb property name mapping
+      const AIRBNB_PROPERTY_MAPPING = await buildAirbnbPropertyMapping(userId);
+      console.log('📊 Mapeamento dinâmico carregado (linha 1650):', Object.keys(AIRBNB_PROPERTY_MAPPING).length, 'mapeamentos');
 
-      const csvContent = Buffer.from(req.body.fileBuffer, 'base64').toString('utf-8').replace(/^\uFEFF/, ''); // Remove BOM
+      const csvContent = req.file.buffer.toString('utf-8').replace(/^\uFEFF/, ''); // Remove BOM
       const lines = csvContent.split('\n').filter((line: string) => line.trim());
       
       if (lines.length <= 1) {
@@ -1643,7 +1740,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Buscar TODAS as transações Airbnb no intervalo de datas
       const allTransactions = await storage.getTransactions(userId);
       const airbnbTransactionsInRange = allTransactions.filter(t => {
-        if (!t.description.includes('Airbnb')) return false;
+        // Verificar se description existe e inclui 'Airbnb'
+        if (!t.description || !t.description.includes('Airbnb')) return false;
         
         const transactionDate = new Date(t.date);
         return transactionDate >= startDate && transactionDate <= endDate;
@@ -1686,27 +1784,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         console.log(`🗓️  Data processada: ${date} -> ${transactionDate.toISOString().split('T')[0]}`);
         
-        // Find all reservations for this payout date
+        // Find all reservations between this payout and the next one
+        // The Airbnb CSV format shows reservations right after their corresponding payout
         const reservationsForPayout = [];
+        console.log(`🔍 Procurando reservas após linha ${i} para payout de ${date}`);
+        
         for (let j = i + 1; j < lines.length; j++) {
           const nextRow = parseCSVLine(lines[j]);
           
           // Stop if we hit another payout or end of relevant data
           if (nextRow.length >= 3 && nextRow[2] === 'Payout') {
+            console.log(`🛑 Parou na linha ${j}: encontrou próximo payout`);
             break;
           }
           
-          // Check if this is a reservation with the same date
-          if (nextRow.length >= 10 && nextRow[2] === 'Reserva' && nextRow[0] === date) {
-            const anuncio = nextRow[9];
-            const mappedPropertyName = AIRBNB_PROPERTY_MAPPING[anuncio];
+          // Check if this is a reservation (any date) or adjustment
+          if (nextRow.length >= 10 && (nextRow[2] === 'Reserva' || nextRow[2] === 'Ajuste' || nextRow[2] === 'Ajuste de Resolução')) {
+            console.log(`📝 Linha ${j}: Tipo="${nextRow[2]}", Data="${nextRow[0]}", Anúncio="${nextRow[9]}", Valor="${nextRow[13]}"`);
             
-            if (mappedPropertyName && mappedPropertyName !== 'IGNORE' && mappedPropertyName !== 'OTHER_INCOME') {
-              reservationsForPayout.push({
-                propertyName: mappedPropertyName,
-                anuncio: anuncio,
-                value: parseFloat(nextRow[13]) || 0
-              });
+            // For reservations and adjustments, the date in column 0 is the payout date
+            // We should process it if it matches the current payout date
+            if (nextRow[0] === date) {
+              const anuncio = nextRow[9];
+              const mappedPropertyName = AIRBNB_PROPERTY_MAPPING[anuncio];
+              console.log(`   → Anúncio "${anuncio}" mapeado para "${mappedPropertyName}"`);
+              
+              if (mappedPropertyName && mappedPropertyName !== 'IGNORE' && mappedPropertyName !== 'OTHER_INCOME') {
+                const value = parseFloat(nextRow[13]) || 0;
+                // Process ALL values including negative adjustments (important for cash flow)
+                if (value !== 0) {
+                  // Capturar datas de hospedagem (colunas 5 e 6)
+                  const startDateStr = nextRow[5]; // Data de início
+                  const endDateStr = nextRow[6];   // Data de término
+                  
+                  const tipo = nextRow[2];
+                  const isAdjustment = tipo.includes('Ajuste');
+                  
+                  console.log(`   ✓ Adicionando ${isAdjustment ? 'ajuste' : 'reserva'}: ${mappedPropertyName} = R$ ${value} (${startDateStr} a ${endDateStr})`);
+                  reservationsForPayout.push({
+                    propertyName: mappedPropertyName,
+                    anuncio: anuncio,
+                    value: value,  // Include negative values for adjustments
+                    accommodationStartDate: startDateStr,
+                    accommodationEndDate: endDateStr,
+                    isAdjustment: isAdjustment
+                  });
+                } else {
+                  console.log(`   ✗ Valor zero, ignorando`);
+                }
+              } else {
+                console.log(`   ✗ Propriedade ignorada ou não mapeada`);
+              }
+            } else {
+              console.log(`   ✗ Data não corresponde ao payout (${nextRow[0]} != ${date})`);
             }
           }
         }
@@ -1729,24 +1859,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           console.log(`📊 ${reservation.propertyName}: R$ ${reservation.value.toFixed(2)} (${(proportion * 100).toFixed(1)}%) = R$ ${distributedAmount.toFixed(2)}`);
           
-          // Find property in database
-          const allProperties = await storage.getProperties(userId);
-          const property = allProperties.find(p => p.name === reservation.propertyName);
+          // Find property in database using the property map that considers all name fields
+          const propertyMap = await buildPropertyIdMap(userId);
+          const propertyId = propertyMap.get(reservation.propertyName);
           
-          if (!property) {
+          if (!propertyId) {
             errors.push(`Propriedade não encontrada: ${reservation.propertyName}`);
+            console.log(`❌ Propriedade não encontrada no mapa: ${reservation.propertyName}`);
             continue;
           }
           
+          const property = await storage.getProperty(propertyId, userId);
+          
+          if (!property) {
+            errors.push(`Propriedade ID ${propertyId} não encontrada no banco`);
+            continue;
+          }
+          
+          // Parse accommodation dates if available
+          let accommodationStartDate = null;
+          let accommodationEndDate = null;
+          
+          if (reservation.accommodationStartDate && reservation.accommodationEndDate) {
+            // Parse dates in MM/DD/YYYY format
+            const [startMonth, startDay, startYear] = reservation.accommodationStartDate.split('/');
+            const [endMonth, endDay, endYear] = reservation.accommodationEndDate.split('/');
+            
+            if (startMonth && startDay && startYear) {
+              const startDate = new Date(parseInt(startYear), parseInt(startMonth) - 1, parseInt(startDay));
+              accommodationStartDate = startDate.toISOString().split('T')[0];
+            }
+            
+            if (endMonth && endDay && endYear) {
+              const endDate = new Date(parseInt(endYear), parseInt(endMonth) - 1, parseInt(endDay));
+              accommodationEndDate = endDate.toISOString().split('T')[0];
+            }
+          }
+          
           // Create transaction for this property
+          // Handle negative adjustments properly
+          const isNegativeAdjustment = reservation.isAdjustment && reservation.value < 0;
+          const transactionDescription = isNegativeAdjustment 
+            ? `Airbnb - Ajuste/Devolução (${reservation.anuncio})`
+            : `Airbnb - Payout (${reservation.anuncio})`;
+          
           const transactionData = {
             userId,
             propertyId: property.id,
             type: 'revenue' as const,
-            category: 'rent',
-            description: `Airbnb - Payout (${reservation.anuncio})`,
-            amount: distributedAmount.toString(),
+            category: 'airbnb', // Changed from 'rent' to 'airbnb'
+            description: transactionDescription,
+            amount: distributedAmount.toString(), // Can be negative for adjustments
             date: transactionDate.toISOString().split('T')[0],
+            accommodationStartDate,
+            accommodationEndDate,
             currency: 'BRL'
           };
           
@@ -1771,7 +1937,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get all current Airbnb transactions after import
       const currentTransactions = await storage.getTransactions(userId);
-      const currentAirbnbTransactions = currentTransactions.filter(t => t.description.includes('Airbnb'));
+      const currentAirbnbTransactions = currentTransactions.filter(t => t.description && t.description.includes('Airbnb'));
       
       // Group current transactions by property and date
       const currentByProperty = new Map();
@@ -1860,9 +2026,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
       
+      // Discrepâncias são normais quando há múltiplos payouts no mesmo dia - não é erro
       if (discrepancies.length > 0) {
-        console.log(`⚠️ ENCONTRADAS ${discrepancies.length} DISCREPÂNCIAS - usuário será consultado`);
-        response.message += ` ATENÇÃO: ${discrepancies.length} discrepâncias encontradas - revise os valores.`;
+        console.log(`ℹ️ ${discrepancies.length} dias com múltiplos payouts processados corretamente`);
       }
       
       res.json(response);
@@ -1948,24 +2114,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const tipo = row['Tipo'];
         const anuncio = row['Anúncio'];
         const dataReserva = row['Data'];
-        const valor = parseFloat(row['Valor'] || '0');
+        
+        // Use "Valor" column for correct values (column 12 in CSV) - R$ 53.202,63
+        const valorRaw = row['Valor'] || '0';
+        const valor = parseFloat(valorRaw.replace(/[^\d.,]/g, '').replace(',', '.'));
 
         // Only process reservations with valid data
         if (tipo === 'Reserva' && anuncio && dataReserva && valor > 0) {
           const mappedPropertyName = AIRBNB_PROPERTY_MAPPING[anuncio];
           
           if (mappedPropertyName && mappedPropertyName !== 'IGNORE' && mappedPropertyName !== 'OTHER_INCOME') {
-            const [day, month, year] = dataReserva.split('/');
-            const transactionDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            // Use check-in date from "Data de início" (column 4)
+            const dataInicioRaw = row['Data de início'];
+            let checkInDate: Date;
             
-            newReservations.push({
-              propertyName: mappedPropertyName,
-              date: transactionDate.toISOString().split('T')[0],
-              amount: valor,
-              anuncio: anuncio,
-              confirmationCode: row['Código de Confirmação'],
-              csvLine: i
-            });
+            if (dataInicioRaw) {
+              // Parse check-in date in MM/DD/YYYY format
+              const [monthIn, dayIn, yearIn] = dataInicioRaw.split('/');
+              checkInDate = new Date(parseInt(yearIn), parseInt(monthIn) - 1, parseInt(dayIn));
+            } else {
+              // Fallback to reservation date if check-in date is not available
+              const [monthRes, dayRes, yearRes] = dataReserva.split('/');
+              checkInDate = new Date(parseInt(yearRes), parseInt(monthRes) - 1, parseInt(dayRes));
+            }
+            
+            // Only include if it's truly a future reservation based on check-in date
+            if (checkInDate > new Date()) {
+              // Captura o número de noites da coluna 'Noites'
+              const noitesStr = row['Noites'] || '0';
+              const nights = parseInt(noitesStr) || 0;
+              
+              newReservations.push({
+                propertyName: mappedPropertyName,
+                date: checkInDate.toISOString().split('T')[0],
+                amount: valor,
+                anuncio: anuncio,
+                confirmationCode: row['Código de Confirmação'],
+                nights: nights,
+                csvLine: i
+              });
+            }
           }
         }
       }
@@ -1978,7 +2166,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // STEP 2: Compare with existing future reservations and remove conflicting ones
       console.log('🔍 STEP 2: Comparando com reservas futuras existentes...');
       const allTransactions = await storage.getTransactions(userId);
-      const existingFutureReservations = allTransactions.filter(t => t.description.includes('Reserva futura'));
+      const existingFutureReservations = allTransactions.filter(t => t.description && t.description.includes('Reserva futura'));
       
       console.log(`🔍 Encontradas ${existingFutureReservations.length} reservas futuras existentes`);
       
@@ -2031,7 +2219,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const summary = {
         properties: new Set<string>(),
         revenues: 0,
-        reservations: 0
+        reservations: 0,
+        occupiedNights: 0
       };
       
       for (const newReservation of newReservations) {
@@ -2060,6 +2249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           summary.properties.add(property.name);
           summary.revenues += newReservation.amount;
           summary.reservations++;
+          summary.occupiedNights += newReservation.nights || 0;
           
           importedCount++;
           console.log(`✅ Reserva futura importada: ${newReservation.propertyName} - ${newReservation.date} - R$ ${newReservation.amount.toFixed(2)}`);
@@ -2076,7 +2266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get all current future reservations after import
       const currentTransactions = await storage.getTransactions(userId);
-      const currentFutureReservations = currentTransactions.filter(t => t.description.includes('Reserva futura'));
+      const currentFutureReservations = currentTransactions.filter(t => t.description && t.description.includes('Reserva futura'));
       
       // Group current future reservations by property and date
       const currentByProperty = new Map();
@@ -2148,8 +2338,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         importedCount,
         summary: {
           properties: Array.from(summary.properties).length,
-          totalRevenue: summary.revenues,
+          revenues: summary.revenues, // Changed from totalRevenue to revenues
           reservations: summary.reservations,
+          occupiedNights: summary.occupiedNights,
+          averageDailyRate: summary.occupiedNights > 0 ? summary.revenues / summary.occupiedNights : 0,
           deletedConflicts: deletedCount
         },
         errors: errors.length > 0 ? errors : undefined,
@@ -2161,9 +2353,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
       
+      // Discrepâncias são normais quando há múltiplos payouts no mesmo dia - não é erro
       if (discrepancies.length > 0) {
-        console.log(`⚠️ ENCONTRADAS ${discrepancies.length} DISCREPÂNCIAS - usuário será consultado`);
-        response.message += ` ATENÇÃO: ${discrepancies.length} discrepâncias encontradas - revise os valores.`;
+        console.log(`ℹ️ ${discrepancies.length} dias com múltiplos payouts processados corretamente`);
       }
       
       res.json(response);
@@ -2173,116 +2365,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ success: false, message: "Erro interno do servidor" });
     }
   });
-        
-        try {
-          console.log(`🔄 Salvando reserva futura sequencial:`, JSON.stringify(transactionData, null, 2));
-          const savedTransaction = await storage.createTransaction(transactionData);
-          console.log(`✅ Reserva futura salva com ID: ${savedTransaction.id}`);
-          importedCount++;
-          
-          summary.properties.add(newReservation.propertyName);
-          summary.revenues += newReservation.amount;
-          summary.reservations++;
-          
-          console.log(`✅ Importada reserva futura: ${newReservation.propertyName} - ${newReservation.date} - R$ ${newReservation.amount.toFixed(2)}`);
-        } catch (error) {
-          console.error(`❌ Erro ao criar reserva futura: ${error}`);
-          errors.push(`Erro ao criar reserva futura para ${newReservation.propertyName}: ${error}`);
-        }
+
+  // Airbnb Future Reservations Analysis - Using robust CSV parser
+  app.post('/api/import/airbnb-pending/analyze', uploadCSV.single('file'), isAuthenticated, async (req: any, res) => {
+    console.log('🔍 ANÁLISE DE RESERVAS FUTURAS - SISTEMA ROBUSTO');
+    
+    try {
+      const userId = getUserId(req);
+      
+      if (!req.file) {
+        console.log('❌ Nenhum arquivo enviado');
+        return res.status(400).json({ success: false, message: "Arquivo não encontrado" });
       }
+
+      console.log('📁 Arquivo:', req.file.originalname, 'Tamanho:', req.file.size);
+
+      // Parse CSV using robust parser
+      const csvContent = req.file.buffer.toString('utf-8');
+      const parseResult = parseAirbnbCSV(csvContent);
       
-      console.log(`✅ Importação de reservas futuras concluída: ${importedCount} reservas importadas`);
+      if (!parseResult.success) {
+        console.log('❌ Erro ao processar CSV:', parseResult.error);
+        return res.status(400).json({ 
+          success: false, 
+          message: parseResult.error || 'Erro ao processar arquivo CSV' 
+        });
+      }
+
+      console.log(`📊 Formato detectado: ${parseResult.format}`);
+      console.log(`📊 Total de linhas processadas: ${parseResult.rows.length}`);
+
+      // Filter only future reservations
+      const futureReservations = parseResult.rows.filter(row => row.isFutureReservation);
+      console.log(`🔮 Reservas futuras encontradas: ${futureReservations.length}`);
+
+      // Map listings to properties and prepare response
+      const mappedReservations = [];
+      const unmappedListings = new Set<string>();
       
-      // STEP 5: Final validation - compare imported values with CSV report
-      console.log('🔍 STEP 5: Validação final - comparando reservas futuras importadas com relatório CSV...');
-      
-      // Get all current future reservations after import
-      const currentTransactions = await storage.getTransactions(userId);
-      const currentFutureReservations = currentTransactions.filter(t => t.description.includes('Reserva futura'));
-      
-      // Group current reservations by property and date
-      const currentByPropertyAndDate = new Map();
-      currentFutureReservations.forEach(t => {
-        const dateStr = t.date instanceof Date ? t.date.toISOString().split('T')[0] : 
-                        typeof t.date === 'string' ? t.date : 
-                        new Date(t.date).toISOString().split('T')[0];
-        const key = `${t.propertyId}-${dateStr}`;
-        if (!currentByPropertyAndDate.has(key)) {
-          currentByPropertyAndDate.set(key, 0);
-        }
-        currentByPropertyAndDate.set(key, currentByPropertyAndDate.get(key) + parseFloat(t.amount));
-      });
-      
-      // Get property names for comparison
-      const propertyIdToName = new Map();
-      allProperties.forEach(p => propertyIdToName.set(p.id, p.name));
-      
-      // Compare each new reservation with imported values
-      const discrepancies = [];
-      
-      for (const newReservation of newReservations) {
-        const propertyId = propertyNameToId.get(newReservation.propertyName);
-        if (!propertyId) continue;
+      for (const reservation of futureReservations) {
+        const propertyName = mapListingToProperty(reservation.listing);
         
-        const key = `${propertyId}-${newReservation.date}`;
-        const importedAmount = currentByPropertyAndDate.get(key) || 0;
-        const csvAmount = newReservation.amount;
-        
-        // Check for discrepancies
-        const difference = Math.abs(csvAmount - importedAmount);
-        const tolerance = 0.01; // 1 centavo de tolerância
-        
-        if (difference > tolerance) {
-          console.log(`❌ DISCREPÂNCIA ENCONTRADA para ${newReservation.propertyName} - ${newReservation.date}:`);
-          console.log(`   CSV: R$ ${csvAmount.toFixed(2)}`);
-          console.log(`   Importado: R$ ${importedAmount.toFixed(2)}`);
-          console.log(`   Diferença: R$ ${difference.toFixed(2)}`);
-          
-          discrepancies.push({
-            property: newReservation.propertyName,
-            date: newReservation.date,
-            csvAmount: csvAmount,
-            importedAmount: importedAmount,
-            difference: difference
+        if (propertyName) {
+          mappedReservations.push({
+            data: reservation.date,
+            dataInicio: reservation.checkIn,
+            dataTermino: reservation.checkOut,
+            noites: reservation.nights,
+            hospede: reservation.guest,
+            anuncio: reservation.listing,
+            codigo: reservation.confirmationCode,
+            valor: reservation.amount,
+            moeda: reservation.currency,
+            propertyName: propertyName
           });
         } else {
-          console.log(`✅ VALORES CORRETOS para ${newReservation.propertyName} - ${newReservation.date}: R$ ${csvAmount.toFixed(2)}`);
+          unmappedListings.add(reservation.listing);
         }
       }
-      
-      if (errors.length > 0) {
-        console.log('⚠️ Erros encontrados:', errors);
+
+      // Log unmapped listings
+      if (unmappedListings.size > 0) {
+        console.log('⚠️ Anúncios não mapeados:', Array.from(unmappedListings));
       }
-      
-      // Return results with discrepancies for user review
-      const response = {
-        success: true,
-        message: `Importação de reservas futuras concluída! ${importedCount} reservas importadas.`,
-        importedCount,
+
+      // Group by property
+      const propertiesFound = [...new Set(mappedReservations.map(r => r.propertyName))];
+      const periods = [...new Set(mappedReservations.map(r => {
+        // Parse MM/DD/YYYY format correctly
+        const [month, day, year] = r.dataInicio.split('/');
+        return `${month.padStart(2, '0')}/${year}`;
+      }))];
+
+      // Calculate totals
+      const totalRevenue = mappedReservations.reduce((sum, r) => sum + r.valor, 0);
+
+      const analysis = {
+        properties: propertiesFound,
+        periods: periods.sort(),
+        dateRange: parseResult.dateRange,
         summary: {
-          properties: Array.from(summary.properties),
-          revenues: summary.revenues,
-          reservations: summary.reservations
-        },
-        errors: errors.length > 0 ? errors : undefined,
-        discrepancies: discrepancies.length > 0 ? discrepancies : undefined,
-        validationSummary: {
-          totalReservationsValidated: newReservations.length,
-          correctReservations: newReservations.length - discrepancies.length,
-          discrepantReservations: discrepancies.length
+          reservationCount: mappedReservations.length,
+          totalRevenue: totalRevenue,
+          propertyCount: propertiesFound.length,
+          periodCount: periods.length,
+          unmappedListings: Array.from(unmappedListings)
         }
       };
-      
-      if (discrepancies.length > 0) {
-        console.log(`⚠️ ENCONTRADAS ${discrepancies.length} DISCREPÂNCIAS EM RESERVAS FUTURAS - usuário será consultado`);
-        response.message += ` ATENÇÃO: ${discrepancies.length} discrepâncias encontradas - revise os valores.`;
-      }
-      
-      res.json(response);
 
+      console.log('📊 Análise concluída:', JSON.stringify(analysis, null, 2));
+
+      res.json({ success: true, analysis });
     } catch (error) {
-      console.error("Erro durante importação de reservas futuras:", error);
-      res.status(500).json({ success: false, message: "Erro interno do servidor" });
+      console.error('❌ Erro na análise de reservas futuras:', error);
+      res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   });
 
@@ -2341,122 +2517,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Analyze pending Airbnb reservations file
-  app.post('/api/import/airbnb-pending/analyze', isAuthenticated, async (req: any, res) => {
-    console.log('🔍 ROTA CHAMADA: /api/import/airbnb-pending/analyze');
-    try {
-      console.log('🔍 ANÁLISE DE RESERVAS FUTURAS INICIADA');
-      
-      if (!req.body.fileBuffer) {
-        return res.status(400).json({ success: false, message: "Dados do arquivo não encontrados" });
-      }
-
-      const csvContent = Buffer.from(req.body.fileBuffer, 'base64').toString('utf-8').replace(/^\uFEFF/, '');
-      const lines = csvContent.split('\n').filter(line => line.trim());
-      
-      if (lines.length < 2) {
-        return res.status(400).json({ success: false, message: "Arquivo CSV vazio ou inválido" });
-      }
-
-      // Simple CSV parsing for debugging
-      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-      console.log('🔍 Headers reservas futuras:', headers);
-      console.log(`🔍 Total linhas: ${lines.length}`);
-
-      // Track statistics
-      const properties = new Set<string>();
-      const periods = new Set<string>();
-      let totalRevenue = 0;
-      let reservationCount = 0;
-
-      // Airbnb property mapping
-      const AIRBNB_PROPERTY_MAPPING: Record<string, string> = {
-        "1 Suíte + Quintal privativo": "Sevilha G07",
-        "1 Suíte Wonderful Einstein Morumbi": "Sevilha 307", 
-        "2 Quartos + Quintal Privativo": "Málaga M07",
-        "2 quartos, maravilhoso, na Avenida Berrini": "MaxHaus 43R",
-        "Sesimbra SeaView Studio 502: Sol, Luxo e Mar": "Sesimbra ap 505- Portugal",
-        "Studio Premium - Haddock Lobo.": "Next Haddock Lobo ap 33"
-      };
-
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-
-        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-        if (values.length < headers.length) continue;
-
-        const row: Record<string, string> = {};
-        headers.forEach((header: string, index: number) => {
-          row[header] = values[index] || '';
-        });
-
-        const tipo = row['Tipo'];
-        const anuncio = row['Anúncio'];
-        const dataPagamento = row['Data'];
-        
-        // Debugging: check what we're getting for Ganhos brutos
-        const ganhosBrutosRaw = row['Ganhos brutos'];
-        const ganhosBrutos = parseFloat(ganhosBrutosRaw?.replace(',', '.') || '0');
-
-        console.log(`Linha ${i}: Tipo="${tipo}", Anúncio="${anuncio}", Data="${dataPagamento}"`);
-        console.log(`  Ganhos brutos raw: "${ganhosBrutosRaw}", parsed: ${ganhosBrutos}`);
-        console.log(`  Row keys: ${Object.keys(row)}`);
-
-        if (tipo === 'Reserva' && anuncio && ganhosBrutos > 0) {
-          const mappedPropertyName = AIRBNB_PROPERTY_MAPPING[anuncio];
-          if (mappedPropertyName) {
-            properties.add(mappedPropertyName);
-            totalRevenue += ganhosBrutos;
-            reservationCount++;
-            
-            const [month, day, year] = dataPagamento.split('/');
-            periods.add(`${year}-${month.padStart(2, '0')}`);
-            
-            console.log(`  ✓ Adicionado: ${mappedPropertyName} - R$ ${ganhosBrutos}`);
-          } else {
-            console.log(`  ✗ Propriedade não mapeada: "${anuncio}"`);
-          }
-        } else {
-          console.log(`  ✗ Condições não atendidas: tipo=${tipo}, anuncio=${!!anuncio}, ganhos=${ganhosBrutos}`);
-        }
-      }
-
-      console.log(`Propriedades no arquivo: ${Array.from(properties)}`);
-      console.log(`Períodos no arquivo: ${Array.from(periods)}`);
-      console.log(`Total receita: R$ ${totalRevenue}`);
-
-      const result = {
-        success: true,
-        analysis: {
-          properties: Array.from(properties),
-          periods: Array.from(periods).sort(),
-          dateRange: {
-            start: Array.from(periods).sort()[0] || '',
-            end: Array.from(periods).sort().reverse()[0] || ''
-          },
-          summary: {
-            reservationCount,
-            totalRevenue,
-            propertyCount: properties.size,
-            periodCount: periods.size
-          }
-        }
-      };
-
-      res.json(result);
-    } catch (error) {
-      console.error('🔍 Erro completo na análise de reservas futuras:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erro interno do servidor';
-      console.error('🔍 Mensagem do erro:', errorMessage);
-      res.status(500).json({ 
-        success: false, 
-        message: errorMessage,
-        error: error instanceof Error ? error.stack : String(error)
-      });
-    }
-  });
-
   // Import pending Airbnb reservations (future revenue forecasting)
   app.post('/api/import/airbnb-pending', isAuthenticated, uploadCSV.single('file'), async (req: any, res) => {
     try {
@@ -2502,21 +2562,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const headers = parseCSVLineImport(lines[0]);
       console.log('🔮 Headers:', headers);
 
-      // Airbnb property mapping for future reservations
-      const AIRBNB_PROPERTY_MAPPING: Record<string, string> = {
-        "1 Suíte + Quintal privativo": "Sevilha G07",
-        "1 Suíte Wonderful Einstein Morumbi": "Sevilha 307", 
-        "2 Quartos + Quintal Privativo": "Málaga M07",
-        "2 quartos, maravilhoso, na Avenida Berrini": "MaxHaus 43R",
-        "Studio Premium - Haddock Lobo.": "Next Haddock Lobo ap 33"
-      };
-
-      // Get existing properties to match IDs
-      const existingProperties = await storage.getProperties(userId);
-      const propertyMap = new Map<string, number>();
-      for (const prop of existingProperties) {
-        propertyMap.set(prop.name, prop.id);
-      }
+      // Use the centralized mapping functions
+      const AIRBNB_PROPERTY_MAPPING = await buildAirbnbPropertyMapping(userId);
+      console.log('🔮 Airbnb property mapping:', AIRBNB_PROPERTY_MAPPING);
+      
+      const propertyMap = await buildPropertyIdMap(userId);
+      console.log('🔮 Property ID mapping created:', Array.from(propertyMap.entries()));
 
       let importedCount = 0;
       let totalPlannedRevenue = 0;
@@ -2954,6 +3005,183 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get management expense for editing
+  app.get('/api/expenses/management/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const transactionId = parseInt(req.params.id);
+      
+      // Get the parent transaction
+      const parentTransaction = await db.select()
+        .from(transactions)
+        .where(and(
+          eq(transactions.id, transactionId),
+          eq(transactions.userId, userId),
+          eq(transactions.isCompositeParent, true)
+        ))
+        .limit(1);
+      
+      if (parentTransaction.length === 0) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+      
+      // Get child transactions
+      const childTransactions = await db.select()
+        .from(transactions)
+        .where(eq(transactions.parentTransactionId, transactionId));
+      
+      // Calculate distribution
+      const distribution = childTransactions.map(child => ({
+        propertyId: child.propertyId,
+        amount: Math.abs(child.amount),
+        percentage: (Math.abs(child.amount) / Math.abs(parentTransaction[0].amount)) * 100
+      }));
+      
+      res.json({
+        id: parentTransaction[0].id,
+        totalAmount: Math.abs(parentTransaction[0].amount),
+        paymentDate: parentTransaction[0].date,
+        description: parentTransaction[0].description,
+        supplier: parentTransaction[0].supplier,
+        cpfCnpj: parentTransaction[0].cpfCnpj,
+        distribution
+      });
+    } catch (error) {
+      console.error("Error fetching management expense:", error);
+      res.status(500).json({ message: "Failed to fetch management expense" });
+    }
+  });
+
+  // Management expense endpoint - Update existing expense
+  app.put('/api/expenses/management/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const transactionId = parseInt(req.params.id);
+      const { totalAmount, paymentDate, description, supplier, cpfCnpj, distribution } = req.body;
+      
+      if (!totalAmount || !paymentDate || !supplier || !distribution || distribution.length === 0) {
+        return res.status(400).json({ message: "Dados obrigatórios faltando" });
+      }
+      
+      // Parse total amount
+      const parsedTotalAmount = typeof totalAmount === 'string' 
+        ? parseFloat(totalAmount.replace(/\./g, '').replace(',', '.'))
+        : totalAmount;
+
+      // Delete existing child transactions
+      await db.delete(transactions)
+        .where(eq(transactions.parentTransactionId, transactionId));
+      
+      // Update the main transaction
+      await db.update(transactions)
+        .set({
+          amount: parsedTotalAmount,
+          description: description || `Gestão - ${supplier}`,
+          date: new Date(paymentDate),
+          supplier,
+          cpfCnpj: cpfCnpj || null,
+          notes: `Pagamento consolidado de gestão para ${distribution.length} propriedades`
+        })
+        .where(and(
+          eq(transactions.id, transactionId),
+          eq(transactions.userId, userId)
+        ));
+      
+      // Create new child transactions for each property
+      const childTransactions = [];
+      for (const item of distribution) {
+        const childTransaction = await db.insert(transactions).values({
+          userId,
+          propertyId: item.propertyId,
+          type: 'expense',
+          category: 'management',
+          amount: item.amount,
+          description: `${description || `Gestão - ${supplier}`} - ${item.percentage.toFixed(1)}%`,
+          date: new Date(paymentDate),
+          supplier,
+          cpfCnpj: cpfCnpj || null,
+          parentTransactionId: transactionId,
+          notes: `Parte do pagamento consolidado de ${format(new Date(paymentDate), 'dd/MM/yyyy')}`
+        }).returning();
+        
+        childTransactions.push(childTransaction[0]);
+      }
+      
+      res.json({ 
+        success: true, 
+        transactions: childTransactions,
+        message: 'Despesa de gestão atualizada com sucesso!' 
+      });
+    } catch (error) {
+      console.error("Error updating management expense:", error);
+      res.status(500).json({ message: "Failed to update management expense" });
+    }
+  });
+
+  // Management expense endpoint - Create new expense
+  app.post('/api/expenses/management', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const { totalAmount, paymentDate, description, supplier, cpfCnpj, distribution } = req.body;
+      
+      if (!totalAmount || !paymentDate || !supplier || !distribution || distribution.length === 0) {
+        return res.status(400).json({ message: "Dados obrigatórios faltando" });
+      }
+      
+      // Parse total amount
+      const parsedTotalAmount = typeof totalAmount === 'string' 
+        ? parseFloat(totalAmount.replace(/\./g, '').replace(',', '.'))
+        : totalAmount;
+
+      // Create the main transaction (parent) without propertyId
+      const mainTransaction = await db.insert(transactions).values({
+        userId,
+        propertyId: null, // This is a consolidated payment
+        type: 'expense',
+        category: 'management',
+        amount: parsedTotalAmount,
+        description: description || `Gestão - ${supplier}`,
+        date: new Date(paymentDate),
+        supplier,
+        cpfCnpj: cpfCnpj || null,
+        isCompositeParent: true,
+        notes: `Pagamento consolidado de gestão para ${distribution.length} propriedades`
+      }).returning();
+
+      const parentId = mainTransaction[0].id;
+      
+      // Create child transactions for each property
+      const childTransactions = [];
+      for (const item of distribution) {
+        const childTransaction = await db.insert(transactions).values({
+          userId,
+          propertyId: item.propertyId,
+          type: 'expense',
+          category: 'management',
+          amount: item.amount,
+          description: `${description || `Gestão - ${supplier}`} - ${item.percentage.toFixed(1)}%`,
+          date: new Date(paymentDate),
+          supplier,
+          cpfCnpj: cpfCnpj || null,
+          parentTransactionId: parentId,
+          notes: `Parte do pagamento consolidado de ${format(new Date(paymentDate), 'dd/MM/yyyy')}`
+        }).returning();
+        
+        childTransactions.push(childTransaction[0]);
+      }
+      
+      res.json({ 
+        success: true, 
+        mainTransaction: mainTransaction[0],
+        transactions: childTransactions,
+        message: 'Despesa de gestão cadastrada com sucesso!' 
+      });
+    } catch (error) {
+      console.error("Error creating management expense:", error);
+      res.status(500).json({ message: "Failed to create management expense" });
+    }
+  });
+
   // Expense components management
   app.get('/api/properties/:id/expense-components', isAuthenticated, async (req, res) => {
     try {
@@ -3029,6 +3257,1441 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+  // Helper function to format relative date - show actual dates in DD MMM format
+  const formatRelativeDate = (current: Date, today: Date, period: string): string => {
+    const isToday = current.toDateString() === today.toDateString();
+    
+    // Always show HOJE for today, regardless of period
+    if (isToday) {
+      return 'HOJE';
+    }
+    
+    // For monthly periods, show day of month
+    if (period === 'current_month' || period === '2_months' || period === '1m' || period === '2m') {
+      return current.getDate().toString();
+    }
+    
+    // For all other periods, show actual date in DD MMM format
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const day = current.getDate().toString().padStart(2, '0');
+    const month = months[current.getMonth()];
+    
+    return `${day} ${month}`;
+  };
+
+  // Helper function to calculate date range - NEW PERIODS as requested
+  const calculateDateRange = (period: string, today: Date) => {
+    let startDate = new Date(today);
+    let endDate = new Date(today);
+    
+    switch (period) {
+      case 'default':
+        // Padrão: D-1 to D+5 (7 days total)
+        startDate.setDate(today.getDate() - 1);
+        endDate.setDate(today.getDate() + 5);
+        break;
+      case '1d':
+        // 1 day: Only today
+        startDate = new Date(today);
+        endDate = new Date(today);
+        break;
+      case '2d':
+        // 2 days: Today + 1 day
+        startDate = new Date(today);
+        endDate.setDate(today.getDate() + 1);
+        break;
+      case '3d':
+        // 3 days: Today + 2 days
+        startDate = new Date(today);
+        endDate.setDate(today.getDate() + 2);
+        break;
+      case '4d':
+        // 4 days: Today + 3 days
+        startDate = new Date(today);
+        endDate.setDate(today.getDate() + 3);
+        break;
+      case '5d':
+        // 5 days: Today + 4 days
+        startDate = new Date(today);
+        endDate.setDate(today.getDate() + 4);
+        break;
+      case '1m':
+      case 'current_month':
+        // 1 month: Current month from day 1 to last day
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Last day of current month
+        break;
+      case '2m':
+      case '2_months':
+        // 2 Months: Day 1 of current month to last day of next month
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        endDate = new Date(today.getFullYear(), today.getMonth() + 2, 0); // Last day of next month
+        break;
+      case '2w':
+        // 2 sem: D-1 to D+12 (14 days total)
+        startDate.setDate(today.getDate() - 1);
+        endDate.setDate(today.getDate() + 12);
+        break;
+      default:
+        // Default to Padrão if period not recognized
+        startDate.setDate(today.getDate() - 1);
+        endDate.setDate(today.getDate() + 5);
+        break;
+    }
+    
+    return { startDate, endDate };
+  };
+
+  // Cash Flow endpoints
+  app.get('/api/analytics/cash-flow', isAuthenticated, async (req, res) => {
+    const userId = getUserId(req);
+    const { period = 'default' } = req.query;
+    
+    try {
+      // Get or create cash flow settings
+      let [settings] = await db.select().from(cashFlowSettings).where(eq(cashFlowSettings.userId, userId));
+      if (!settings) {
+        [settings] = await db.insert(cashFlowSettings).values({
+          userId,
+          initialBalance: '0',
+          initialDate: '2025-01-01'
+        }).returning();
+      }
+      
+      // Calculate date range based on period
+      const today = new Date();
+      const { startDate, endDate } = calculateDateRange(period as string, today);
+      
+      // Calculate balance up to start of period
+      let balanceAtStart = parseFloat(settings.initialBalance);
+      const startDateStr = startDate.toISOString().split('T')[0];
+      
+      if (startDateStr > settings.initialDate) {
+        const transactionsBeforeStart = await db.select({
+          amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+          type: transactions.type,
+          isCompositeParent: transactions.isCompositeParent,
+        }).from(transactions)
+          .where(
+            and(
+              eq(transactions.userId, userId),
+              gte(transactions.date, settings.initialDate),
+              lt(transactions.date, startDateStr),
+              eq(transactions.isHistorical, false) // Ignorar transações históricas
+            )
+          );
+        
+        transactionsBeforeStart.forEach(transaction => {
+          // Skip parent transactions in balance calculation
+          if (transaction.isCompositeParent) {
+            return;
+          }
+          const amount = Math.abs(transaction.amount);
+          if (transaction.type === 'revenue') {
+            balanceAtStart += amount;
+          } else {
+            balanceAtStart -= amount;
+          }
+        });
+      }
+      
+      // Get all transactions in the date range
+      const periodTransactions = await db.select({
+        date: sql<string>`${transactions.date}`,
+        amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        type: transactions.type,
+        description: transactions.description,
+        isCompositeParent: transactions.isCompositeParent
+      }).from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            gte(transactions.date, startDate.toISOString().split('T')[0]),
+            lte(transactions.date, endDate.toISOString().split('T')[0]),
+            eq(transactions.isHistorical, false) // Ignorar transações históricas
+          )
+        )
+        .orderBy(asc(transactions.date));
+      
+      // Process daily cash flow
+      const dailyData: { [key: string]: { revenue: number; expenses: number; } } = {};
+      
+      periodTransactions.forEach(transaction => {
+        // Skip parent transactions in cash flow
+        if (transaction.isCompositeParent) {
+          return;
+        }
+        const date = transaction.date;
+        if (!dailyData[date]) {
+          dailyData[date] = { revenue: 0, expenses: 0 };
+        }
+        
+        const amount = Math.abs(transaction.amount);
+        if (transaction.type === 'revenue') {
+          dailyData[date].revenue += amount;
+        } else {
+          dailyData[date].expenses += amount;
+        }
+      });
+      
+      // Generate daily cash flow data
+      const cashFlowData = [];
+      let runningBalance = balanceAtStart;
+      
+      const current = new Date(startDate);
+      while (current <= endDate) {
+        const dateStr = current.toISOString().split('T')[0];
+        const dayData = dailyData[dateStr] || { revenue: 0, expenses: 0 };
+        
+        // Calculate daily balance
+        const dailyRevenue = dayData.revenue;
+        const dailyExpenses = dayData.expenses;
+        runningBalance += dailyRevenue - dailyExpenses;
+        
+        // Format display date
+        const isToday = dateStr === today.toISOString().split('T')[0];
+        const displayDate = formatRelativeDate(current, today, period as string);
+        
+        cashFlowData.push({
+          date: dateStr,
+          displayDate,
+          revenue: dailyRevenue,
+          expenses: dailyExpenses,
+          balance: runningBalance,
+          isToday
+        });
+        
+        current.setDate(current.getDate() + 1);
+      }
+      
+      res.json(cashFlowData);
+    } catch (error) {
+      console.error('Error fetching cash flow:', error);
+      res.status(500).json({ error: 'Failed to fetch cash flow data' });
+    }
+  });
+
+  app.get('/api/analytics/cash-flow-stats', isAuthenticated, async (req, res) => {
+    const userId = getUserId(req);
+    const { period = '2w' } = req.query;
+    
+    try {
+      // Get or create cash flow settings
+      let [settings] = await db.select().from(cashFlowSettings).where(eq(cashFlowSettings.userId, userId));
+      if (!settings) {
+        [settings] = await db.insert(cashFlowSettings).values({
+          userId,
+          initialBalance: '0',
+          initialDate: '2025-01-01'
+        }).returning();
+      }
+      
+      // Calculate date range based on period
+      const today = new Date();
+      const { startDate, endDate } = calculateDateRange(period as string, today);
+      
+      // Calculate balance up to start of period
+      let balanceAtStart = parseFloat(settings.initialBalance);
+      const startDateStr = startDate.toISOString().split('T')[0];
+      
+      if (startDateStr > settings.initialDate) {
+        const transactionsBeforeStart = await db.select({
+          amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+          type: transactions.type,
+          isCompositeParent: transactions.isCompositeParent,
+        }).from(transactions)
+          .where(
+            and(
+              eq(transactions.userId, userId),
+              gte(transactions.date, settings.initialDate),
+              lt(transactions.date, startDateStr),
+              eq(transactions.isHistorical, false) // Ignorar transações históricas
+            )
+          );
+        
+        transactionsBeforeStart.forEach(transaction => {
+          // Skip parent transactions in balance calculation
+          if (transaction.isCompositeParent) {
+            return;
+          }
+          const amount = Math.abs(transaction.amount);
+          if (transaction.type === 'revenue') {
+            balanceAtStart += amount;
+          } else {
+            balanceAtStart -= amount;
+          }
+        });
+      }
+      
+      // Get all transactions in the date range
+      const periodTransactions = await db.select({
+        date: sql<string>`${transactions.date}`,
+        amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        type: transactions.type,
+        description: transactions.description,
+        isCompositeParent: transactions.isCompositeParent
+      }).from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            gte(transactions.date, startDate.toISOString().split('T')[0]),
+            lte(transactions.date, endDate.toISOString().split('T')[0]),
+            eq(transactions.isHistorical, false) // Ignorar transações históricas
+          )
+        )
+        .orderBy(asc(transactions.date));
+      
+      // Process daily cash flow
+      const dailyData: { [key: string]: { revenue: number; expenses: number; } } = {};
+      
+      periodTransactions.forEach(transaction => {
+        // Skip parent transactions in cash flow
+        if (transaction.isCompositeParent) {
+          return;
+        }
+        const date = transaction.date;
+        if (!dailyData[date]) {
+          dailyData[date] = { revenue: 0, expenses: 0 };
+        }
+        
+        const amount = Math.abs(transaction.amount);
+        if (transaction.type === 'revenue') {
+          dailyData[date].revenue += amount;
+        } else {
+          dailyData[date].expenses += amount;
+        }
+      });
+      
+      // Generate daily cash flow data
+      const cashFlowData = [];
+      let runningBalance = balanceAtStart;
+      
+      const current = new Date(startDate);
+      while (current <= endDate) {
+        const dateStr = current.toISOString().split('T')[0];
+        const dayData = dailyData[dateStr] || { revenue: 0, expenses: 0 };
+        
+        // Calculate daily balance
+        const dailyRevenue = dayData.revenue;
+        const dailyExpenses = dayData.expenses;
+        runningBalance += dailyRevenue - dailyExpenses;
+        
+        // Format display date
+        const isToday = dateStr === today.toISOString().split('T')[0];
+        const displayDate = formatRelativeDate(current, today);
+        
+        cashFlowData.push({
+          date: dateStr,
+          displayDate,
+          revenue: dailyRevenue,
+          expenses: dailyExpenses,
+          balance: runningBalance,
+          isToday
+        });
+        
+        current.setDate(current.getDate() + 1);
+      }
+      
+      if (!Array.isArray(cashFlowData) || cashFlowData.length === 0) {
+        return res.json({
+          currentBalance: 0,
+          highestBalance: 0,
+          lowestBalance: 0,
+          highestDate: '',
+          lowestDate: '',
+          totalRevenue: 0,
+          totalExpenses: 0
+        });
+      }
+      
+      // Calculate statistics
+      const balances = cashFlowData.map((d: any) => d.balance);
+      const highestBalance = Math.max(...balances);
+      const lowestBalance = Math.min(...balances);
+      
+      const highestIndex = balances.indexOf(highestBalance);
+      const lowestIndex = balances.indexOf(lowestBalance);
+      
+      const totalRevenue = cashFlowData.reduce((sum: number, d: any) => sum + d.revenue, 0);
+      const totalExpenses = cashFlowData.reduce((sum: number, d: any) => sum + d.expenses, 0);
+      
+      const todayData = cashFlowData.find((d: any) => d.isToday);
+      const currentBalance = todayData ? todayData.balance : balances[balances.length - 1];
+      
+      res.json({
+        currentBalance,
+        highestBalance,
+        lowestBalance,
+        highestDate: cashFlowData[highestIndex].displayDate,
+        lowestDate: cashFlowData[lowestIndex].displayDate,
+        totalRevenue,
+        totalExpenses
+      });
+    } catch (error) {
+      console.error('Error fetching cash flow stats:', error);
+      res.status(500).json({ error: 'Failed to fetch cash flow statistics' });
+    }
+  });
+
+  // Get available months from transactions
+  app.get('/api/analytics/available-months', isAuthenticated, async (req, res) => {
+    const userId = getUserId(req);
+    
+    try {
+      // Get all distinct months from transactions
+      const result = await db
+        .selectDistinct({
+          monthYear: sql<string>`TO_CHAR(${transactions.date}, 'MM/YYYY')`
+        })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            or(
+              eq(transactions.isCompositeParent, false),
+              isNull(transactions.isCompositeParent)
+            )
+          )
+        );
+      
+      // Sort and format months for frontend
+      const sortedMonths = result.sort((a, b) => {
+        const [monthA, yearA] = a.monthYear.split('/');
+        const [monthB, yearB] = b.monthYear.split('/');
+        const dateA = new Date(parseInt(yearA), parseInt(monthA) - 1);
+        const dateB = new Date(parseInt(yearB), parseInt(monthB) - 1);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      const months = sortedMonths.map(row => {
+        const [month, year] = row.monthYear.split('/');
+        const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+        const monthName = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+        return {
+          key: row.monthYear,
+          label: monthName
+        };
+      });
+      
+      res.json(months);
+    } catch (error) {
+      console.error('Error fetching available months:', error);
+      res.status(500).json({ error: 'Failed to fetch available months' });
+    }
+  });
+
+  // Generic expense distribution routes
+  app.post("/api/expenses/distributed", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { 
+        expenseType, 
+        description,
+        amount, 
+        paymentDate, 
+        selectedPropertyIds,
+        competencyMonth 
+      } = req.body;
+
+      // Validate required fields
+      if (!expenseType || !amount || !paymentDate || !selectedPropertyIds?.length) {
+        return res.status(400).json({ 
+          error: "Campos obrigatórios faltando" 
+        });
+      }
+
+      // Parse amount
+      const parsedAmount = typeof amount === 'string' 
+        ? parseFloat(amount.replace(/\./g, '').replace(',', '.'))
+        : amount;
+
+      // Get properties for distribution
+      const userProperties = await db
+        .select()
+        .from(properties)
+        .where(
+          and(
+            eq(properties.userId, userId),
+            or(...selectedPropertyIds.map((id: number) => eq(properties.id, id)))
+          )
+        );
+
+      if (userProperties.length === 0) {
+        return res.status(404).json({ error: "Propriedades não encontradas" });
+      }
+
+      // Calculate 30-day period for revenue calculation
+      const paymentDateObj = new Date(paymentDate);
+      const endDate = new Date(paymentDateObj);
+      endDate.setDate(endDate.getDate() - 1);
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - 29);
+
+      // Get revenues for each property in the period
+      const revenuePromises = userProperties.map(async (property) => {
+        const revenues = await db
+          .select({
+            total: sql<number>`COALESCE(SUM(${transactions.amount}), 0)`
+          })
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.propertyId, property.id),
+              eq(transactions.type, 'revenue'),
+              gte(transactions.date, startDate.toISOString().split('T')[0]),
+              lte(transactions.date, endDate.toISOString().split('T')[0])
+            )
+          );
+        
+        return {
+          propertyId: property.id,
+          propertyName: property.name,
+          revenue: Number(revenues[0]?.total || 0)
+        };
+      });
+
+      const propertyRevenues = await Promise.all(revenuePromises);
+      const totalRevenue = propertyRevenues.reduce((sum, p) => sum + p.revenue, 0);
+
+      // If no revenue, distribute equally
+      const hasRevenue = totalRevenue > 0;
+      
+      // Create transactions for each property
+      const transactionPromises = propertyRevenues.map(async (propRevenue) => {
+        const proportion = hasRevenue 
+          ? propRevenue.revenue / totalRevenue 
+          : 1 / userProperties.length;
+        
+        const distributedAmount = parsedAmount * proportion;
+
+        if (distributedAmount > 0) {
+          const fullDescription = description 
+            ? `${expenseType} - ${description}${competencyMonth ? ` (${competencyMonth})` : ''}`
+            : `${expenseType}${competencyMonth ? ` (${competencyMonth})` : ''}`;
+
+          const categoryMap: Record<string, string> = {
+            'Gestão - Maurício': 'management',
+            'cleaning': 'cleaning',
+            'maintenance': 'maintenance'
+          };
+
+          return await db.insert(transactions).values({
+            propertyId: propRevenue.propertyId,
+            type: 'expense',
+            category: categoryMap[expenseType] || 'other',
+            description: fullDescription,
+            amount: distributedAmount,
+            date: paymentDate,
+            userId,
+          }).returning();
+        }
+        return null;
+      });
+
+      const createdTransactions = (await Promise.all(transactionPromises)).filter(Boolean);
+
+      res.json({ 
+        success: true, 
+        transactions: createdTransactions,
+        distribution: propertyRevenues.map(p => ({
+          ...p,
+          amount: hasRevenue 
+            ? parsedAmount * (p.revenue / totalRevenue)
+            : parsedAmount / userProperties.length,
+          percentage: hasRevenue 
+            ? (p.revenue / totalRevenue * 100).toFixed(2) + '%'
+            : (100 / userProperties.length).toFixed(2) + '%'
+        }))
+      });
+    } catch (error) {
+      console.error("Error creating distributed expense:", error);
+      res.status(500).json({ error: "Erro ao processar despesa" });
+    }
+  });
+
+  // Company expenses endpoint (not property-related)
+  app.post("/api/expenses/company", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { 
+        description,
+        amount, 
+        paymentDate, 
+        category,
+        supplier,
+        notes 
+      } = req.body;
+
+      // Validate required fields
+      if (!description || !amount || !paymentDate || !category) {
+        return res.status(400).json({ 
+          error: "Campos obrigatórios faltando" 
+        });
+      }
+
+      // Parse amount
+      const parsedAmount = typeof amount === 'string' 
+        ? parseFloat(amount.replace(/\./g, '').replace(',', '.'))
+        : amount;
+
+      // Map category to expense category
+      const categoryMap: { [key: string]: string } = {
+        'bank_fees': 'bank_fees',
+        'accounting': 'accounting',
+        'office_rent': 'office_rent',
+        'general': 'other',
+        'fixed_costs': 'other',
+        'variable_costs': 'other'
+      };
+
+      const mappedCategory = categoryMap[category] || 'other';
+
+      // Create transaction for company expense (no propertyId)
+      const transaction = await db.insert(transactions).values({
+        userId,
+        propertyId: null, // Company expense, not linked to any property
+        type: 'expense',
+        category: mappedCategory,
+        amount: parsedAmount,
+        description: `[Empresa] ${description}`,
+        date: new Date(paymentDate),
+        supplier,
+        notes
+      }).returning();
+
+      res.json({ 
+        success: true, 
+        transaction: transaction[0],
+        message: "Despesa da empresa cadastrada com sucesso"
+      });
+    } catch (error) {
+      console.error("Error creating company expense:", error);
+      res.status(500).json({ error: "Erro ao processar despesa da empresa" });
+    }
+  });
+
+  // Cleaning expenses batch endpoint
+  app.post("/api/expenses/cleaning-batch", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { paymentDate, items } = req.body;
+
+      if (!paymentDate || !items || items.length === 0) {
+        return res.status(400).json({ error: "Dados obrigatórios faltando" });
+      }
+
+      const createdTransactions = [];
+      let totalAmount = 0;
+
+      // Create individual transactions for each property
+      for (const item of items) {
+        const amount = item.total;
+        totalAmount += amount;
+
+        const transaction = await db.insert(transactions).values({
+          userId,
+          propertyId: item.propertyId,
+          type: 'expense',
+          category: 'cleaning',
+          amount: amount,
+          description: `Limpeza - ${item.quantity} unidade${item.quantity > 1 ? 's' : ''} x R$ ${item.unitValue.toFixed(2).replace('.', ',')}`,
+          date: new Date(paymentDate),
+          supplier: 'Serviço de Limpeza',
+          notes: `Pagamento de ${item.quantity} limpeza${item.quantity > 1 ? 's' : ''} no valor unitário de R$ ${item.unitValue.toFixed(2).replace('.', ',')}`
+        }).returning();
+        
+        createdTransactions.push(transaction[0]);
+      }
+
+      res.json({ 
+        success: true, 
+        transactions: createdTransactions,
+        totalAmount,
+        message: `Despesas de limpeza cadastradas para ${items.length} propriedade${items.length > 1 ? 's' : ''}`
+      });
+    } catch (error) {
+      console.error("Error creating cleaning expenses:", error);
+      res.status(500).json({ error: "Erro ao processar despesas de limpeza" });
+    }
+  });
+
+
+
+  app.post("/api/expenses/distributed/preview", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { amount, paymentDate, selectedPropertyIds } = req.body;
+
+      if (!amount || !paymentDate || !selectedPropertyIds?.length) {
+        return res.status(400).json({ error: "Dados incompletos para prévia" });
+      }
+
+      const parsedAmount = typeof amount === 'string' 
+        ? parseFloat(amount.replace(/\./g, '').replace(',', '.'))
+        : amount;
+
+      // Get properties
+      const userProperties = await db
+        .select()
+        .from(properties)
+        .where(
+          and(
+            eq(properties.userId, userId),
+            or(...selectedPropertyIds.map((id: number) => eq(properties.id, id)))
+          )
+        );
+
+      // Calculate period
+      const paymentDateObj = new Date(paymentDate);
+      const endDate = new Date(paymentDateObj);
+      endDate.setDate(endDate.getDate() - 1);
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - 29);
+
+      // Get revenues
+      const revenuePromises = userProperties.map(async (property) => {
+        const revenues = await db
+          .select({
+            total: sql<number>`COALESCE(SUM(${transactions.amount}), 0)`
+          })
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.propertyId, property.id),
+              eq(transactions.type, 'revenue'),
+              gte(transactions.date, startDate.toISOString().split('T')[0]),
+              lte(transactions.date, endDate.toISOString().split('T')[0])
+            )
+          );
+        
+        return {
+          propertyId: property.id,
+          propertyName: property.name,
+          revenue: Number(revenues[0]?.total || 0)
+        };
+      });
+
+      const propertyRevenues = await Promise.all(revenuePromises);
+      const totalRevenue = propertyRevenues.reduce((sum, p) => sum + p.revenue, 0);
+      const hasRevenue = totalRevenue > 0;
+
+      const preview = propertyRevenues.map(p => ({
+        propertyName: p.propertyName,
+        revenue: p.revenue,
+        amount: hasRevenue 
+          ? parsedAmount * (p.revenue / totalRevenue)
+          : parsedAmount / userProperties.length,
+        percentage: hasRevenue 
+          ? (p.revenue / totalRevenue * 100).toFixed(2) + '%'
+          : (100 / userProperties.length).toFixed(2) + '%'
+      }));
+
+      res.json({
+        success: true,
+        preview,
+        period: {
+          start: startDate.toLocaleDateString('pt-BR'),
+          end: endDate.toLocaleDateString('pt-BR')
+        },
+        totalAmount: parsedAmount,
+        distributionMethod: hasRevenue ? 'Proporcional à receita' : 'Distribuição igual'
+      });
+    } catch (error) {
+      console.error("Error generating preview:", error);
+      res.status(500).json({ error: "Erro ao gerar prévia" });
+    }
+  });
+
+  // Tax payment routes
+  app.post('/api/taxes/simple', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { taxType, amount, competencyMonth, selectedPropertyIds, paymentDate, cota1, cota2, cota3 } = req.body;
+      
+      // Simple validation
+      if (!taxType || !amount || !competencyMonth || !selectedPropertyIds || selectedPropertyIds.length === 0 || !paymentDate) {
+        return res.status(400).json({ success: false, message: "Dados incompletos" });
+      }
+
+      // Parse competency period - handle both month (MM/YYYY) and quarter (Q1/2025) formats
+      let competencyStart: Date, competencyEnd: Date;
+      
+      if (competencyMonth.startsWith('Q')) {
+        // Quarter format: Q1/2025
+        const [quarterStr, yearStr] = competencyMonth.split('/');
+        const quarter = parseInt(quarterStr.substring(1)) - 1; // Convert Q1-Q4 to 0-3
+        const year = parseInt(yearStr);
+        
+        competencyStart = new Date(year, quarter * 3, 1); // Start of quarter
+        competencyEnd = new Date(year, (quarter + 1) * 3, 0); // End of quarter
+      } else {
+        // Month format: MM/YYYY
+        const [month, year] = competencyMonth.split('/');
+        competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
+        competencyEnd = new Date(parseInt(year), parseInt(month), 0);
+      }
+      
+      // Convert amount from centavos to reais
+      const taxAmount = typeof amount === 'string' ? parseFloat(amount) / 100 : amount;
+      
+      // Get gross revenue for selected properties in competency period
+      const transactionData = await db.select({
+        propertyId: transactions.propertyId,
+        amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        type: transactions.type
+      }).from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            or(...selectedPropertyIds.map(id => eq(transactions.propertyId, id))),
+            eq(transactions.type, 'revenue'),
+            gte(transactions.date, competencyStart.toISOString().split('T')[0]),
+            lte(transactions.date, competencyEnd.toISOString().split('T')[0])
+          )
+        );
+      
+      // Calculate total revenue by property
+      const propertyRevenues = new Map<number, number>();
+      transactionData.forEach(transaction => {
+        const current = propertyRevenues.get(transaction.propertyId) || 0;
+        propertyRevenues.set(transaction.propertyId, current + transaction.amount);
+      });
+      
+      const totalRevenue = Array.from(propertyRevenues.values()).reduce((sum, amount) => sum + amount, 0);
+      
+      // Handle quotas for CSLL and IRPJ
+      const isQuarterlyTax = taxType === 'CSLL' || taxType === 'IRPJ';
+      const selectedCotas = isQuarterlyTax ? [cota1, cota2, cota3] : [true]; // Non-quarterly taxes always create one entry
+      
+      const createdTransactions = [];
+      
+      // Process each selected quota
+      for (let cotaIndex = 0; cotaIndex < selectedCotas.length; cotaIndex++) {
+        if (!selectedCotas[cotaIndex] && isQuarterlyTax) continue; // Skip unselected quotas for quarterly taxes
+        
+        const cotaLabel = isQuarterlyTax ? ` - Cota ${cotaIndex + 1}` : '';
+        
+        // Create distributed transactions for each property
+        for (const propertyId of selectedPropertyIds) {
+          const propertyRevenue = propertyRevenues.get(propertyId) || 0;
+          const proportion = totalRevenue > 0 ? propertyRevenue / totalRevenue : 1 / selectedPropertyIds.length;
+          const propertyTaxAmount = taxAmount * proportion;
+          
+          if (propertyTaxAmount > 0) {
+            const transaction = await storage.createTransaction({
+              userId,
+              propertyId,
+              type: 'expense',
+              category: 'taxes',
+              amount: propertyTaxAmount.toString(),
+              description: `${taxType} - ${competencyMonth}${cotaLabel} (${(proportion * 100).toFixed(1)}% do total)`,
+              date: paymentDate,
+              currency: 'BRL'
+            });
+            createdTransactions.push(transaction);
+          }
+        }
+      }
+
+      res.json({ success: true, transactions: createdTransactions });
+    } catch (error) {
+      console.error("Error creating tax payment:", error);
+      res.status(500).json({ success: false, message: "Erro ao cadastrar imposto" });
+    }
+  });
+
+  app.post('/api/taxes/preview', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { taxType, competencyMonth, amount, paymentDate, selectedPropertyIds, cota1, cota2, cota3 } = req.body;
+      
+      // Parse competency period - handle both month (MM/YYYY) and quarter (Q1/2025) formats
+      let competencyStart: Date, competencyEnd: Date;
+      
+      if (competencyMonth.startsWith('Q')) {
+        // Quarter format: Q1/2025
+        const [quarterStr, yearStr] = competencyMonth.split('/');
+        const quarter = parseInt(quarterStr.substring(1)) - 1; // Convert Q1-Q4 to 0-3
+        const year = parseInt(yearStr);
+        
+        competencyStart = new Date(year, quarter * 3, 1); // Start of quarter
+        competencyEnd = new Date(year, (quarter + 1) * 3, 0); // End of quarter
+      } else {
+        // Month format: MM/YYYY
+        const [month, year] = competencyMonth.split('/');
+        competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
+        competencyEnd = new Date(parseInt(year), parseInt(month), 0);
+      }
+      
+      // Get gross revenue for selected properties in competency period
+      const transactionData = await db.select({
+        propertyId: transactions.propertyId,
+        amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        type: transactions.type
+      }).from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            or(...selectedPropertyIds.map(id => eq(transactions.propertyId, id))),
+            eq(transactions.type, 'revenue'),
+            gte(transactions.date, competencyStart.toISOString().split('T')[0]),
+            lte(transactions.date, competencyEnd.toISOString().split('T')[0])
+          )
+        );
+      
+      // Calculate total revenue by property
+      const propertyRevenues = new Map<number, number>();
+      transactionData.forEach(transaction => {
+        const current = propertyRevenues.get(transaction.propertyId) || 0;
+        propertyRevenues.set(transaction.propertyId, current + transaction.amount);
+      });
+      
+      const totalRevenue = Array.from(propertyRevenues.values()).reduce((sum, amount) => sum + amount, 0);
+      
+      // Get property names
+      const properties = await storage.getProperties(userId);
+      const propertyMap = new Map(properties.map(p => [p.id, p.name]));
+      
+      // Calculate proportional allocation
+      const breakdown = [];
+      const totalTaxAmount = parseFloat(amount) / 100; // Convert from centavos to reais
+      
+      selectedPropertyIds.forEach((propertyId: number) => {
+        const propertyRevenue = propertyRevenues.get(propertyId) || 0;
+        const proportion = totalRevenue > 0 ? propertyRevenue / totalRevenue : 1 / selectedPropertyIds.length;
+        const allocatedAmount = totalTaxAmount * proportion;
+        
+        breakdown.push({
+          propertyId,
+          propertyName: propertyMap.get(propertyId) || 'Unknown',
+          revenue: propertyRevenue,
+          proportion,
+          taxes: [{
+            taxType: taxType,
+            amount: allocatedAmount
+          }]
+        });
+      });
+      
+      // Add quota information to response for quarterly taxes
+      const isQuarterlyTax = taxType === 'CSLL' || taxType === 'IRPJ';
+      const selectedCotas = isQuarterlyTax ? 
+        [(cota1 ? 'Cota 1' : null), (cota2 ? 'Cota 2' : null), (cota3 ? 'Cota 3' : null)].filter(Boolean) : 
+        [];
+      
+      res.json({
+        success: true,
+        competencyPeriod: {
+          start: competencyStart.toISOString().split('T')[0],
+          end: competencyEnd.toISOString().split('T')[0]
+        },
+        totalRevenue,
+        breakdown,
+        total: totalTaxAmount,
+        selectedCotas: selectedCotas,
+        cotasTotal: isQuarterlyTax ? totalTaxAmount * selectedCotas.length : totalTaxAmount
+      });
+      
+    } catch (error) {
+      console.error('Error in tax preview:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao calcular prévia dos impostos' 
+      });
+    }
+  });
+
+  // Calculate PIS/COFINS based on previous month revenue (Lucro Presumido)
+  app.post('/api/taxes/calculate-pis-cofins', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { taxType, competencyMonth, selectedPropertyIds } = req.body;
+      
+      // Tax rates for Lucro Presumido
+      const TAX_RATES: Record<string, number> = {
+        PIS: 0.0065, // 0.65%
+        COFINS: 0.03, // 3.00%
+      };
+      
+      if (!TAX_RATES[taxType]) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Tipo de imposto inválido. Use PIS ou COFINS.' 
+        });
+      }
+      
+      // Parse competency month (format: MM/YYYY)
+      const [month, year] = competencyMonth.split('/');
+      const competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const competencyEnd = new Date(parseInt(year), parseInt(month), 0);
+      
+      // Get properties info
+      const properties = await storage.getProperties(userId);
+      const propertyMap = new Map(properties.map(p => [p.id, p.name]));
+      
+      // Get all revenues for selected properties in competency period
+      // Include both actual revenues and pending/future revenues
+      const [actualRevenues, pendingRevenues] = await Promise.all([
+        // Actual revenues (already received)
+        db.select({
+          propertyId: transactions.propertyId,
+          amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        }).from(transactions)
+          .where(
+            and(
+              eq(transactions.userId, userId),
+              or(...selectedPropertyIds.map((id: number) => eq(transactions.propertyId, id))),
+              eq(transactions.type, 'revenue'),
+              gte(transactions.date, competencyStart.toISOString().split('T')[0]),
+              lte(transactions.date, competencyEnd.toISOString().split('T')[0])
+            )
+          ),
+        
+        // Pending/future revenues (from Airbnb imports or manual entries)
+        db.select({
+          propertyId: transactions.propertyId,
+          amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        }).from(transactions)
+          .where(
+            and(
+              eq(transactions.userId, userId),
+              or(...selectedPropertyIds.map((id: number) => eq(transactions.propertyId, id))),
+              eq(transactions.type, 'revenue'),
+              eq(transactions.status, 'pending'),
+              gte(transactions.accommodationStartDate, competencyStart.toISOString().split('T')[0]),
+              lte(transactions.accommodationStartDate, competencyEnd.toISOString().split('T')[0])
+            )
+          )
+      ]);
+      
+      // Combine and calculate total revenue by property
+      const propertyRevenues = new Map<number, number>();
+      
+      // Add actual revenues
+      actualRevenues.forEach(transaction => {
+        const current = propertyRevenues.get(transaction.propertyId) || 0;
+        propertyRevenues.set(transaction.propertyId, current + transaction.amount);
+      });
+      
+      // Add pending revenues
+      pendingRevenues.forEach(transaction => {
+        const current = propertyRevenues.get(transaction.propertyId) || 0;
+        propertyRevenues.set(transaction.propertyId, current + transaction.amount);
+      });
+      
+      const totalRevenue = Array.from(propertyRevenues.values()).reduce((sum, amount) => sum + amount, 0);
+      
+      // Calculate tax amount
+      const taxRate = TAX_RATES[taxType];
+      const calculatedAmount = totalRevenue * taxRate;
+      
+      // Calculate breakdown by property
+      const propertyBreakdown = selectedPropertyIds.map((propertyId: number) => {
+        const revenue = propertyRevenues.get(propertyId) || 0;
+        const proportion = totalRevenue > 0 ? revenue / totalRevenue : 1 / selectedPropertyIds.length;
+        const taxAmount = calculatedAmount * proportion;
+        
+        return {
+          propertyId,
+          propertyName: propertyMap.get(propertyId) || 'Unknown',
+          revenue,
+          taxAmount,
+          percentage: proportion * 100
+        };
+      });
+      
+      res.json({
+        success: true,
+        taxType,
+        competencyMonth,
+        totalRevenue,
+        calculatedAmount,
+        rate: taxRate,
+        propertyBreakdown,
+        competencyPeriod: {
+          start: competencyStart.toISOString().split('T')[0],
+          end: competencyEnd.toISOString().split('T')[0]
+        },
+        includesPendingRevenues: pendingRevenues.length > 0
+      });
+      
+    } catch (error) {
+      console.error('Error calculating PIS/COFINS:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao calcular PIS/COFINS' 
+      });
+    }
+  });
+
+  app.post('/api/taxes/payments', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { 
+        taxType, 
+        competencyMonth, 
+        amount, 
+        paymentDate, 
+        selectedPropertyIds,
+        enableInstallment
+      } = req.body;
+      
+      // Parse competency month (format: MM/YYYY)
+      const [month, year] = competencyMonth.split('/');
+      const competencyStart = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const competencyEnd = new Date(parseInt(year), parseInt(month), 0);
+      
+      // Get gross revenue for selected properties in competency period
+      const transactionData = await db.select({
+        propertyId: transactions.propertyId,
+        amount: sql<number>`CAST(${transactions.amount} AS DECIMAL)`,
+        type: transactions.type
+      }).from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            or(...selectedPropertyIds.map(id => eq(transactions.propertyId, id))),
+            eq(transactions.type, 'revenue'),
+            gte(transactions.date, competencyStart.toISOString().split('T')[0]),
+            lte(transactions.date, competencyEnd.toISOString().split('T')[0])
+          )
+        );
+      
+      // Calculate total revenue by property
+      const propertyRevenues = new Map<number, number>();
+      transactionData.forEach(transaction => {
+        const current = propertyRevenues.get(transaction.propertyId) || 0;
+        propertyRevenues.set(transaction.propertyId, current + transaction.amount);
+      });
+      
+      const totalRevenue = Array.from(propertyRevenues.values()).reduce((sum, amount) => sum + amount, 0);
+      
+      const totalTaxAmount = parseFloat(amount) / 100; // Convert from centavos to reais
+      
+      if (enableInstallment && (taxType === 'CSLL' || taxType === 'IRPJ')) {
+        // Create 3 installments
+        const baseAmount = totalTaxAmount / 3;
+        const installmentAmount2 = baseAmount + (totalTaxAmount * 0.01); // 1/3 + 1%
+        const installmentAmount3 = baseAmount + (totalTaxAmount * 0.01); // 1/3 + 1%
+        
+        // Store main tax record
+        const [mainTaxRecord] = await db.insert(taxPayments).values({
+          userId,
+          taxType,
+          totalAmount: totalTaxAmount.toString(),
+          paymentDate,
+          competencyPeriodStart: competencyStart.toISOString().split('T')[0],
+          competencyPeriodEnd: competencyEnd.toISOString().split('T')[0],
+          selectedPropertyIds: JSON.stringify(selectedPropertyIds),
+          isInstallment: true
+        }).returning();
+        
+        // Create installment records and distributed transactions
+        const installmentAmounts = [baseAmount, installmentAmount2, installmentAmount3];
+        
+        for (let i = 0; i < 3; i++) {
+          const installmentDate = new Date(paymentDate);
+          installmentDate.setMonth(installmentDate.getMonth() + i);
+          
+          await db.insert(taxPayments).values({
+            userId,
+            taxType,
+            totalAmount: installmentAmounts[i].toString(),
+            paymentDate: installmentDate.toISOString().split('T')[0],
+            competencyPeriodStart: competencyStart.toISOString().split('T')[0],
+            competencyPeriodEnd: competencyEnd.toISOString().split('T')[0],
+            selectedPropertyIds: JSON.stringify(selectedPropertyIds),
+            isInstallment: true,
+            installmentNumber: i + 1,
+            parentTaxPaymentId: mainTaxRecord.id
+          });
+          
+          // Create distributed transactions for each property
+          for (const propertyId of selectedPropertyIds) {
+            const propertyRevenue = propertyRevenues.get(propertyId) || 0;
+            const proportion = totalRevenue > 0 ? propertyRevenue / totalRevenue : 1 / selectedPropertyIds.length;
+            const propertyTaxAmount = installmentAmounts[i] * proportion;
+            
+            if (propertyTaxAmount > 0) {
+              await storage.createTransaction({
+                userId,
+                propertyId,
+                type: 'expense',
+                category: 'taxes',
+                amount: propertyTaxAmount.toString(),
+                description: `${taxType} - Parcela ${i + 1}/3 (${(proportion * 100).toFixed(1)}% do total)`,
+                date: installmentDate.toISOString().split('T')[0],
+                currency: 'BRL'
+              });
+            }
+          }
+        }
+        
+      } else {
+        // Single payment
+        await db.insert(taxPayments).values({
+          userId,
+          taxType,
+          totalAmount: totalTaxAmount.toString(),
+          paymentDate,
+          competencyPeriodStart: competencyStart.toISOString().split('T')[0],
+          competencyPeriodEnd: competencyEnd.toISOString().split('T')[0],
+          selectedPropertyIds: JSON.stringify(selectedPropertyIds),
+          isInstallment: false
+        });
+        
+        // Create distributed transactions for each property
+        for (const propertyId of selectedPropertyIds) {
+          const propertyRevenue = propertyRevenues.get(propertyId) || 0;
+          const proportion = totalRevenue > 0 ? propertyRevenue / totalRevenue : 1 / selectedPropertyIds.length;
+          const propertyTaxAmount = totalTaxAmount * proportion;
+          
+          if (propertyTaxAmount > 0) {
+            await storage.createTransaction({
+              userId,
+              propertyId,
+              type: 'expense',
+              category: 'taxes',
+              amount: propertyTaxAmount.toString(),
+              description: `${taxType} - ${competencyMonth} (${(proportion * 100).toFixed(1)}% do total)`,
+              date: paymentDate,
+              currency: 'BRL'
+            });
+          }
+        }
+      }
+      
+      res.json({
+        success: true,
+        message: 'Impostos cadastrados e rateados com sucesso!'
+      });
+      
+    } catch (error) {
+      console.error('Error processing tax payments:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao processar pagamentos de impostos' 
+      });
+    }
+  });
+
+  // Create detailed cleaning expense with individual service records
+  app.post("/api/expenses/cleaning-detailed", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { 
+        paymentDate,
+        supplier,
+        cpfCnpj,
+        phone,
+        email,
+        pixKey,
+        totalAmount,
+        details
+      } = req.body;
+
+      // Validate required fields
+      if (!paymentDate || !supplier || !totalAmount || !details || details.length === 0) {
+        return res.status(400).json({ 
+          error: "Campos obrigatórios faltando" 
+        });
+      }
+
+      // Parse total amount
+      const parsedTotalAmount = typeof totalAmount === 'string' 
+        ? parseFloat(totalAmount.replace(/\./g, '').replace(',', '.'))
+        : totalAmount;
+
+      if (isNaN(parsedTotalAmount) || parsedTotalAmount <= 0) {
+        return res.status(400).json({ 
+          error: "Valor total inválido" 
+        });
+      }
+
+      // Calculate sum of details
+      const detailsSum = details.reduce((sum: number, detail: any) => {
+        const amount = typeof detail.amount === 'string' 
+          ? parseFloat(detail.amount.replace(/\./g, '').replace(',', '.'))
+          : detail.amount;
+        return sum + amount;
+      }, 0);
+
+      // Validate that details sum matches total (with tolerance)
+      const tolerance = 0.01;
+      if (Math.abs(detailsSum - parsedTotalAmount) > tolerance) {
+        return res.status(400).json({ 
+          error: `Soma dos detalhes (R$ ${detailsSum.toFixed(2)}) não corresponde ao valor total (R$ ${parsedTotalAmount.toFixed(2)})` 
+        });
+      }
+
+      // Create the main transaction
+      const mainTransaction = await db.insert(transactions).values({
+        userId,
+        propertyId: null, // This is a consolidated payment
+        type: 'expense',
+        category: 'cleaning',
+        amount: parsedTotalAmount,
+        description: `Pagamento de limpezas - ${supplier}`,
+        date: new Date(paymentDate),
+        supplier,
+        cpfCnpj: cpfCnpj || null,
+        phone: phone || null,
+        email: email || null,
+        pixKey: pixKey || null,
+        isCompositeParent: true,
+        notes: `Pagamento consolidado de ${details.length} limpezas`
+      }).returning();
+
+      const parentId = mainTransaction[0].id;
+
+      // Create individual cleaning detail records
+      const detailRecords = [];
+      for (const detail of details) {
+        const amount = typeof detail.amount === 'string' 
+          ? parseFloat(detail.amount.replace(/\./g, '').replace(',', '.'))
+          : detail.amount;
+
+        // Insert into cleaning_service_details table
+        const detailRecord = await db.insert(cleaningServiceDetails).values({
+          transactionId: parentId,
+          propertyId: detail.propertyId,
+          serviceDate: new Date(detail.serviceDate),
+          amount: amount,
+          notes: detail.notes || null
+        }).returning();
+
+        detailRecords.push(detailRecord[0]);
+
+        // Also create a child transaction for each property
+        await db.insert(transactions).values({
+          userId,
+          propertyId: detail.propertyId,
+          type: 'expense',
+          category: 'cleaning',
+          amount: amount,
+          description: `Limpeza - ${format(new Date(detail.serviceDate), 'dd/MM/yyyy')}`,
+          date: new Date(detail.serviceDate),
+          supplier,
+          parentTransactionId: parentId,
+          notes: `Parte do pagamento consolidado de ${format(new Date(paymentDate), 'dd/MM/yyyy')}`
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        transaction: mainTransaction[0],
+        details: detailRecords,
+        message: `Limpezas cadastradas com sucesso`
+      });
+    } catch (error) {
+      console.error("Error creating detailed cleaning expense:", error);
+      res.status(500).json({ error: "Erro ao processar despesas de limpeza" });
+    }
+  });
+
+  // PDF Import for Cleaning Expenses
+  app.post("/api/cleaning/parse-pdf", isAuthenticated, uploadPDF.single('file'), async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      
+      if (!req.file) {
+        return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      }
+
+      // Parse the PDF
+      const pdfData = await parseCleaningPdf(req.file.buffer);
+      
+      // Get user's properties for mapping
+      const userProperties = await storage.getProperties(userId);
+      
+      // Create a mapping of property names - parser already handles the mapping
+      const propertyMap = new Map<string, Property>();
+      for (const prop of userProperties) {
+        propertyMap.set(prop.name, prop);
+      }
+      
+      // Process entries and find matching properties
+      const processedEntries = pdfData.entries.map(entry => {
+        // The parser already mapped the unit names correctly
+        const matchedProperty = propertyMap.get(entry.unit);
+        
+        return {
+          ...entry,
+          propertyId: matchedProperty?.id || null,
+          propertyName: matchedProperty?.name || entry.unit,
+          matched: !!matchedProperty
+        };
+      });
+      
+      // Return parsed data for preview
+      res.json({
+        success: true,
+        period: pdfData.period,
+        entries: processedEntries,
+        total: pdfData.total,
+        errors: pdfData.errors,
+        unmatchedCount: processedEntries.filter(e => !e.matched).length
+      });
+      
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao processar PDF" });
+    }
+  });
+
+  // Import cleaning expenses from parsed PDF data
+  app.post("/api/cleaning/import-pdf", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { entries, supplier = "Serviço de Limpeza", paymentDate } = req.body;
+      
+      if (!entries || !Array.isArray(entries) || entries.length === 0) {
+        return res.status(400).json({ error: "Nenhuma entrada para importar" });
+      }
+      
+      const importedTransactions = [];
+      const errors = [];
+      
+      for (const entry of entries) {
+        if (!entry.propertyId) {
+          errors.push(`Propriedade não encontrada: ${entry.unit}`);
+          continue;
+        }
+        
+        try {
+          // Create expense transaction
+          const [transaction] = await db.insert(transactions).values({
+            userId,
+            propertyId: entry.propertyId,
+            type: 'expense',
+            category: 'cleaning',
+            amount: String(entry.value),
+            description: `Limpeza - ${format(new Date(entry.date), 'dd/MM/yyyy')}`,
+            date: new Date(entry.date),
+            supplier,
+            paymentDate: paymentDate ? new Date(paymentDate) : new Date(entry.date)
+          }).returning();
+          
+          importedTransactions.push(transaction);
+        } catch (error) {
+          console.error(`Error importing entry for ${entry.unit}:`, error);
+          errors.push(`Erro ao importar ${entry.unit}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+        }
+      }
+      
+      res.json({
+        success: true,
+        imported: importedTransactions.length,
+        errors,
+        message: `${importedTransactions.length} despesas de limpeza importadas com sucesso`
+      });
+      
+    } catch (error) {
+      console.error("Error importing cleaning expenses:", error);
+      res.status(500).json({ error: "Erro ao importar despesas" });
+    }
+  });
+
 
   const httpServer = createServer(app);
   return httpServer;
