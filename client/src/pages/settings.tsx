@@ -3,12 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, Plus, Save, Trash2, Landmark, DollarSign, TrendingUp } from 'lucide-react';
+import { Calendar, Plus, Save, Trash2, Landmark, DollarSign, TrendingUp, Calculator, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useLocation } from 'wouter';
 
 interface Account {
   id: string;
@@ -20,6 +21,7 @@ interface Account {
 export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const [marcoZeroDate, setMarcoZeroDate] = useState(new Date().toISOString().split('T')[0]);
   
   // Estado inicial com contas padrão
@@ -147,6 +149,22 @@ export default function Settings() {
         <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
         <p className="text-muted-foreground">Gerencie as configurações do sistema</p>
       </div>
+
+      {/* Link para Configuração de Impostos */}
+      <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate('/settings/taxes')}>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Calculator className="h-5 w-5" />
+              Configuração de Impostos
+            </span>
+            <ArrowRight className="h-5 w-5 text-muted-foreground" />
+          </CardTitle>
+          <CardDescription>
+            Configure alíquotas, datas de vencimento e parâmetros dos impostos. Prepare-se para a reforma tributária 2026.
+          </CardDescription>
+        </CardHeader>
+      </Card>
 
       {/* Marco Zero Card */}
       <Card>

@@ -37,6 +37,7 @@ const CleaningDetailPage = lazy(() => import("@/pages/expenses/cleaning-detail")
 const FinancingDetailPage = lazy(() => import("@/pages/expenses/financing-detail"));
 const OtherDetailPage = lazy(() => import("@/pages/expenses/other-detail"));
 const Settings = lazy(() => import("@/pages/settings"));
+const TaxSettings = lazy(() => import("@/pages/tax-settings"));
 
 // Componente de fallback para lazy loading
 function PageLoader() {
@@ -93,6 +94,7 @@ function Router() {
             <Route path="/expenses/financing-detail" component={FinancingDetailPage} />
             <Route path="/expenses/other-detail" component={OtherDetailPage} />
             <Route path="/settings" component={Settings} />
+            <Route path="/settings/taxes" component={TaxSettings} />
           </Suspense>
         </Layout>
       )}
