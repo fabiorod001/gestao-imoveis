@@ -6,9 +6,10 @@ import { transactions, properties, taxPayments } from "@shared/schema";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { format } from "date-fns";
 import { z } from "zod";
+import { Money, ServerMoneyUtils, MoneyUtils } from "../utils/money";
 
 /**
- * Service for tax calculation and payment operations
+ * Service for tax calculation and payment operations with precise Money handling
  */
 export class TaxService extends BaseService {
   private transactionService: TransactionService;
@@ -19,7 +20,7 @@ export class TaxService extends BaseService {
   }
 
   /**
-   * Record simple tax payment
+   * Record simple tax payment with Money precision
    */
   async recordSimpleTaxPayment(userId: string, data: {
     amount: number | string;
@@ -27,16 +28,15 @@ export class TaxService extends BaseService {
     description?: string;
     type: string;
   }): Promise<any> {
-    const parsedAmount = typeof data.amount === 'string' 
-      ? parseFloat(data.amount.replace(/\./g, '').replace(',', '.'))
-      : data.amount;
+    // Use Money for precise amount handling
+    const amount = ServerMoneyUtils.parseUserInput(data.amount);
 
     const transaction = await this.transactionService.createTransaction(userId, {
       propertyId: null, // Company-level tax
       type: 'expense',
       category: 'taxes',
       description: data.description || `Pagamento de ${data.type}`,
-      amount: parsedAmount,
+      amount: amount.toDecimalString(), // Convert Money to string for transaction service
       date: data.date,
       supplier: 'Receita Federal',
       notes: `Imposto: ${data.type}`
@@ -45,12 +45,13 @@ export class TaxService extends BaseService {
     return {
       success: true,
       transaction,
-      message: 'Pagamento de imposto registrado com sucesso'
+      message: 'Pagamento de imposto registrado com sucesso',
+      formattedAmount: amount.toBRL()
     };
   }
 
   /**
-   * Generate tax payment preview based on revenue
+   * Generate tax payment preview based on revenue with Money precision
    */
   async generateTaxPreview(userId: string, data: {
     referenceMonth: string;
@@ -67,7 +68,7 @@ export class TaxService extends BaseService {
       .select({
         propertyId: transactions.propertyId,
         propertyName: properties.name,
-        totalRevenue: sql<number>`SUM(${transactions.amount})`
+        totalRevenue: sql<string>`SUM(${transactions.amount})` // Changed to string for Money conversion
       })
       .from(transactions)
       .leftJoin(properties, eq(transactions.propertyId, properties.id))
@@ -82,28 +83,41 @@ export class TaxService extends BaseService {
       ))
       .groupBy(transactions.propertyId, properties.name);
 
-    const totalRevenue = revenueData.reduce((sum, prop) => sum + Number(prop.totalRevenue), 0);
-    const taxAmount = totalRevenue * (data.rate / 100);
-
-    const distribution = revenueData.map(prop => ({
-      propertyId: prop.propertyId,
-      propertyName: prop.propertyName,
-      revenue: Number(prop.totalRevenue),
-      taxAmount: Number(prop.totalRevenue) * (data.rate / 100)
+    // Calculate using Money for precision
+    const revenueMoneyList = revenueData.map(prop => ({
+      ...prop,
+      revenueMoney: ServerMoneyUtils.fromDecimal(prop.totalRevenue)
     }));
+
+    const totalRevenue = MoneyUtils.sum(revenueMoneyList.map(p => p.revenueMoney));
+    const taxAmount = totalRevenue.percentage(data.rate);
+
+    const distribution = revenueMoneyList.map(prop => {
+      const propTax = prop.revenueMoney.percentage(data.rate);
+      return {
+        propertyId: prop.propertyId,
+        propertyName: prop.propertyName,
+        revenue: prop.revenueMoney.toDecimal(),
+        revenueFormatted: prop.revenueMoney.toBRL(),
+        taxAmount: propTax.toDecimal(),
+        taxFormatted: propTax.toBRL()
+      };
+    });
 
     return {
       referenceMonth: data.referenceMonth,
       taxType: data.taxType,
       rate: data.rate,
-      totalRevenue,
-      taxAmount,
+      totalRevenue: totalRevenue.toDecimal(),
+      totalRevenueFormatted: totalRevenue.toBRL(),
+      taxAmount: taxAmount.toDecimal(),
+      taxAmountFormatted: taxAmount.toBRL(),
       distribution
     };
   }
 
   /**
-   * Calculate PIS/COFINS based on revenue
+   * Calculate PIS/COFINS based on revenue with Money precision
    */
   async calculatePisCofins(userId: string, data: {
     referenceMonth: string;
@@ -125,7 +139,7 @@ export class TaxService extends BaseService {
       .select({
         propertyId: transactions.propertyId,
         propertyName: properties.name,
-        revenue: sql<number>`SUM(${transactions.amount})`
+        revenue: sql<string>`SUM(${transactions.amount})` // Changed to string for Money conversion
       })
       .from(transactions)
       .leftJoin(properties, eq(transactions.propertyId, properties.id))
@@ -140,32 +154,52 @@ export class TaxService extends BaseService {
       ))
       .groupBy(transactions.propertyId, properties.name);
 
-    const totalRevenue = revenueData.reduce((sum, prop) => sum + Number(prop.revenue), 0);
-    const pisAmount = totalRevenue * (pisRate / 100);
-    const cofinsAmount = totalRevenue * (cofinsRate / 100);
-    const totalTax = pisAmount + cofinsAmount;
+    // Calculate using Money for precision
+    const revenueMoneyList = revenueData.map(prop => ({
+      ...prop,
+      revenueMoney: ServerMoneyUtils.fromDecimal(prop.revenue)
+    }));
+
+    const totalRevenue = MoneyUtils.sum(revenueMoneyList.map(p => p.revenueMoney));
+    const pisAmount = totalRevenue.percentage(pisRate);
+    const cofinsAmount = totalRevenue.percentage(cofinsRate);
+    const totalTax = pisAmount.add(cofinsAmount);
 
     return {
       referenceMonth: data.referenceMonth,
       regime,
-      totalRevenue,
+      totalRevenue: totalRevenue.toDecimal(),
+      totalRevenueFormatted: totalRevenue.toBRL(),
       pisRate,
       cofinsRate,
-      pisAmount,
-      cofinsAmount,
-      totalTax,
-      propertyDetails: revenueData.map(prop => ({
-        propertyName: prop.propertyName,
-        revenue: Number(prop.revenue),
-        pis: Number(prop.revenue) * (pisRate / 100),
-        cofins: Number(prop.revenue) * (cofinsRate / 100),
-        total: Number(prop.revenue) * ((pisRate + cofinsRate) / 100)
-      }))
+      pisAmount: pisAmount.toDecimal(),
+      pisAmountFormatted: pisAmount.toBRL(),
+      cofinsAmount: cofinsAmount.toDecimal(),
+      cofinsAmountFormatted: cofinsAmount.toBRL(),
+      totalTax: totalTax.toDecimal(),
+      totalTaxFormatted: totalTax.toBRL(),
+      propertyDetails: revenueMoneyList.map(prop => {
+        const propPis = prop.revenueMoney.percentage(pisRate);
+        const propCofins = prop.revenueMoney.percentage(cofinsRate);
+        const propTotal = propPis.add(propCofins);
+        
+        return {
+          propertyName: prop.propertyName,
+          revenue: prop.revenueMoney.toDecimal(),
+          revenueFormatted: prop.revenueMoney.toBRL(),
+          pis: propPis.toDecimal(),
+          pisFormatted: propPis.toBRL(),
+          cofins: propCofins.toDecimal(),
+          cofinsFormatted: propCofins.toBRL(),
+          total: propTotal.toDecimal(),
+          totalFormatted: propTotal.toBRL()
+        };
+      })
     };
   }
 
   /**
-   * Record tax payment with installments support
+   * Record tax payment with installments support using Money precision
    */
   async recordTaxPayment(userId: string, data: {
     taxType: string;
@@ -178,12 +212,12 @@ export class TaxService extends BaseService {
       amount: number;
     }>;
   }): Promise<any> {
-    const parsedTotalAmount = typeof data.totalAmount === 'string' 
-      ? parseFloat(data.totalAmount.replace(/\./g, '').replace(',', '.'))
-      : data.totalAmount;
-
+    // Use Money for precise amount handling
+    const totalAmount = ServerMoneyUtils.parseUserInput(data.totalAmount);
     const installments = data.installments || 1;
-    const installmentAmount = parsedTotalAmount / installments;
+    
+    // Split the total amount equally among installments
+    const installmentAmounts = totalAmount.split(installments);
     const createdPayments = [];
 
     // Create tax payment records
@@ -197,7 +231,7 @@ export class TaxService extends BaseService {
         referenceMonth: data.referenceMonth,
         installmentNumber: i + 1,
         totalInstallments: installments,
-        amount: installmentAmount.toString(),
+        amount: installmentAmounts[i].toDecimalString(),
         dueDate: format(dueDate, 'yyyy-MM-dd'),
         paid: false,
         notes: `Parcela ${i + 1}/${installments}`
@@ -212,7 +246,7 @@ export class TaxService extends BaseService {
           type: 'expense',
           category: 'taxes',
           description: `${data.taxType} - Ref: ${data.referenceMonth}`,
-          amount: installmentAmount,
+          amount: installmentAmounts[i].toDecimalString(),
           date: format(dueDate, 'yyyy-MM-dd'),
           supplier: 'Receita Federal',
           notes: `Imposto referente a ${data.referenceMonth}`
@@ -220,15 +254,16 @@ export class TaxService extends BaseService {
       }
     }
 
-    // If there's property distribution, create child transactions
+    // If there's property distribution, create child transactions with Money precision
     if (data.propertyDistribution && data.propertyDistribution.length > 0) {
       for (const dist of data.propertyDistribution) {
+        const distAmount = ServerMoneyUtils.parseUserInput(dist.amount);
         await this.transactionService.createTransaction(userId, {
           propertyId: dist.propertyId,
           type: 'expense',
           category: 'taxes',
           description: `${data.taxType} - Ref: ${data.referenceMonth}`,
-          amount: dist.amount,
+          amount: distAmount.toDecimalString(),
           date: data.firstDueDate,
           supplier: 'Receita Federal',
           notes: `Parte proporcional do imposto`
@@ -239,8 +274,9 @@ export class TaxService extends BaseService {
     return {
       success: true,
       payments: createdPayments,
+      totalAmountFormatted: totalAmount.toBRL(),
       message: installments > 1 
-        ? `Parcelamento de ${data.taxType} criado com sucesso (${installments}x)`
+        ? `Parcelamento de ${data.taxType} criado com sucesso (${installments}x de ${installmentAmounts[0].toBRL()})`
         : `Pagamento de ${data.taxType} registrado com sucesso`
     };
   }
@@ -271,11 +307,16 @@ export class TaxService extends BaseService {
       .where(and(...conditions))
       .orderBy(taxPayments.dueDate);
 
-    return payments;
+    // Format amounts using Money
+    return payments.map(payment => ({
+      ...payment,
+      amountMoney: ServerMoneyUtils.fromDecimal(payment.amount),
+      amountFormatted: ServerMoneyUtils.fromDecimal(payment.amount).toBRL()
+    }));
   }
 
   /**
-   * Mark tax payment as paid
+   * Mark tax payment as paid with Money precision
    */
   async markTaxPaymentAsPaid(userId: string, paymentId: number): Promise<any> {
     const [payment] = await db
@@ -291,13 +332,16 @@ export class TaxService extends BaseService {
       .returning();
 
     if (payment) {
+      // Use Money for amount handling
+      const amount = ServerMoneyUtils.fromDecimal(payment.amount);
+      
       // Create expense transaction for the payment
       await this.transactionService.createTransaction(userId, {
         propertyId: null,
         type: 'expense',
         category: 'taxes',
         description: `${payment.taxType} - Parcela ${payment.installmentNumber}/${payment.totalInstallments}`,
-        amount: parseFloat(payment.amount),
+        amount: amount.toDecimalString(),
         date: payment.paymentDate!,
         supplier: 'Receita Federal',
         notes: `Referência: ${payment.referenceMonth}`
@@ -306,13 +350,16 @@ export class TaxService extends BaseService {
 
     return {
       success: true,
-      payment,
+      payment: {
+        ...payment,
+        amountFormatted: ServerMoneyUtils.fromDecimal(payment.amount).toBRL()
+      },
       message: 'Pagamento de imposto confirmado'
     };
   }
 
   /**
-   * Calculate tax summary for a period
+   * Calculate tax summary for a period with Money precision
    */
   async getTaxSummary(userId: string, year: number): Promise<any> {
     const startDate = `${year}-01-01`;
@@ -322,7 +369,7 @@ export class TaxService extends BaseService {
     const taxExpenses = await db
       .select({
         month: sql<string>`TO_CHAR(${transactions.date}, 'MM/YYYY')`,
-        amount: sql<number>`SUM(${transactions.amount})`
+        amount: sql<string>`SUM(${transactions.amount})` // Changed to string for Money conversion
       })
       .from(transactions)
       .where(and(
@@ -339,7 +386,7 @@ export class TaxService extends BaseService {
     const revenueData = await db
       .select({
         month: sql<string>`TO_CHAR(${transactions.date}, 'MM/YYYY')`,
-        revenue: sql<number>`SUM(${transactions.amount})`
+        revenue: sql<string>`SUM(${transactions.amount})` // Changed to string for Money conversion
       })
       .from(transactions)
       .where(and(
@@ -350,20 +397,97 @@ export class TaxService extends BaseService {
       ))
       .groupBy(sql`TO_CHAR(${transactions.date}, 'MM/YYYY')`);
 
-    const totalTaxPaid = taxExpenses.reduce((sum, row) => sum + Number(row.amount), 0);
-    const totalRevenue = revenueData.reduce((sum, row) => sum + Number(row.revenue), 0);
-    const effectiveRate = totalRevenue > 0 ? (totalTaxPaid / totalRevenue) * 100 : 0;
+    // Calculate using Money for precision
+    const taxMoneyList = taxExpenses.map(row => ServerMoneyUtils.fromDecimal(row.amount));
+    const revenueMoneyList = revenueData.map(row => ServerMoneyUtils.fromDecimal(row.revenue));
+    
+    const totalTaxPaid = MoneyUtils.sum(taxMoneyList);
+    const totalRevenue = MoneyUtils.sum(revenueMoneyList);
+    
+    const effectiveRate = totalRevenue.isZero() 
+      ? 0 
+      : (totalTaxPaid.toDecimal() / totalRevenue.toDecimal()) * 100;
+
+    const averageMonthlyTax = taxMoneyList.length > 0 
+      ? totalTaxPaid.divide(taxMoneyList.length)
+      : Money.zero();
 
     return {
       year,
-      totalTaxPaid,
-      totalRevenue,
+      totalTaxPaid: totalTaxPaid.toDecimal(),
+      totalTaxPaidFormatted: totalTaxPaid.toBRL(),
+      totalRevenue: totalRevenue.toDecimal(),
+      totalRevenueFormatted: totalRevenue.toBRL(),
       effectiveRate,
-      monthlyBreakdown: taxExpenses.map(row => ({
-        month: row.month,
-        amount: Number(row.amount)
-      })),
-      averageMonthlyTax: taxExpenses.length > 0 ? totalTaxPaid / taxExpenses.length : 0
+      effectiveRateFormatted: `${effectiveRate.toFixed(2)}%`,
+      monthlyBreakdown: taxExpenses.map((row, index) => {
+        const amount = taxMoneyList[index];
+        return {
+          month: row.month,
+          amount: amount.toDecimal(),
+          amountFormatted: amount.toBRL()
+        };
+      }),
+      averageMonthlyTax: averageMonthlyTax.toDecimal(),
+      averageMonthlyTaxFormatted: averageMonthlyTax.toBRL()
+    };
+  }
+
+  /**
+   * Calculate distributed tax based on property revenue
+   */
+  async calculateDistributedTax(userId: string, data: {
+    taxType: string;
+    totalAmount: number | string;
+    referenceMonth: string;
+    propertyIds: number[];
+  }): Promise<any> {
+    const totalAmount = ServerMoneyUtils.parseUserInput(data.totalAmount);
+    const [year, month] = data.referenceMonth.split('-').map(Number);
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+
+    // Get revenue for each property
+    const revenueData = await db
+      .select({
+        propertyId: transactions.propertyId,
+        propertyName: properties.name,
+        revenue: sql<string>`SUM(${transactions.amount})`
+      })
+      .from(transactions)
+      .leftJoin(properties, eq(transactions.propertyId, properties.id))
+      .where(and(
+        eq(transactions.userId, userId),
+        eq(transactions.type, 'revenue'),
+        gte(transactions.date, format(startDate, 'yyyy-MM-dd')),
+        lte(transactions.date, format(endDate, 'yyyy-MM-dd')),
+        sql`${transactions.propertyId} IN (${data.propertyIds.join(',')})`
+      ))
+      .groupBy(transactions.propertyId, properties.name);
+
+    // Convert to Money and calculate distribution
+    const weights = revenueData.map(prop => ({
+      id: prop.propertyId!,
+      weight: ServerMoneyUtils.fromDecimal(prop.revenue).toDecimal()
+    }));
+
+    const distribution = ServerMoneyUtils.distributeProportionally(totalAmount, weights);
+
+    return {
+      taxType: data.taxType,
+      totalAmount: totalAmount.toDecimal(),
+      totalAmountFormatted: totalAmount.toBRL(),
+      referenceMonth: data.referenceMonth,
+      distribution: Array.from(distribution.entries()).map(([propertyId, amount]) => {
+        const prop = revenueData.find(p => p.propertyId === propertyId);
+        return {
+          propertyId,
+          propertyName: prop?.propertyName || 'Unknown',
+          amount: amount.toDecimal(),
+          amountFormatted: amount.toBRL(),
+          percentage: (amount.toDecimal() / totalAmount.toDecimal()) * 100
+        };
+      })
     };
   }
 }

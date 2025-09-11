@@ -4,9 +4,10 @@ import { db } from "../db";
 import { transactions, properties, cashFlowSettings, accounts } from "@shared/schema";
 import { eq, and, gte, lte, sql, desc, asc, or, isNull } from "drizzle-orm";
 import { format, startOfDay, endOfDay, addDays, differenceInDays } from "date-fns";
+import { Money, ServerMoneyUtils, MoneyUtils } from "../utils/money";
 
 /**
- * Service for cash flow operations and analysis
+ * Service for cash flow operations and analysis with precise Money handling
  */
 export class CashFlowService extends BaseService {
   constructor(storage: IStorage) {
@@ -14,7 +15,7 @@ export class CashFlowService extends BaseService {
   }
 
   /**
-   * Get daily cash flow data for a period
+   * Get daily cash flow data for a period with Money precision
    */
   async getDailyCashFlow(userId: string, startDate: string, endDate: string): Promise<any> {
     const start = startOfDay(new Date(startDate));
@@ -41,18 +42,18 @@ export class CashFlowService extends BaseService {
     // Get initial balance from accounts
     const accountsData = await db
       .select({
-        balance: sql<number>`SUM(${accounts.balance})`
+        balance: sql<string>`SUM(${accounts.balance})` // Changed to string for Money conversion
       })
       .from(accounts)
       .where(eq(accounts.userId, userId));
 
-    const initialBalance = accountsData[0]?.balance || 0;
+    const initialBalance = ServerMoneyUtils.fromDecimal(accountsData[0]?.balance);
 
     // Calculate balance before the start date
     const previousTransactions = await db
       .select({
         type: transactions.type,
-        totalAmount: sql<number>`SUM(${transactions.amount})`
+        totalAmount: sql<string>`SUM(${transactions.amount})` // Changed to string for Money conversion
       })
       .from(transactions)
       .where(and(
@@ -61,16 +62,18 @@ export class CashFlowService extends BaseService {
       ))
       .groupBy(transactions.type);
 
+    // Calculate starting balance using Money
     let startingBalance = initialBalance;
     previousTransactions.forEach(row => {
+      const amount = ServerMoneyUtils.fromDecimal(row.totalAmount);
       if (row.type === 'revenue') {
-        startingBalance += Number(row.totalAmount);
+        startingBalance = startingBalance.add(amount);
       } else if (row.type === 'expense') {
-        startingBalance -= Number(row.totalAmount);
+        startingBalance = startingBalance.subtract(amount);
       }
     });
 
-    // Create daily cash flow
+    // Create daily cash flow with Money precision
     const dailyFlow = [];
     let runningBalance = startingBalance;
     let currentDate = new Date(start);
@@ -79,50 +82,68 @@ export class CashFlowService extends BaseService {
       const dateStr = format(currentDate, 'yyyy-MM-dd');
       const dayTransactions = transactionsData.filter(t => t.date === dateStr);
       
-      let dayRevenue = 0;
-      let dayExpenses = 0;
+      let dayRevenue = Money.zero();
+      let dayExpenses = Money.zero();
       const dayDetails = [];
 
       dayTransactions.forEach(t => {
+        const amount = ServerMoneyUtils.fromDecimal(t.amount);
         if (t.type === 'revenue') {
-          dayRevenue += t.amount;
+          dayRevenue = dayRevenue.add(amount);
         } else if (t.type === 'expense') {
-          dayExpenses += t.amount;
+          dayExpenses = dayExpenses.add(amount);
         }
         dayDetails.push({
           type: t.type,
-          amount: t.amount,
+          amount: amount.toDecimal(),
+          amountFormatted: amount.toBRL(),
           category: t.category,
           description: t.description
         });
       });
 
-      const netFlow = dayRevenue - dayExpenses;
-      runningBalance += netFlow;
+      const netFlow = dayRevenue.subtract(dayExpenses);
+      runningBalance = runningBalance.add(netFlow);
 
       dailyFlow.push({
         date: dateStr,
-        revenue: dayRevenue,
-        expenses: dayExpenses,
-        netFlow,
-        balance: runningBalance,
+        revenue: dayRevenue.toDecimal(),
+        revenueFormatted: dayRevenue.toBRL(),
+        expenses: dayExpenses.toDecimal(),
+        expensesFormatted: dayExpenses.toBRL(),
+        netFlow: netFlow.toDecimal(),
+        netFlowFormatted: netFlow.toBRL(),
+        balance: runningBalance.toDecimal(),
+        balanceFormatted: runningBalance.toBRL(),
         transactions: dayDetails
       });
 
       currentDate = addDays(currentDate, 1);
     }
 
+    // Calculate summary using Money
+    const totalRevenue = MoneyUtils.sum(dailyFlow.map(d => Money.fromDecimal(d.revenue)));
+    const totalExpenses = MoneyUtils.sum(dailyFlow.map(d => Money.fromDecimal(d.expenses)));
+    const netCashFlow = totalRevenue.subtract(totalExpenses);
+    const averageDailyFlow = netCashFlow.divide(days);
+
     return {
       startDate,
       endDate,
-      startingBalance,
-      endingBalance: runningBalance,
+      startingBalance: startingBalance.toDecimal(),
+      startingBalanceFormatted: startingBalance.toBRL(),
+      endingBalance: runningBalance.toDecimal(),
+      endingBalanceFormatted: runningBalance.toBRL(),
       dailyFlow,
       summary: {
-        totalRevenue: dailyFlow.reduce((sum, day) => sum + day.revenue, 0),
-        totalExpenses: dailyFlow.reduce((sum, day) => sum + day.expenses, 0),
-        netCashFlow: dailyFlow.reduce((sum, day) => sum + day.netFlow, 0),
-        averageDailyFlow: dailyFlow.reduce((sum, day) => sum + day.netFlow, 0) / days,
+        totalRevenue: totalRevenue.toDecimal(),
+        totalRevenueFormatted: totalRevenue.toBRL(),
+        totalExpenses: totalExpenses.toDecimal(),
+        totalExpensesFormatted: totalExpenses.toBRL(),
+        netCashFlow: netCashFlow.toDecimal(),
+        netCashFlowFormatted: netCashFlow.toBRL(),
+        averageDailyFlow: averageDailyFlow.toDecimal(),
+        averageDailyFlowFormatted: averageDailyFlow.toBRL(),
         daysWithPositiveFlow: dailyFlow.filter(day => day.netFlow > 0).length,
         daysWithNegativeFlow: dailyFlow.filter(day => day.netFlow < 0).length
       }
@@ -130,7 +151,7 @@ export class CashFlowService extends BaseService {
   }
 
   /**
-   * Get cash flow statistics
+   * Get cash flow statistics with Money precision
    */
   async getCashFlowStats(userId: string, period?: { startDate: string; endDate: string }): Promise<any> {
     const conditions = [eq(transactions.userId, userId)];
@@ -146,22 +167,27 @@ export class CashFlowService extends BaseService {
     const totals = await db
       .select({
         type: transactions.type,
-        totalAmount: sql<number>`SUM(${transactions.amount})`,
+        totalAmount: sql<string>`SUM(${transactions.amount})`, // Changed to string for Money conversion
         count: sql<number>`COUNT(*)`
       })
       .from(transactions)
       .where(and(...conditions))
       .groupBy(transactions.type);
 
-    const revenue = totals.find(t => t.type === 'revenue') || { totalAmount: 0, count: 0 };
-    const expenses = totals.find(t => t.type === 'expense') || { totalAmount: 0, count: 0 };
+    const revenue = totals.find(t => t.type === 'revenue');
+    const expenses = totals.find(t => t.type === 'expense');
+    
+    // Use Money for calculations
+    const revenueMoney = revenue ? ServerMoneyUtils.fromDecimal(revenue.totalAmount) : Money.zero();
+    const expensesMoney = expenses ? ServerMoneyUtils.fromDecimal(expenses.totalAmount) : Money.zero();
+    const netFlowMoney = revenueMoney.subtract(expensesMoney);
 
     // Get category breakdown
     const categoryBreakdown = await db
       .select({
         type: transactions.type,
         category: transactions.category,
-        amount: sql<number>`SUM(${transactions.amount})`,
+        amount: sql<string>`SUM(${transactions.amount})`, // Changed to string for Money conversion
         count: sql<number>`COUNT(*)`
       })
       .from(transactions)
@@ -174,78 +200,101 @@ export class CashFlowService extends BaseService {
       .select({
         month: sql<string>`TO_CHAR(${transactions.date}, 'MM/YYYY')`,
         type: transactions.type,
-        amount: sql<number>`SUM(${transactions.amount})`
+        amount: sql<string>`SUM(${transactions.amount})` // Changed to string for Money conversion
       })
       .from(transactions)
       .where(and(...conditions))
       .groupBy(sql`TO_CHAR(${transactions.date}, 'MM/YYYY')`, transactions.type)
       .orderBy(sql`MIN(${transactions.date})`);
 
-    // Process monthly trends
+    // Process monthly trends with Money
     const trendsByMonth = new Map();
     monthlyTrends.forEach(row => {
+      const amount = ServerMoneyUtils.fromDecimal(row.amount);
       if (!trendsByMonth.has(row.month)) {
-        trendsByMonth.set(row.month, { revenue: 0, expenses: 0 });
+        trendsByMonth.set(row.month, { revenue: Money.zero(), expenses: Money.zero() });
       }
       const monthData = trendsByMonth.get(row.month);
       if (row.type === 'revenue') {
-        monthData.revenue = Number(row.amount);
+        monthData.revenue = amount;
       } else if (row.type === 'expense') {
-        monthData.expenses = Number(row.amount);
+        monthData.expenses = amount;
       }
     });
 
-    const trends = Array.from(trendsByMonth.entries()).map(([month, data]) => ({
-      month,
-      revenue: data.revenue,
-      expenses: data.expenses,
-      netFlow: data.revenue - data.expenses,
-      margin: data.revenue > 0 ? ((data.revenue - data.expenses) / data.revenue) * 100 : 0
-    }));
+    const trends = Array.from(trendsByMonth.entries()).map(([month, data]) => {
+      const netFlow = data.revenue.subtract(data.expenses);
+      const margin = data.revenue.isZero() ? 0 : (netFlow.toDecimal() / data.revenue.toDecimal()) * 100;
+      
+      return {
+        month,
+        revenue: data.revenue.toDecimal(),
+        revenueFormatted: data.revenue.toBRL(),
+        expenses: data.expenses.toDecimal(),
+        expensesFormatted: data.expenses.toBRL(),
+        netFlow: netFlow.toDecimal(),
+        netFlowFormatted: netFlow.toBRL(),
+        margin
+      };
+    });
+
+    // Calculate averages with Money
+    const monthlyRevenueAvg = trends.length > 0
+      ? MoneyUtils.average(trends.map(t => Money.fromDecimal(t.revenue)))
+      : Money.zero();
+    const monthlyExpensesAvg = trends.length > 0
+      ? MoneyUtils.average(trends.map(t => Money.fromDecimal(t.expenses)))
+      : Money.zero();
+    const monthlyNetFlowAvg = monthlyRevenueAvg.subtract(monthlyExpensesAvg);
 
     return {
       period,
       totals: {
-        revenue: Number(revenue.totalAmount),
-        expenses: Number(expenses.totalAmount),
-        netFlow: Number(revenue.totalAmount) - Number(expenses.totalAmount),
-        revenueCount: Number(revenue.count),
-        expenseCount: Number(expenses.count)
+        revenue: revenueMoney.toDecimal(),
+        revenueFormatted: revenueMoney.toBRL(),
+        expenses: expensesMoney.toDecimal(),
+        expensesFormatted: expensesMoney.toBRL(),
+        netFlow: netFlowMoney.toDecimal(),
+        netFlowFormatted: netFlowMoney.toBRL(),
+        revenueCount: Number(revenue?.count || 0),
+        expenseCount: Number(expenses?.count || 0)
       },
       ratios: {
-        expenseToRevenueRatio: Number(revenue.totalAmount) > 0 
-          ? (Number(expenses.totalAmount) / Number(revenue.totalAmount)) * 100 
-          : 0,
-        profitMargin: Number(revenue.totalAmount) > 0
-          ? ((Number(revenue.totalAmount) - Number(expenses.totalAmount)) / Number(revenue.totalAmount)) * 100
-          : 0
+        expenseToRevenueRatio: revenueMoney.isZero() 
+          ? 0 
+          : (expensesMoney.toDecimal() / revenueMoney.toDecimal()) * 100,
+        profitMargin: revenueMoney.isZero()
+          ? 0
+          : (netFlowMoney.toDecimal() / revenueMoney.toDecimal()) * 100
       },
-      categoryBreakdown: categoryBreakdown.map(cat => ({
-        type: cat.type,
-        category: cat.category,
-        amount: Number(cat.amount),
-        count: Number(cat.count),
-        percentage: cat.type === 'revenue' 
-          ? Number(revenue.totalAmount) > 0 ? (Number(cat.amount) / Number(revenue.totalAmount)) * 100 : 0
-          : Number(expenses.totalAmount) > 0 ? (Number(cat.amount) / Number(expenses.totalAmount)) * 100 : 0
-      })),
+      categoryBreakdown: categoryBreakdown.map(cat => {
+        const catAmount = ServerMoneyUtils.fromDecimal(cat.amount);
+        const totalForType = cat.type === 'revenue' ? revenueMoney : expensesMoney;
+        const percentage = totalForType.isZero() ? 0 : (catAmount.toDecimal() / totalForType.toDecimal()) * 100;
+        
+        return {
+          type: cat.type,
+          category: cat.category,
+          amount: catAmount.toDecimal(),
+          amountFormatted: catAmount.toBRL(),
+          count: Number(cat.count),
+          percentage
+        };
+      }),
       monthlyTrends: trends,
       averages: {
-        monthlyRevenue: trends.length > 0 
-          ? trends.reduce((sum, t) => sum + t.revenue, 0) / trends.length 
-          : 0,
-        monthlyExpenses: trends.length > 0
-          ? trends.reduce((sum, t) => sum + t.expenses, 0) / trends.length
-          : 0,
-        monthlyNetFlow: trends.length > 0
-          ? trends.reduce((sum, t) => sum + t.netFlow, 0) / trends.length
-          : 0
+        monthlyRevenue: monthlyRevenueAvg.toDecimal(),
+        monthlyRevenueFormatted: monthlyRevenueAvg.toBRL(),
+        monthlyExpenses: monthlyExpensesAvg.toDecimal(),
+        monthlyExpensesFormatted: monthlyExpensesAvg.toBRL(),
+        monthlyNetFlow: monthlyNetFlowAvg.toDecimal(),
+        monthlyNetFlowFormatted: monthlyNetFlowAvg.toBRL()
       }
     };
   }
 
   /**
-   * Project future cash flow based on historical data
+   * Project future cash flow based on historical data with Money precision
    */
   async projectCashFlow(userId: string, months: number = 3): Promise<any> {
     // Get historical data for the last 6 months
@@ -256,7 +305,7 @@ export class CashFlowService extends BaseService {
       .select({
         type: transactions.type,
         category: transactions.category,
-        avgAmount: sql<number>`AVG(${transactions.amount})`,
+        avgAmount: sql<string>`AVG(${transactions.amount})`, // Changed to string for Money conversion
         frequency: sql<number>`COUNT(*) / 6.0` // Average per month
       })
       .from(transactions)
@@ -266,10 +315,10 @@ export class CashFlowService extends BaseService {
       ))
       .groupBy(transactions.type, transactions.category);
 
-    // Calculate current balance
+    // Calculate current balance with Money
     const currentBalance = await this.getCurrentBalance(userId);
 
-    // Project future months
+    // Project future months with Money precision
     const projections = [];
     let projectedBalance = currentBalance;
     const today = new Date();
@@ -278,62 +327,78 @@ export class CashFlowService extends BaseService {
       const projectionDate = new Date(today);
       projectionDate.setMonth(projectionDate.getMonth() + i);
       
-      let monthRevenue = 0;
-      let monthExpenses = 0;
+      let monthRevenue = Money.zero();
+      let monthExpenses = Money.zero();
       const categoryDetails = [];
 
       historicalData.forEach(data => {
-        const monthlyAmount = Number(data.avgAmount) * Number(data.frequency);
+        const avgAmount = ServerMoneyUtils.fromDecimal(data.avgAmount);
+        const monthlyAmount = avgAmount.multiply(Number(data.frequency));
         
         if (data.type === 'revenue') {
-          monthRevenue += monthlyAmount;
+          monthRevenue = monthRevenue.add(monthlyAmount);
         } else if (data.type === 'expense') {
-          monthExpenses += monthlyAmount;
+          monthExpenses = monthExpenses.add(monthlyAmount);
         }
 
         categoryDetails.push({
           type: data.type,
           category: data.category,
-          projectedAmount: monthlyAmount
+          projectedAmount: monthlyAmount.toDecimal(),
+          projectedAmountFormatted: monthlyAmount.toBRL()
         });
       });
 
-      const netFlow = monthRevenue - monthExpenses;
-      projectedBalance += netFlow;
+      const netFlow = monthRevenue.subtract(monthExpenses);
+      projectedBalance = projectedBalance.add(netFlow);
 
       projections.push({
         month: format(projectionDate, 'MM/yyyy'),
-        projectedRevenue: monthRevenue,
-        projectedExpenses: monthExpenses,
-        projectedNetFlow: netFlow,
-        projectedBalance,
+        projectedRevenue: monthRevenue.toDecimal(),
+        projectedRevenueFormatted: monthRevenue.toBRL(),
+        projectedExpenses: monthExpenses.toDecimal(),
+        projectedExpensesFormatted: monthExpenses.toBRL(),
+        projectedNetFlow: netFlow.toDecimal(),
+        projectedNetFlowFormatted: netFlow.toBRL(),
+        projectedBalance: projectedBalance.toDecimal(),
+        projectedBalanceFormatted: projectedBalance.toBRL(),
         categoryBreakdown: categoryDetails
       });
     }
 
+    // Calculate summary with Money
+    const totalProjectedRevenue = MoneyUtils.sum(projections.map(p => Money.fromDecimal(p.projectedRevenue)));
+    const totalProjectedExpenses = MoneyUtils.sum(projections.map(p => Money.fromDecimal(p.projectedExpenses)));
+    const totalProjectedNetFlow = totalProjectedRevenue.subtract(totalProjectedExpenses);
+
     return {
-      currentBalance,
+      currentBalance: currentBalance.toDecimal(),
+      currentBalanceFormatted: currentBalance.toBRL(),
       projectionMonths: months,
       projections,
       summary: {
-        totalProjectedRevenue: projections.reduce((sum, p) => sum + p.projectedRevenue, 0),
-        totalProjectedExpenses: projections.reduce((sum, p) => sum + p.projectedExpenses, 0),
-        totalProjectedNetFlow: projections.reduce((sum, p) => sum + p.projectedNetFlow, 0),
-        finalProjectedBalance: projectedBalance
+        totalProjectedRevenue: totalProjectedRevenue.toDecimal(),
+        totalProjectedRevenueFormatted: totalProjectedRevenue.toBRL(),
+        totalProjectedExpenses: totalProjectedExpenses.toDecimal(),
+        totalProjectedExpensesFormatted: totalProjectedExpenses.toBRL(),
+        totalProjectedNetFlow: totalProjectedNetFlow.toDecimal(),
+        totalProjectedNetFlowFormatted: totalProjectedNetFlow.toBRL(),
+        finalProjectedBalance: projectedBalance.toDecimal(),
+        finalProjectedBalanceFormatted: projectedBalance.toBRL()
       },
       assumptions: "Projeção baseada na média dos últimos 6 meses"
     };
   }
 
   /**
-   * Get current balance for a user
+   * Get current balance for a user with Money precision
    */
-  private async getCurrentBalance(userId: string): Promise<number> {
+  private async getCurrentBalance(userId: string): Promise<Money> {
     // Get all transactions up to today
     const totals = await db
       .select({
         type: transactions.type,
-        totalAmount: sql<number>`SUM(${transactions.amount})`
+        totalAmount: sql<string>`SUM(${transactions.amount})` // Changed to string for Money conversion
       })
       .from(transactions)
       .where(and(
@@ -342,12 +407,13 @@ export class CashFlowService extends BaseService {
       ))
       .groupBy(transactions.type);
 
-    let balance = 0;
+    let balance = Money.zero();
     totals.forEach(row => {
+      const amount = ServerMoneyUtils.fromDecimal(row.totalAmount);
       if (row.type === 'revenue') {
-        balance += Number(row.totalAmount);
+        balance = balance.add(amount);
       } else if (row.type === 'expense') {
-        balance -= Number(row.totalAmount);
+        balance = balance.subtract(amount);
       }
     });
 
@@ -355,29 +421,39 @@ export class CashFlowService extends BaseService {
   }
 
   /**
-   * Analyze cash flow health
+   * Analyze cash flow health with Money precision
    */
   async analyzeCashFlowHealth(userId: string): Promise<any> {
     const stats = await this.getCashFlowStats(userId);
     const currentBalance = await this.getCurrentBalance(userId);
     
-    // Calculate health indicators
+    // Calculate health indicators with Money
     const healthScore = this.calculateHealthScore(stats, currentBalance);
     const warnings = this.identifyWarnings(stats, currentBalance);
     const recommendations = this.generateRecommendations(stats, currentBalance);
 
+    // Calculate liquidity ratio with Money
+    const monthlyExpenses = Money.fromDecimal(stats.averages.monthlyExpenses);
+    const liquidityRatio = currentBalance.isPositive() && monthlyExpenses.isPositive()
+      ? currentBalance.toDecimal() / monthlyExpenses.toDecimal()
+      : 0;
+
+    // Calculate runway months with Money
+    const monthlyNetFlow = Money.fromDecimal(stats.averages.monthlyNetFlow);
+    const runwayMonths = currentBalance.isPositive() && monthlyNetFlow.isNegative()
+      ? currentBalance.toDecimal() / Math.abs(monthlyNetFlow.toDecimal())
+      : null;
+
     return {
-      currentBalance,
+      currentBalance: currentBalance.toDecimal(),
+      currentBalanceFormatted: currentBalance.toBRL(),
       healthScore,
       healthStatus: this.getHealthStatus(healthScore),
       indicators: {
-        liquidityRatio: currentBalance > 0 && stats.totals.expenses > 0 
-          ? currentBalance / (stats.totals.expenses / 12) 
-          : 0, // Months of expenses covered
-        burnRate: stats.averages.monthlyExpenses,
-        runwayMonths: currentBalance > 0 && stats.averages.monthlyNetFlow < 0
-          ? currentBalance / Math.abs(stats.averages.monthlyNetFlow)
-          : null,
+        liquidityRatio, // Months of expenses covered
+        burnRate: monthlyExpenses.toDecimal(),
+        burnRateFormatted: monthlyExpenses.toBRL(),
+        runwayMonths,
         profitMargin: stats.ratios.profitMargin,
         expenseRatio: stats.ratios.expenseToRevenueRatio
       },
@@ -392,20 +468,20 @@ export class CashFlowService extends BaseService {
   }
 
   /**
-   * Calculate health score (0-100)
+   * Calculate health score (0-100) with Money precision
    */
-  private calculateHealthScore(stats: any, balance: number): number {
+  private calculateHealthScore(stats: any, balance: Money): number {
     let score = 50; // Base score
 
     // Positive factors
-    if (balance > 0) score += 10;
+    if (balance.isPositive()) score += 10;
     if (stats.ratios.profitMargin > 20) score += 15;
     if (stats.ratios.profitMargin > 10) score += 10;
     if (stats.ratios.expenseToRevenueRatio < 70) score += 10;
     if (stats.averages.monthlyNetFlow > 0) score += 15;
 
     // Negative factors
-    if (balance < 0) score -= 20;
+    if (balance.isNegative()) score -= 20;
     if (stats.ratios.profitMargin < 0) score -= 15;
     if (stats.ratios.expenseToRevenueRatio > 90) score -= 10;
     if (stats.averages.monthlyNetFlow < 0) score -= 15;
@@ -425,13 +501,13 @@ export class CashFlowService extends BaseService {
   }
 
   /**
-   * Identify financial warnings
+   * Identify financial warnings with Money precision
    */
-  private identifyWarnings(stats: any, balance: number): string[] {
+  private identifyWarnings(stats: any, balance: Money): string[] {
     const warnings = [];
 
-    if (balance < 0) {
-      warnings.push('Saldo negativo - atenção imediata necessária');
+    if (balance.isNegative()) {
+      warnings.push(`Saldo negativo: ${balance.toBRL()} - atenção imediata necessária`);
     }
     if (stats.ratios.profitMargin < 5 && stats.ratios.profitMargin >= 0) {
       warnings.push('Margem de lucro muito baixa');
@@ -450,9 +526,9 @@ export class CashFlowService extends BaseService {
   }
 
   /**
-   * Generate financial recommendations
+   * Generate financial recommendations with Money precision
    */
-  private generateRecommendations(stats: any, balance: number): string[] {
+  private generateRecommendations(stats: any, balance: Money): string[] {
     const recommendations = [];
 
     if (stats.ratios.expenseToRevenueRatio > 80) {
@@ -461,15 +537,19 @@ export class CashFlowService extends BaseService {
     if (stats.ratios.profitMargin < 10) {
       recommendations.push('Considerar aumentar preços ou buscar novas fontes de receita');
     }
-    if (balance < stats.averages.monthlyExpenses * 3) {
-      recommendations.push('Criar reserva de emergência (3-6 meses de despesas)');
+    
+    const monthlyExpenses = Money.fromDecimal(stats.averages.monthlyExpenses);
+    const emergencyReserve = monthlyExpenses.multiply(3);
+    
+    if (balance.isLessThan(emergencyReserve)) {
+      recommendations.push(`Criar reserva de emergência (3-6 meses de despesas = ${emergencyReserve.toBRL()})`);
     }
     
     // Category-specific recommendations
     const expenseCategories = stats.categoryBreakdown.filter(c => c.type === 'expense');
     const highestExpense = expenseCategories[0];
     if (highestExpense && highestExpense.percentage > 30) {
-      recommendations.push(`Analisar despesas de ${highestExpense.category} (${highestExpense.percentage.toFixed(1)}% do total)`);
+      recommendations.push(`Analisar despesas de ${highestExpense.category} (${highestExpense.percentage.toFixed(1)}% do total = ${highestExpense.amountFormatted})`);
     }
 
     return recommendations;

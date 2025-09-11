@@ -16,6 +16,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { Property } from "@shared/schema";
 import { z } from "zod";
 import ConsolidatedExpenseTable from './ConsolidatedExpenseTable';
+import { Money, MoneyFormatter, MoneyInputParser, useMoneyInput } from "@/lib/money";
 
 const taxFormSchema = z.object({
   taxType: z.enum(['PIS', 'COFINS', 'CSLL', 'IRPJ']),
@@ -36,9 +37,9 @@ interface TaxExpenseFormProps {
 interface PropertyRevenue {
   propertyId: number;
   propertyName: string;
-  totalRevenue: number;
+  totalRevenue: Money;
   percentage: number;
-  allocatedAmount: number;
+  allocatedAmount: Money;
 }
 
 export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormProps) {
@@ -111,29 +112,43 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     },
   });
 
-  // Calcular rateio pro-rata quando dados mudarem
+  // Calcular rateio pro-rata quando dados mudarem usando Money para precisão
   useEffect(() => {
     const selectedProps = form.watch('selectedProperties');
-    const totalAmount = parseFloat(form.watch('totalAmount')) || 0;
+    const totalAmountStr = form.watch('totalAmount');
     
-    if (selectedProps.length > 0 && totalAmount > 0 && Array.isArray(revenueData) && revenueData.length > 0) {
+    // Parse o valor total usando Money
+    let totalAmount: Money;
+    try {
+      totalAmount = totalAmountStr ? Money.fromBRL(totalAmountStr.replace('.', ',')) : Money.zero();
+    } catch {
+      totalAmount = Money.zero();
+    }
+    
+    if (selectedProps.length > 0 && !totalAmount.isZero() && Array.isArray(revenueData) && revenueData.length > 0) {
       const selectedRevenueData = revenueData.filter((rev: any) => 
         selectedProps.includes(rev.propertyId.toString())
       );
       
-      const totalSelectedRevenue = selectedRevenueData.reduce((sum: number, rev: any) => 
-        sum + (rev.totalRevenue || 0), 0
+      // Converter receitas para Money e calcular total
+      const revenuesWithMoney = selectedRevenueData.map((rev: any) => ({
+        ...rev,
+        revenueMoney: Money.fromDecimal(rev.totalRevenue || 0)
+      }));
+      
+      const totalSelectedRevenue = revenuesWithMoney.reduce((sum: Money, rev: any) => 
+        sum.add(rev.revenueMoney), Money.zero()
       );
 
-      if (totalSelectedRevenue > 0) {
-        const calculation = selectedRevenueData.map((rev: any) => {
-          const percentage = (rev.totalRevenue / totalSelectedRevenue) * 100;
-          const allocatedAmount = (rev.totalRevenue / totalSelectedRevenue) * totalAmount;
+      if (!totalSelectedRevenue.isZero()) {
+        const calculation = revenuesWithMoney.map((rev: any) => {
+          const percentage = (rev.revenueMoney.toDecimal() / totalSelectedRevenue.toDecimal()) * 100;
+          const allocatedAmount = totalAmount.multiply(percentage / 100);
           
           return {
             propertyId: rev.propertyId,
             propertyName: rev.propertyName,
-            totalRevenue: rev.totalRevenue,
+            totalRevenue: rev.revenueMoney,
             percentage,
             allocatedAmount,
           };
@@ -156,21 +171,21 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
       return;
     }
 
-    // Criar transações para cada propriedade
+    // Criar transações para cada propriedade usando Money para precisão
     const transactions = proRataCalculation.map(calc => ({
       propertyId: calc.propertyId,
       type: 'expense',
       category: 'taxes',
       subcategory: data.taxType.toLowerCase(),
       description: `${data.taxType} ${data.competencyMonth} - ${calc.propertyName} (${calc.percentage.toFixed(2)}%)`,
-      amount: calc.allocatedAmount.toString(), // Convert to string
+      amount: calc.allocatedAmount.toBRL(false), // Formato sem símbolo R$
       date: data.paymentDate,
       currency: 'BRL',
       metadata: {
         taxType: data.taxType,
         competencyMonth: data.competencyMonth,
-        totalAmount: parseFloat(data.totalAmount),
-        revenueBase: calc.totalRevenue,
+        totalAmount: Money.fromBRL(data.totalAmount.replace('.', ',')).toDecimal(),
+        revenueBase: calc.totalRevenue.toDecimal(),
         percentage: calc.percentage,
         proRataCalculation: true,
       }
@@ -179,13 +194,22 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     try {
       await createMutation.mutateAsync(transactions);
       
+      const totalAmount = Money.fromBRL(data.totalAmount.replace('.', ','));
+      
       onComplete({
         type: `Impostos - ${data.taxType}`,
-        totalAmount: parseFloat(data.totalAmount),
+        totalAmount: totalAmount.toDecimal(),
+        totalAmountFormatted: totalAmount.toBRL(),
         propertiesCount: transactions.length,
         competencyMonth: data.competencyMonth,
         paymentDate: data.paymentDate,
-        calculation: proRataCalculation,
+        calculation: proRataCalculation.map(calc => ({
+          ...calc,
+          totalRevenue: calc.totalRevenue.toDecimal(),
+          allocatedAmount: calc.allocatedAmount.toDecimal(),
+          totalRevenueFormatted: calc.totalRevenue.toBRL(),
+          allocatedAmountFormatted: calc.allocatedAmount.toBRL(),
+        })),
       });
     } catch (error) {
       // Erro já tratado no onError da mutation
@@ -217,7 +241,8 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
     monthOptions.push({ value, label });
   }
 
-  const totalCalculated = proRataCalculation.reduce((sum, calc) => sum + calc.allocatedAmount, 0);
+  // Calcular total usando Money para precisão
+  const totalCalculated = proRataCalculation.reduce((sum, calc) => sum.add(calc.allocatedAmount), Money.zero());
 
   return (
     <>
@@ -374,12 +399,12 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
                         <div>
                           <span className="font-medium">{calc.propertyName}</span>
                           <div className="text-xs text-muted-foreground">
-                            Receita: R$ {calc.totalRevenue.toFixed(2)}
+                            Receita: {calc.totalRevenue.toBRL()}
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-medium">R$ {calc.allocatedAmount.toFixed(2)}</div>
+                        <div className="font-medium">{calc.allocatedAmount.toBRL()}</div>
                         <div className="text-xs text-muted-foreground">
                           {calc.percentage.toFixed(2)}%
                         </div>
@@ -389,19 +414,33 @@ export default function TaxExpenseForm({ onComplete, onCancel }: TaxExpenseFormP
                   
                   <div className="border-t pt-3 flex justify-between font-semibold">
                     <span>Total Distribuído:</span>
-                    <span>R$ {totalCalculated.toFixed(2)}</span>
+                    <span>{totalCalculated.toBRL()}</span>
                   </div>
                 </div>
 
-                {Math.abs(totalCalculated - parseFloat(form.watch('totalAmount') || '0')) > 0.01 && (
-                  <div className="flex items-center gap-2 text-amber-600">
-                    <AlertCircle className="h-4 w-4" />
-                    <span className="text-sm">
-                      Diferença de R$ {Math.abs(totalCalculated - parseFloat(form.watch('totalAmount') || '0')).toFixed(2)} 
-                      devido a arredondamentos
-                    </span>
-                  </div>
-                )}
+                {(() => {
+                  const inputAmount = form.watch('totalAmount');
+                  if (!inputAmount) return null;
+                  
+                  try {
+                    const expectedTotal = Money.fromBRL(inputAmount.replace('.', ','));
+                    const difference = expectedTotal.subtract(totalCalculated).abs();
+                    
+                    if (difference.toDecimal() > 0.01) {
+                      return (
+                        <div className="flex items-center gap-2 text-amber-600">
+                          <AlertCircle className="h-4 w-4" />
+                          <span className="text-sm">
+                            Diferença de {difference.toBRL()} devido a arredondamentos
+                          </span>
+                        </div>
+                      );
+                    }
+                  } catch {
+                    return null;
+                  }
+                  return null;
+                })()}
               </div>
             )}
 
