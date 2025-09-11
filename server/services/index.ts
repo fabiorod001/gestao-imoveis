@@ -47,6 +47,8 @@ export class ServiceFactory {
   getTransactionService(): TransactionService {
     if (!this.transactionService) {
       this.transactionService = new TransactionService(this.storage);
+      // Inject TaxService to enable automatic tax recalculation
+      this.transactionService.setTaxService(this.getTaxService());
     }
     return this.transactionService;
   }

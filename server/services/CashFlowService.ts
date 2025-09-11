@@ -1,7 +1,7 @@
 import { BaseService } from "./BaseService";
 import type { IStorage } from "../storage";
 import { db } from "../db";
-import { transactions, properties, cashFlowSettings, accounts } from "@shared/schema";
+import { transactions, properties, cashFlowSettings, accounts, taxProjections } from "@shared/schema";
 import { eq, and, gte, lte, sql, desc, asc, or, isNull } from "drizzle-orm";
 import { format, startOfDay, endOfDay, addDays, differenceInDays } from "date-fns";
 import { Money, ServerMoneyUtils, MoneyUtils } from "../utils/money";
@@ -38,6 +38,29 @@ export class CashFlowService extends BaseService {
         lte(transactions.date, format(end, 'yyyy-MM-dd'))
       ))
       .orderBy(asc(transactions.date));
+
+    // Get tax projections in the period
+    const taxProjectionsData = await db
+      .select({
+        dueDate: taxProjections.dueDate,
+        taxType: taxProjections.taxType,
+        totalAmount: taxProjections.totalAmount,
+        status: taxProjections.status,
+        notes: taxProjections.notes,
+        isInstallment: taxProjections.isInstallment,
+        installmentNumber: taxProjections.installmentNumber
+      })
+      .from(taxProjections)
+      .where(and(
+        eq(taxProjections.userId, userId),
+        gte(taxProjections.dueDate, format(start, 'yyyy-MM-dd')),
+        lte(taxProjections.dueDate, format(end, 'yyyy-MM-dd')),
+        or(
+          eq(taxProjections.status, 'projected'),
+          eq(taxProjections.status, 'confirmed')
+        )
+      ))
+      .orderBy(asc(taxProjections.dueDate));
 
     // Get initial balance from accounts
     const accountsData = await db
@@ -81,6 +104,7 @@ export class CashFlowService extends BaseService {
     for (let i = 0; i < days; i++) {
       const dateStr = format(currentDate, 'yyyy-MM-dd');
       const dayTransactions = transactionsData.filter(t => t.date === dateStr);
+      const dayTaxProjections = taxProjectionsData.filter(t => t.dueDate === dateStr);
       
       let dayRevenue = Money.zero();
       let dayExpenses = Money.zero();
@@ -98,7 +122,30 @@ export class CashFlowService extends BaseService {
           amount: amount.toDecimal(),
           amountFormatted: amount.toBRL(),
           category: t.category,
-          description: t.description
+          description: t.description,
+          isProjected: false
+        });
+      });
+
+      // Add tax projections as projected expenses
+      dayTaxProjections.forEach(projection => {
+        const amount = ServerMoneyUtils.fromDecimal(projection.totalAmount);
+        dayExpenses = dayExpenses.add(amount);
+        
+        let description = `${projection.taxType} - Projeção`;
+        if (projection.isInstallment) {
+          description += ` (Parcela ${projection.installmentNumber})`;
+        }
+        
+        dayDetails.push({
+          type: 'expense',
+          amount: amount.toDecimal(),
+          amountFormatted: amount.toBRL(),
+          category: 'taxes',
+          subcategory: projection.taxType,
+          description,
+          isProjected: projection.status === 'projected',
+          notes: projection.notes
         });
       });
 

@@ -12,8 +12,15 @@ import { Money, ServerMoneyUtils, MoneyUtils } from "../utils/money";
  * Service for managing transaction-related operations with precise Money handling
  */
 export class TransactionService extends BaseService {
+  private taxService: any; // Will be injected to avoid circular dependency
+
   constructor(storage: IStorage) {
     super(storage);
+  }
+
+  // Set the tax service instance (to avoid circular dependency)
+  setTaxService(taxService: any): void {
+    this.taxService = taxService;
   }
 
   /**
@@ -92,6 +99,18 @@ export class TransactionService extends BaseService {
       const validatedData = insertTransactionSchema.parse(transactionData);
       const created = await this.storage.createTransaction(validatedData);
       
+      // If it's a revenue transaction, recalculate tax projections
+      if (created.type === 'revenue' && this.taxService && !created.isHistorical) {
+        try {
+          const monthStr = format(new Date(created.date), 'yyyy-MM');
+          await this.taxService.recalculateProjectionsForMonth(userId, monthStr);
+          console.log(`Tax projections recalculated for ${monthStr} after revenue transaction`);
+        } catch (error) {
+          console.error('Failed to recalculate tax projections:', error);
+          // Don't fail the transaction creation if tax recalculation fails
+        }
+      }
+      
       // Return with formatted amount
       const createdAmount = ServerMoneyUtils.fromDecimal(created.amount);
       return {
@@ -131,6 +150,18 @@ export class TransactionService extends BaseService {
       const updated = await this.storage.updateTransaction(id, validatedData, userId);
       
       if (updated) {
+        // If it's a revenue transaction, recalculate tax projections
+        if (updated.type === 'revenue' && this.taxService && !updated.isHistorical) {
+          try {
+            const monthStr = format(new Date(updated.date), 'yyyy-MM');
+            await this.taxService.recalculateProjectionsForMonth(userId, monthStr);
+            console.log(`Tax projections recalculated for ${monthStr} after revenue update`);
+          } catch (error) {
+            console.error('Failed to recalculate tax projections:', error);
+            // Don't fail the transaction update if tax recalculation fails
+          }
+        }
+        
         const updatedAmount = ServerMoneyUtils.fromDecimal(updated.amount);
         return {
           ...updated,

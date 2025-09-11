@@ -752,6 +752,189 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
   );
 
+  // ==================== ADVANCED TAX SYSTEM ROUTES ====================
+  
+  // Initialize tax settings for user
+  app.post('/api/taxes/initialize', 
+    isAuthenticated,
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      await taxService.initializeTaxSettings(userId);
+      res.json({ success: true, message: 'Tax settings initialized' });
+    })
+  );
+
+  // Get tax settings
+  app.get('/api/taxes/settings', 
+    isAuthenticated,
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const { taxType, effectiveDate } = req.query;
+      const settings = await taxService.getTaxSettings(
+        userId, 
+        taxType as string | undefined,
+        effectiveDate as string | undefined
+      );
+      res.json(settings);
+    })
+  );
+
+  // Update tax settings
+  app.put('/api/taxes/settings/:taxType', 
+    isAuthenticated,
+    validateMultiple({
+      params: z.object({ taxType: z.string() }),
+      body: z.object({
+        rate: z.string().optional(),
+        baseRate: z.string().optional(),
+        additionalRate: z.string().optional(),
+        additionalThreshold: z.string().optional(),
+        paymentFrequency: z.enum(['monthly', 'quarterly']).optional(),
+        dueDay: z.number().optional(),
+        installmentAllowed: z.boolean().optional(),
+        installmentThreshold: z.string().optional(),
+        installmentCount: z.number().optional()
+      })
+    }),
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const { taxType } = req.params;
+      const settings = await taxService.updateTaxSettings(userId, taxType, req.body);
+      res.json(settings);
+    })
+  );
+
+  // Calculate tax projections for a month
+  app.post('/api/taxes/calculate', 
+    isAuthenticated,
+    validate(z.object({
+      referenceMonth: z.string().regex(/^\d{4}-\d{2}$/),
+      propertyIds: z.array(z.number()).optional()
+    })),
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const { referenceMonth, propertyIds } = req.body;
+      const projections = await taxService.calculateTaxProjections(userId, referenceMonth, propertyIds);
+      res.json({
+        success: true,
+        message: `Projeções de impostos calculadas para ${referenceMonth}`,
+        projections
+      });
+    })
+  );
+
+  // Get tax projections
+  app.get('/api/taxes/projections', 
+    isAuthenticated,
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const { startDate, endDate, taxType, status } = req.query;
+      const projections = await taxService.getTaxProjections(userId, {
+        startDate: startDate as string | undefined,
+        endDate: endDate as string | undefined,
+        taxType: taxType as string | undefined,
+        status: status as string | undefined
+      });
+      res.json(projections);
+    })
+  );
+
+  // Update tax projection (manual override)
+  app.patch('/api/taxes/projections/:id', 
+    isAuthenticated,
+    validateMultiple({
+      params: z.object({ id: idSchema }),
+      body: z.object({
+        totalAmount: z.union([z.string(), z.number()]).optional(),
+        notes: z.string().optional()
+      })
+    }),
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const projectionId = req.params.id;
+      const projection = await taxService.updateTaxProjection(userId, projectionId, req.body);
+      res.json({
+        success: true,
+        message: 'Projeção atualizada com sucesso',
+        projection
+      });
+    })
+  );
+
+  // Confirm tax projection and create transaction
+  app.post('/api/taxes/projections/:id/confirm', 
+    isAuthenticated,
+    validateMultiple({
+      params: z.object({ id: idSchema })
+    }),
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const projectionId = req.params.id;
+      const result = await taxService.confirmTaxProjection(userId, projectionId);
+      res.json({
+        success: true,
+        message: 'Projeção confirmada e transação criada',
+        ...result
+      });
+    })
+  );
+
+  // Recalculate projections for a month
+  app.post('/api/taxes/recalculate', 
+    isAuthenticated,
+    validate(z.object({
+      referenceMonth: z.string().regex(/^\d{4}-\d{2}$/)
+    })),
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const { referenceMonth } = req.body;
+      await taxService.recalculateProjectionsForMonth(userId, referenceMonth);
+      res.json({
+        success: true,
+        message: `Projeções recalculadas para ${referenceMonth}`
+      });
+    })
+  );
+
+  // Get tax projections for cash flow
+  app.get('/api/taxes/cash-flow-projections', 
+    isAuthenticated,
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const { startDate, endDate } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'startDate and endDate are required' 
+        });
+      }
+      
+      const projections = await taxService.projectTaxesToCashFlow(
+        userId, 
+        startDate as string, 
+        endDate as string
+      );
+      res.json(projections);
+    })
+  );
+
+  // Generate tax report
+  app.get('/api/taxes/report/:year', 
+    isAuthenticated,
+    validateMultiple({
+      params: z.object({ 
+        year: z.coerce.number().int().min(2020).max(2100) 
+      })
+    }),
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const year = req.params.year;
+      const report = await taxService.generateTaxReport(userId, year);
+      res.json(report);
+    })
+  );
+
   // ==================== IMPORT ROUTES ====================
   app.post('/api/import/historical', isAuthenticated, upload.single('excel'), async (req: any, res) => {
     try {

@@ -3,15 +3,21 @@ import {
   properties,
   transactions,
   expenseComponents,
+  taxSettings,
+  taxProjections,
   type User,
   type UpsertUser,
   type Property,
   type InsertProperty,
   type Transaction,
   type InsertTransaction,
+  type TaxSettings,
+  type InsertTaxSettings,
+  type TaxProjection,
+  type InsertTaxProjection,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sum, sql, gte, lte, or, inArray, exists } from "drizzle-orm";
+import { eq, desc, and, sum, sql, gte, lte, or, inArray, exists, isNull } from "drizzle-orm";
 
 export interface IStorage {
   // User operations - mandatory for Replit Auth
@@ -100,6 +106,27 @@ export interface IStorage {
     totalAmount: number;
     components: any[];
   }): Promise<any>;
+
+  // Tax settings operations
+  getTaxSettings(userId: string, taxType?: string, effectiveDate?: string): Promise<TaxSettings[]>;
+  createTaxSettings(settings: InsertTaxSettings): Promise<TaxSettings>;
+  updateTaxSettings(id: number, settings: Partial<InsertTaxSettings>, userId: string): Promise<TaxSettings | undefined>;
+  
+  // Tax projections operations
+  getTaxProjections(userId: string, filters?: {
+    startDate?: string;
+    endDate?: string;
+    taxType?: string;
+    status?: string;
+  }): Promise<TaxProjection[]>;
+  getTaxProjection(id: number, userId: string): Promise<TaxProjection | undefined>;
+  createTaxProjection(projection: InsertTaxProjection): Promise<TaxProjection>;
+  updateTaxProjection(id: number, projection: Partial<InsertTaxProjection>, userId: string): Promise<TaxProjection | undefined>;
+  deleteTaxProjection(id: number, userId: string): Promise<boolean>;
+  
+  // Batch operations for tax projections
+  createTaxProjections(projections: InsertTaxProjection[]): Promise<TaxProjection[]>;
+  deleteProjectionsForMonth(userId: string, referenceMonth: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -687,6 +714,116 @@ export class DatabaseStorage implements IStorage {
       parentTransaction: parentTransaction[0],
       componentTransactions
     };
+  }
+
+  // Tax settings operations
+  async getTaxSettings(userId: string, taxType?: string, effectiveDate?: string): Promise<TaxSettings[]> {
+    const date = effectiveDate || new Date().toISOString().split('T')[0];
+    
+    const conditions = [
+      eq(taxSettings.userId, userId),
+      lte(taxSettings.effectiveDate, date),
+      or(isNull(taxSettings.endDate), gte(taxSettings.endDate, date))
+    ];
+
+    if (taxType) {
+      conditions.push(eq(taxSettings.taxType, taxType));
+    }
+
+    return await this.db
+      .select()
+      .from(taxSettings)
+      .where(and(...conditions))
+      .orderBy(desc(taxSettings.effectiveDate));
+  }
+
+  async createTaxSettings(settings: InsertTaxSettings): Promise<TaxSettings> {
+    const [newSettings] = await this.db.insert(taxSettings).values(settings).returning();
+    return newSettings;
+  }
+
+  async updateTaxSettings(id: number, settings: Partial<InsertTaxSettings>, userId: string): Promise<TaxSettings | undefined> {
+    const [updatedSettings] = await this.db
+      .update(taxSettings)
+      .set({ ...settings, updatedAt: new Date() })
+      .where(and(eq(taxSettings.id, id), eq(taxSettings.userId, userId)))
+      .returning();
+    return updatedSettings;
+  }
+
+  // Tax projections operations
+  async getTaxProjections(userId: string, filters?: {
+    startDate?: string;
+    endDate?: string;
+    taxType?: string;
+    status?: string;
+  }): Promise<TaxProjection[]> {
+    const conditions = [eq(taxProjections.userId, userId)];
+
+    if (filters?.startDate) {
+      conditions.push(gte(taxProjections.dueDate, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(taxProjections.dueDate, filters.endDate));
+    }
+    if (filters?.taxType) {
+      conditions.push(eq(taxProjections.taxType, filters.taxType));
+    }
+    if (filters?.status) {
+      conditions.push(eq(taxProjections.status, filters.status));
+    }
+
+    return await this.db
+      .select()
+      .from(taxProjections)
+      .where(and(...conditions))
+      .orderBy(taxProjections.dueDate, taxProjections.taxType);
+  }
+
+  async getTaxProjection(id: number, userId: string): Promise<TaxProjection | undefined> {
+    const [projection] = await this.db
+      .select()
+      .from(taxProjections)
+      .where(and(eq(taxProjections.id, id), eq(taxProjections.userId, userId)));
+    return projection;
+  }
+
+  async createTaxProjection(projection: InsertTaxProjection): Promise<TaxProjection> {
+    const [newProjection] = await this.db.insert(taxProjections).values(projection).returning();
+    return newProjection;
+  }
+
+  async updateTaxProjection(id: number, projection: Partial<InsertTaxProjection>, userId: string): Promise<TaxProjection | undefined> {
+    const [updatedProjection] = await this.db
+      .update(taxProjections)
+      .set({ ...projection, updatedAt: new Date() })
+      .where(and(eq(taxProjections.id, id), eq(taxProjections.userId, userId)))
+      .returning();
+    return updatedProjection;
+  }
+
+  async deleteTaxProjection(id: number, userId: string): Promise<boolean> {
+    const result = await this.db
+      .delete(taxProjections)
+      .where(and(eq(taxProjections.id, id), eq(taxProjections.userId, userId)));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Batch operations for tax projections
+  async createTaxProjections(projections: InsertTaxProjection[]): Promise<TaxProjection[]> {
+    return await this.db.insert(taxProjections).values(projections).returning();
+  }
+
+  async deleteProjectionsForMonth(userId: string, referenceMonth: string): Promise<boolean> {
+    const result = await this.db
+      .delete(taxProjections)
+      .where(and(
+        eq(taxProjections.userId, userId),
+        eq(taxProjections.referenceMonth, referenceMonth),
+        eq(taxProjections.status, 'projected'),
+        eq(taxProjections.manualOverride, false)
+      ));
+    return (result.rowCount ?? 0) > 0;
   }
 }
 

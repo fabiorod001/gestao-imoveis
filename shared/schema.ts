@@ -198,6 +198,58 @@ export const cleaningServiceDetails = pgTable("cleaning_service_details", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Tax settings table - configurações de alíquotas com histórico
+export const taxSettings = pgTable("tax_settings", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  taxType: varchar("tax_type").notNull(), // PIS, COFINS, IRPJ, CSLL
+  rate: decimal("rate", { precision: 5, scale: 2 }).notNull(), // Alíquota em porcentagem
+  baseRate: decimal("base_rate", { precision: 5, scale: 2 }), // Base de cálculo para lucro presumido (32% para IRPJ/CSLL)
+  additionalRate: decimal("additional_rate", { precision: 5, scale: 2 }), // Adicional IRPJ (10% sobre excedente)
+  additionalThreshold: decimal("additional_threshold", { precision: 12, scale: 2 }), // Limite para adicional (R$ 20.000/mês)
+  paymentFrequency: varchar("payment_frequency").notNull(), // monthly, quarterly
+  dueDay: integer("due_day"), // Dia do vencimento (25 para PIS/COFINS, último dia útil para IRPJ/CSLL)
+  installmentAllowed: boolean("installment_allowed").default(false), // Se permite parcelamento
+  installmentThreshold: decimal("installment_threshold", { precision: 12, scale: 2 }), // Valor mínimo para parcelamento (R$ 2.000)
+  installmentCount: integer("installment_count"), // Número de parcelas (3 para IRPJ/CSLL)
+  effectiveDate: date("effective_date").notNull(), // Data de vigência da alíquota
+  endDate: date("end_date"), // Data fim da vigência (null = vigente)
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Tax projections table - projeções calculadas automaticamente
+export const taxProjections = pgTable("tax_projections", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  taxType: varchar("tax_type").notNull(), // PIS, COFINS, IRPJ, CSLL
+  referenceMonth: date("reference_month").notNull(), // Mês de competência (receitas)
+  dueDate: date("due_date").notNull(), // Data de vencimento
+  baseAmount: decimal("base_amount", { precision: 12, scale: 2 }).notNull(), // Base de cálculo (receitas do mês)
+  taxAmount: decimal("tax_amount", { precision: 12, scale: 2 }).notNull(), // Valor do imposto
+  additionalAmount: decimal("additional_amount", { precision: 12, scale: 2 }), // Adicional IRPJ
+  totalAmount: decimal("total_amount", { precision: 12, scale: 2 }).notNull(), // Total a pagar
+  status: varchar("status").notNull().default("projected"), // projected, confirmed, paid
+  manualOverride: boolean("manual_override").default(false), // Se foi editado manualmente
+  originalAmount: decimal("original_amount", { precision: 12, scale: 2 }), // Valor original antes da edição manual
+  
+  // Controle de parcelamento
+  isInstallment: boolean("is_installment").default(false),
+  installmentNumber: integer("installment_number"), // 1, 2, 3
+  parentProjectionId: integer("parent_projection_id").references(() => taxProjections.id),
+  
+  // Rateio por propriedade
+  propertyDistribution: jsonb("property_distribution"), // Array com {propertyId, propertyName, revenue, taxAmount}
+  selectedPropertyIds: jsonb("selected_property_ids"), // IDs das propriedades selecionadas
+  
+  // Integração com transações
+  transactionId: integer("transaction_id").references(() => transactions.id), // Transaction criada quando confirmado
+  
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   properties: many(properties),
@@ -247,6 +299,28 @@ export const taxPaymentsRelations = relations(taxPayments, ({ one }) => ({
   }),
 }));
 
+export const taxSettingsRelations = relations(taxSettings, ({ one }) => ({
+  user: one(users, {
+    fields: [taxSettings.userId],
+    references: [users.id],
+  }),
+}));
+
+export const taxProjectionsRelations = relations(taxProjections, ({ one }) => ({
+  user: one(users, {
+    fields: [taxProjections.userId],
+    references: [users.id],
+  }),
+  transaction: one(transactions, {
+    fields: [taxProjections.transactionId],
+    references: [transactions.id],
+  }),
+  parentProjection: one(taxProjections, {
+    fields: [taxProjections.parentProjectionId],
+    references: [taxProjections.id],
+  }),
+}));
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -262,6 +336,12 @@ export type Transaction = typeof transactions.$inferSelect;
 
 export type InsertTaxPayment = typeof taxPayments.$inferInsert;
 export type TaxPayment = typeof taxPayments.$inferSelect;
+
+export type InsertTaxSettings = typeof taxSettings.$inferInsert;
+export type TaxSettings = typeof taxSettings.$inferSelect;
+
+export type InsertTaxProjection = typeof taxProjections.$inferInsert;
+export type TaxProjection = typeof taxProjections.$inferSelect;
 
 // Schemas
 export const insertAccountSchema = createInsertSchema(accounts).omit({
@@ -286,6 +366,20 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({
 });
 
 export const insertTaxPaymentSchema = createInsertSchema(taxPayments).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTaxSettingsSchema = createInsertSchema(taxSettings).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTaxProjectionSchema = createInsertSchema(taxProjections).omit({
   id: true,
   userId: true,
   createdAt: true,
