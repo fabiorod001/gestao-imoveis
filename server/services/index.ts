@@ -10,6 +10,7 @@ export { ImportService } from "./ImportService";
 export { AnalyticsService } from "./AnalyticsService";
 export { TaxService } from "./TaxService";
 export { CashFlowService } from "./CashFlowService";
+export { MarcoZeroService } from "./MarcoZeroService";
 
 import { PropertyService } from "./PropertyService";
 import { TransactionService } from "./TransactionService";
@@ -17,6 +18,7 @@ import { ImportService } from "./ImportService";
 import { AnalyticsService } from "./AnalyticsService";
 import { TaxService } from "./TaxService";
 import { CashFlowService } from "./CashFlowService";
+import { MarcoZeroService } from "./MarcoZeroService";
 import type { IStorage } from "../storage";
 
 /**
@@ -32,6 +34,7 @@ export class ServiceFactory {
   private analyticsService?: AnalyticsService;
   private taxService?: TaxService;
   private cashFlowService?: CashFlowService;
+  private marcoZeroService?: MarcoZeroService;
 
   constructor(storage: IStorage) {
     this.storage = storage;
@@ -79,5 +82,12 @@ export class ServiceFactory {
       this.cashFlowService = new CashFlowService(this.storage);
     }
     return this.cashFlowService;
+  }
+
+  getMarcoZeroService(): MarcoZeroService {
+    if (!this.marcoZeroService) {
+      this.marcoZeroService = new MarcoZeroService(this.storage);
+    }
+    return this.marcoZeroService;
   }
 }

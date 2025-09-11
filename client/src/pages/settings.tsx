@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, Plus, Save, Trash2, Landmark, DollarSign, TrendingUp, Calculator, ArrowRight } from 'lucide-react';
+import { Calendar, Plus, Save, Trash2, Landmark, DollarSign, TrendingUp, Calculator, ArrowRight, Target } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
@@ -149,6 +149,22 @@ export default function Settings() {
         <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
         <p className="text-muted-foreground">Gerencie as configurações do sistema</p>
       </div>
+
+      {/* Link para Marco Zero */}
+      <Card className="hover:shadow-lg transition-shadow cursor-pointer border-primary/20" onClick={() => navigate('/marco-zero')}>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-primary" />
+              Marco Zero - Ponto de Partida Financeiro
+            </span>
+            <ArrowRight className="h-5 w-5 text-muted-foreground" />
+          </CardTitle>
+          <CardDescription>
+            Defina o ponto de partida real do sistema com saldos precisos de suas contas. Separe o histórico da gestão futura.
+          </CardDescription>
+        </CardHeader>
+      </Card>
 
       {/* Link para Configuração de Impostos */}
       <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate('/settings/taxes')}>

@@ -141,6 +141,8 @@ export const transactions: any = pgTable("transactions", {
   pixKey: varchar("pix_key"), // Chave PIX do fornecedor
   // Flag for historical transactions
   isHistorical: boolean("is_historical").default(false), // Transações históricas não afetam fluxo de caixa
+  // Marco Zero support
+  isBeforeMarco: boolean("is_before_marco").default(false), // Transações antes do marco zero
   // Account reference for multiple accounts support  
   accountId: integer("account_id").references(() => accounts.id), // Conta associada (Principal, Secundária, etc)
   createdAt: timestamp("created_at").defaultNow(),
@@ -218,6 +220,42 @@ export const taxSettings = pgTable("tax_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Marco Zero table - pontos de partida financeiros
+export const marcoZero = pgTable("marco_zero", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  marcoDate: date("marco_date").notNull(), // Data do marco zero
+  isActive: boolean("is_active").default(true), // Apenas um marco pode estar ativo
+  
+  // Saldos por conta no momento do marco
+  accountBalances: jsonb("account_balances").notNull(), // Array de {accountId, accountName, balance}
+  totalBalance: decimal("total_balance", { precision: 12, scale: 2 }).notNull(), // Soma total dos saldos
+  
+  notes: text("notes"),
+  deactivatedAt: timestamp("deactivated_at"), // Quando foi substituído por outro marco
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Reconciliation Adjustments table - ajustes de reconciliação bancária
+export const reconciliationAdjustments = pgTable("reconciliation_adjustments", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  marcoZeroId: integer("marco_zero_id").references(() => marcoZero.id), // Marco relacionado
+  accountId: integer("account_id").references(() => accounts.id), // Conta afetada
+  
+  adjustmentDate: date("adjustment_date").notNull(), // Data do ajuste
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(), // Valor do ajuste (positivo ou negativo)
+  type: varchar("type").notNull(), // bank_fee, correction, etc.
+  description: text("description").notNull(), // Descrição do ajuste
+  
+  // Referência bancária
+  bankReference: varchar("bank_reference"), // Número do documento bancário
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Tax projections table - projeções calculadas automaticamente
 export const taxProjections = pgTable("tax_projections", {
   id: serial("id").primaryKey(),
@@ -255,6 +293,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   properties: many(properties),
   transactions: many(transactions),
   accounts: many(accounts),
+  marcoZeros: many(marcoZero),
+  reconciliationAdjustments: many(reconciliationAdjustments),
 }));
 
 export const propertiesRelations = relations(properties, ({ one, many }) => ({
@@ -321,6 +361,29 @@ export const taxProjectionsRelations = relations(taxProjections, ({ one }) => ({
   }),
 }));
 
+export const marcoZeroRelations = relations(marcoZero, ({ one, many }) => ({
+  user: one(users, {
+    fields: [marcoZero.userId],
+    references: [users.id],
+  }),
+  reconciliationAdjustments: many(reconciliationAdjustments),
+}));
+
+export const reconciliationAdjustmentsRelations = relations(reconciliationAdjustments, ({ one }) => ({
+  user: one(users, {
+    fields: [reconciliationAdjustments.userId],
+    references: [users.id],
+  }),
+  marcoZero: one(marcoZero, {
+    fields: [reconciliationAdjustments.marcoZeroId],
+    references: [marcoZero.id],
+  }),
+  account: one(accounts, {
+    fields: [reconciliationAdjustments.accountId],
+    references: [accounts.id],
+  }),
+}));
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -342,6 +405,12 @@ export type TaxSettings = typeof taxSettings.$inferSelect;
 
 export type InsertTaxProjection = typeof taxProjections.$inferInsert;
 export type TaxProjection = typeof taxProjections.$inferSelect;
+
+export type InsertMarcoZero = typeof marcoZero.$inferInsert;
+export type MarcoZero = typeof marcoZero.$inferSelect;
+
+export type InsertReconciliationAdjustment = typeof reconciliationAdjustments.$inferInsert;
+export type ReconciliationAdjustment = typeof reconciliationAdjustments.$inferSelect;
 
 // Schemas
 export const insertAccountSchema = createInsertSchema(accounts).omit({
@@ -380,6 +449,20 @@ export const insertTaxSettingsSchema = createInsertSchema(taxSettings).omit({
 });
 
 export const insertTaxProjectionSchema = createInsertSchema(taxProjections).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMarcoZeroSchema = createInsertSchema(marcoZero).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertReconciliationAdjustmentSchema = createInsertSchema(reconciliationAdjustments).omit({
   id: true,
   userId: true,
   createdAt: true,

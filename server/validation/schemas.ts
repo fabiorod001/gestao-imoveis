@@ -19,6 +19,34 @@ import {
 
 /**
  * ====================================
+ * MARCO ZERO SCHEMAS
+ * ====================================
+ */
+
+export const accountBalanceSchema = z.object({
+  accountId: idSchema,
+  accountName: z.string().min(1, "Nome da conta é obrigatório"),
+  balance: moneySchema,
+});
+
+export const setMarcoZeroSchema = z.object({
+  marcoDate: dateSchema,
+  accountBalances: z.array(accountBalanceSchema).min(1, "Pelo menos uma conta deve ter saldo"),
+  notes: z.string().max(1000).optional(),
+});
+
+export const createReconciliationAdjustmentSchema = z.object({
+  marcoZeroId: idSchema.optional(),
+  accountId: idSchema.optional(),
+  adjustmentDate: dateSchema,
+  amount: moneySchema,
+  type: z.string().min(1, "Tipo é obrigatório"),
+  description: z.string().min(1, "Descrição é obrigatória").max(500),
+  bankReference: z.string().max(100).optional(),
+});
+
+/**
+ * ====================================
  * PROPERTY SCHEMAS
  * ====================================
  */

@@ -43,6 +43,8 @@ import {
   generateReportSchema,
   cleanupTransactionsSchema,
   createCompanyExpenseSchema,
+  setMarcoZeroSchema,
+  createReconciliationAdjustmentSchema,
 } from "./validation/schemas";
 
 // Import utility validators
@@ -58,6 +60,7 @@ const importService = serviceFactory.getImportService();
 const analyticsService = serviceFactory.getAnalyticsService();
 const taxService = serviceFactory.getTaxService();
 const cashFlowService = serviceFactory.getCashFlowService();
+const marcoZeroService = serviceFactory.getMarcoZeroService();
 
 // Configure multer for file uploads
 const upload = multer({
@@ -1038,6 +1041,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+  // ==================== MARCO ZERO ROUTES ====================
+  
+  // Get active Marco Zero
+  app.get('/api/marco-zero/active', 
+    isAuthenticated,
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const activeMarco = await marcoZeroService.getActiveMarco(userId);
+      res.json(activeMarco);
+    })
+  );
+
+  // Get Marco Zero history
+  app.get('/api/marco-zero/history', 
+    isAuthenticated,
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const history = await marcoZeroService.getMarcoHistory(userId);
+      res.json(history);
+    })
+  );
+
+  // Set Marco Zero
+  app.post('/api/marco-zero', 
+    isAuthenticated,
+    validate(setMarcoZeroSchema),
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const { marcoDate, accountBalances, notes } = req.body;
+      
+      const newMarco = await marcoZeroService.setMarcoZero(
+        userId, 
+        marcoDate, 
+        accountBalances, 
+        notes
+      );
+      
+      // Update accounts with marco balances if specified
+      if (req.body.updateAccounts) {
+        await marcoZeroService.updateAccountsWithMarcoBalances(userId, accountBalances);
+      }
+      
+      res.json({
+        success: true,
+        message: 'Marco Zero definido com sucesso',
+        marco: newMarco
+      });
+    })
+  );
+
+  // Get reconciliation adjustments
+  app.get('/api/reconciliation', 
+    isAuthenticated,
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const marcoZeroId = req.query.marcoZeroId ? parseInt(req.query.marcoZeroId as string) : undefined;
+      const adjustments = await marcoZeroService.getReconciliationAdjustments(userId, marcoZeroId);
+      res.json(adjustments);
+    })
+  );
+
+  // Create reconciliation adjustment
+  app.post('/api/reconciliation', 
+    isAuthenticated,
+    validate(createReconciliationAdjustmentSchema),
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const adjustment = await marcoZeroService.createReconciliationAdjustment(userId, req.body);
+      res.json({
+        success: true,
+        message: 'Ajuste de reconciliação criado com sucesso',
+        adjustment
+      });
+    })
+  );
+
+  // Delete reconciliation adjustment
+  app.delete('/api/reconciliation/:id', 
+    isAuthenticated,
+    validateMultiple({
+      params: z.object({ id: idSchema })
+    }),
+    asyncHandler(async (req: any, res) => {
+      const userId = getUserId(req);
+      const id = parseInt(req.params.id);
+      const success = await marcoZeroService.deleteReconciliationAdjustment(id, userId);
+      
+      if (success) {
+        res.json({
+          success: true,
+          message: 'Ajuste de reconciliação removido com sucesso'
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          message: 'Ajuste não encontrado'
+        });
+      }
+    })
+  );
 
   return createServer(app);
 }

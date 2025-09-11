@@ -1,17 +1,21 @@
 import { BaseService } from "./BaseService";
 import type { IStorage } from "../storage";
 import { db } from "../db";
-import { transactions, properties, cashFlowSettings, accounts, taxProjections } from "@shared/schema";
+import { transactions, properties, cashFlowSettings, accounts, taxProjections, marcoZero, reconciliationAdjustments } from "@shared/schema";
 import { eq, and, gte, lte, sql, desc, asc, or, isNull } from "drizzle-orm";
 import { format, startOfDay, endOfDay, addDays, differenceInDays } from "date-fns";
 import { Money, ServerMoneyUtils, MoneyUtils } from "../utils/money";
+import { MarcoZeroService } from "./MarcoZeroService";
 
 /**
  * Service for cash flow operations and analysis with precise Money handling
  */
 export class CashFlowService extends BaseService {
+  private marcoZeroService: MarcoZeroService;
+
   constructor(storage: IStorage) {
     super(storage);
+    this.marcoZeroService = new MarcoZeroService(storage);
   }
 
   /**
@@ -22,7 +26,10 @@ export class CashFlowService extends BaseService {
     const end = endOfDay(new Date(endDate));
     const days = differenceInDays(end, start) + 1;
 
-    // Get all transactions in the period
+    // Get active marco zero
+    const activeMarco = await this.marcoZeroService.getActiveMarco(userId);
+    
+    // Get all transactions in the period (excluding before marco and historical)
     const transactionsData = await db
       .select({
         date: transactions.date,
@@ -35,7 +42,9 @@ export class CashFlowService extends BaseService {
       .where(and(
         eq(transactions.userId, userId),
         gte(transactions.date, format(start, 'yyyy-MM-dd')),
-        lte(transactions.date, format(end, 'yyyy-MM-dd'))
+        lte(transactions.date, format(end, 'yyyy-MM-dd')),
+        eq(transactions.isBeforeMarco, false),
+        eq(transactions.isHistorical, false)
       ))
       .orderBy(asc(transactions.date));
 
@@ -62,39 +71,67 @@ export class CashFlowService extends BaseService {
       ))
       .orderBy(asc(taxProjections.dueDate));
 
-    // Get initial balance from accounts
-    const accountsData = await db
-      .select({
-        balance: sql<string>`SUM(${accounts.balance})` // Changed to string for Money conversion
-      })
-      .from(accounts)
-      .where(eq(accounts.userId, userId));
+    // Calculate starting balance
+    let startingBalance: Money;
+    
+    if (activeMarco && activeMarco.marcoDate <= format(start, 'yyyy-MM-dd')) {
+      // Use marco zero as base and calculate from there
+      const marcoDateStr = format(new Date(start), 'yyyy-MM-dd');
+      const prevDay = format(addDays(start, -1), 'yyyy-MM-dd');
+      startingBalance = await this.marcoZeroService.calculateBalanceFromMarco(userId, prevDay);
+    } else {
+      // No marco zero or marco is after start date, use account balances
+      const accountsData = await db
+        .select({
+          balance: sql<string>`SUM(${accounts.currentBalance})` // Use currentBalance
+        })
+        .from(accounts)
+        .where(eq(accounts.userId, userId));
 
-    const initialBalance = ServerMoneyUtils.fromDecimal(accountsData[0]?.balance);
+      const initialBalance = ServerMoneyUtils.fromDecimal(accountsData[0]?.balance || "0");
 
-    // Calculate balance before the start date
-    const previousTransactions = await db
+      // Calculate balance before the start date (only non-historical, non-before-marco transactions)
+      const previousTransactions = await db
+        .select({
+          type: transactions.type,
+          totalAmount: sql<string>`SUM(${transactions.amount})`
+        })
+        .from(transactions)
+        .where(and(
+          eq(transactions.userId, userId),
+          sql`${transactions.date} < ${format(start, 'yyyy-MM-dd')}`,
+          eq(transactions.isBeforeMarco, false),
+          eq(transactions.isHistorical, false)
+        ))
+        .groupBy(transactions.type);
+
+      // Calculate starting balance using Money
+      startingBalance = initialBalance;
+      previousTransactions.forEach(row => {
+        const amount = ServerMoneyUtils.fromDecimal(row.totalAmount || "0");
+        if (row.type === 'revenue') {
+          startingBalance = startingBalance.add(amount);
+        } else if (row.type === 'expense') {
+          startingBalance = startingBalance.subtract(amount);
+        }
+      });
+    }
+    
+    // Get reconciliation adjustments in the period
+    const adjustmentsData = await db
       .select({
-        type: transactions.type,
-        totalAmount: sql<string>`SUM(${transactions.amount})` // Changed to string for Money conversion
+        adjustmentDate: reconciliationAdjustments.adjustmentDate,
+        amount: reconciliationAdjustments.amount,
+        description: reconciliationAdjustments.description,
+        type: reconciliationAdjustments.type
       })
-      .from(transactions)
+      .from(reconciliationAdjustments)
       .where(and(
-        eq(transactions.userId, userId),
-        sql`${transactions.date} < ${format(start, 'yyyy-MM-dd')}`
+        eq(reconciliationAdjustments.userId, userId),
+        gte(reconciliationAdjustments.adjustmentDate, format(start, 'yyyy-MM-dd')),
+        lte(reconciliationAdjustments.adjustmentDate, format(end, 'yyyy-MM-dd'))
       ))
-      .groupBy(transactions.type);
-
-    // Calculate starting balance using Money
-    let startingBalance = initialBalance;
-    previousTransactions.forEach(row => {
-      const amount = ServerMoneyUtils.fromDecimal(row.totalAmount);
-      if (row.type === 'revenue') {
-        startingBalance = startingBalance.add(amount);
-      } else if (row.type === 'expense') {
-        startingBalance = startingBalance.subtract(amount);
-      }
-    });
+      .orderBy(asc(reconciliationAdjustments.adjustmentDate));
 
     // Create daily cash flow with Money precision
     const dailyFlow = [];
@@ -105,10 +142,14 @@ export class CashFlowService extends BaseService {
       const dateStr = format(currentDate, 'yyyy-MM-dd');
       const dayTransactions = transactionsData.filter(t => t.date === dateStr);
       const dayTaxProjections = taxProjectionsData.filter(t => t.dueDate === dateStr);
+      const dayAdjustments = adjustmentsData.filter(a => a.adjustmentDate === dateStr);
       
       let dayRevenue = Money.zero();
       let dayExpenses = Money.zero();
       const dayDetails = [];
+      
+      // Check if this is the marco zero date
+      const isMarcoDate = activeMarco && activeMarco.marcoDate === dateStr;
 
       dayTransactions.forEach(t => {
         const amount = ServerMoneyUtils.fromDecimal(t.amount);
@@ -148,6 +189,36 @@ export class CashFlowService extends BaseService {
           notes: projection.notes
         });
       });
+      
+      // Add reconciliation adjustments
+      dayAdjustments.forEach(adjustment => {
+        const amount = ServerMoneyUtils.fromDecimal(adjustment.amount);
+        // Adjustments can be positive or negative
+        if (amount.isPositive()) {
+          dayRevenue = dayRevenue.add(amount);
+        } else {
+          dayExpenses = dayExpenses.add(amount.abs());
+        }
+        
+        dayDetails.push({
+          type: amount.isPositive() ? 'revenue' : 'expense',
+          amount: amount.abs().toDecimal(),
+          amountFormatted: amount.abs().toBRL(),
+          category: 'reconciliation',
+          description: `Ajuste de Reconciliação: ${adjustment.description}`,
+          isReconciliation: true
+        });
+      });
+      
+      // Add Marco Zero marker if this is the marco date
+      if (isMarcoDate) {
+        dayDetails.push({
+          type: 'marker',
+          description: '🎯 MARCO ZERO - Ponto de Partida Financeiro',
+          isMarco: true,
+          marcoBalance: ServerMoneyUtils.fromDecimal(activeMarco.totalBalance).toBRL()
+        });
+      }
 
       const netFlow = dayRevenue.subtract(dayExpenses);
       runningBalance = runningBalance.add(netFlow);
