@@ -44,6 +44,15 @@ const CashFlowPage = memo(function CashFlowPage() {
       });
       const response = await fetch(`/api/analytics/cash-flow?${params}`);
       const data = await response.json();
+      // API now returns an object with dailyFlow array
+      if (data && data.dailyFlow && Array.isArray(data.dailyFlow)) {
+        // Add isToday flag for today's date
+        const today = new Date().toISOString().split('T')[0];
+        return data.dailyFlow.map((item: any) => ({
+          ...item,
+          isToday: item.date === today
+        }));
+      }
       return Array.isArray(data) ? data : [];
     },
     ...queryOptions.realtime, // Cache em tempo real para fluxo de caixa

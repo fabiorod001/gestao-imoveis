@@ -155,8 +155,15 @@ export default function AdvancedPivotTable() {
     
     // Sort options by year and month (newest first)
     options.sort((a, b) => {
+      // Add safety checks for undefined keys
+      if (!a?.key || !b?.key) return 0;
+      
       const [monthA, yearA] = a.key.split('/');
       const [monthB, yearB] = b.key.split('/');
+      
+      // Add safety checks for split results
+      if (!monthA || !yearA || !monthB || !yearB) return 0;
+      
       const dateA = new Date(parseInt(yearA), parseInt(monthA) - 1);
       const dateB = new Date(parseInt(yearB), parseInt(monthB) - 1);
       return dateB.getTime() - dateA.getTime();
