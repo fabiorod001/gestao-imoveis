@@ -11,6 +11,7 @@ export { AnalyticsService } from "./AnalyticsService";
 export { TaxService } from "./TaxService";
 export { CashFlowService } from "./CashFlowService";
 export { MarcoZeroService } from "./MarcoZeroService";
+export { CleaningService } from "./CleaningService";
 
 import { PropertyService } from "./PropertyService";
 import { TransactionService } from "./TransactionService";
@@ -19,6 +20,7 @@ import { AnalyticsService } from "./AnalyticsService";
 import { TaxService } from "./TaxService";
 import { CashFlowService } from "./CashFlowService";
 import { MarcoZeroService } from "./MarcoZeroService";
+import { CleaningService } from "./CleaningService";
 import type { IStorage } from "../storage";
 
 /**
@@ -35,6 +37,7 @@ export class ServiceFactory {
   private taxService?: TaxService;
   private cashFlowService?: CashFlowService;
   private marcoZeroService?: MarcoZeroService;
+  private cleaningService?: CleaningService;
 
   constructor(storage: IStorage) {
     this.storage = storage;
@@ -89,5 +92,12 @@ export class ServiceFactory {
       this.marcoZeroService = new MarcoZeroService(this.storage);
     }
     return this.marcoZeroService;
+  }
+  
+  getCleaningService(): CleaningService {
+    if (!this.cleaningService) {
+      this.cleaningService = new CleaningService(this.storage);
+    }
+    return this.cleaningService;
   }
 }

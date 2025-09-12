@@ -11,7 +11,8 @@ import {
   Settings,
   Calculator,
   X,
-  DollarSign
+  DollarSign,
+  SprayCanIcon
 } from "lucide-react";
 
 const navigation = [
@@ -22,6 +23,7 @@ const navigation = [
   { name: 'Despesas', href: '/expenses', icon: TrendingDown },
   { name: 'Relatórios', href: '/reports', icon: FileText },
   { name: 'Importar Dados', href: '/import', icon: Upload },
+  { name: 'Importar Limpezas', href: '/cleaning/import', icon: SprayCanIcon },
 ];
 
 const settings = [

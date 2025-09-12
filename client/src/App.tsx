@@ -39,6 +39,7 @@ const OtherDetailPage = lazy(() => import("@/pages/expenses/other-detail"));
 const Settings = lazy(() => import("@/pages/settings"));
 const TaxSettings = lazy(() => import("@/pages/tax-settings"));
 const MarcoZero = lazy(() => import("@/pages/marco-zero"));
+const CleaningImport = lazy(() => import("@/pages/cleaning-import"));
 
 // Componente de fallback para lazy loading
 function PageLoader() {
@@ -97,6 +98,7 @@ function Router() {
             <Route path="/settings" component={Settings} />
             <Route path="/settings/taxes" component={TaxSettings} />
             <Route path="/marco-zero" component={MarcoZero} />
+            <Route path="/cleaning/import" component={CleaningImport} />
           </Suspense>
         </Layout>
       )}

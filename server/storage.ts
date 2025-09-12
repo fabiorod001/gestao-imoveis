@@ -5,6 +5,9 @@ import {
   expenseComponents,
   taxSettings,
   taxProjections,
+  cleaningServices,
+  cleaningBatches,
+  propertyNameMappings,
   type User,
   type UpsertUser,
   type Property,
@@ -15,6 +18,12 @@ import {
   type InsertTaxSettings,
   type TaxProjection,
   type InsertTaxProjection,
+  type CleaningService,
+  type InsertCleaningService,
+  type CleaningBatch,
+  type InsertCleaningBatch,
+  type PropertyNameMapping,
+  type InsertPropertyNameMapping,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sum, sql, gte, lte, or, inArray, exists, isNull } from "drizzle-orm";
@@ -127,6 +136,30 @@ export interface IStorage {
   // Batch operations for tax projections
   createTaxProjections(projections: InsertTaxProjection[]): Promise<TaxProjection[]>;
   deleteProjectionsForMonth(userId: string, referenceMonth: string): Promise<boolean>;
+  
+  // Cleaning services operations
+  getCleaningServices(userId: string, filters?: {
+    propertyId?: number;
+    startDate?: string;
+    endDate?: string;
+    batchId?: number;
+  }): Promise<CleaningService[]>;
+  createCleaningService(service: InsertCleaningService): Promise<CleaningService>;
+  createCleaningServices(services: InsertCleaningService[]): Promise<CleaningService[]>;
+  updateCleaningService(id: number, service: Partial<InsertCleaningService>, userId: string): Promise<CleaningService | undefined>;
+  deleteCleaningService(id: number, userId: string): Promise<boolean>;
+  
+  // Cleaning batches operations
+  getCleaningBatches(userId: string): Promise<CleaningBatch[]>;
+  getCleaningBatch(id: number, userId: string): Promise<CleaningBatch | undefined>;
+  createCleaningBatch(batch: InsertCleaningBatch): Promise<CleaningBatch>;
+  updateCleaningBatch(id: number, batch: Partial<InsertCleaningBatch>, userId: string): Promise<CleaningBatch | undefined>;
+  deleteCleaningBatch(id: number, userId: string): Promise<boolean>;
+  
+  // Property name mappings operations
+  getPropertyNameMappings(userId: string, propertyId?: number): Promise<PropertyNameMapping[]>;
+  createPropertyNameMapping(mapping: InsertPropertyNameMapping): Promise<PropertyNameMapping>;
+  findPropertyByVariation(userId: string, variation: string): Promise<Property | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -830,6 +863,175 @@ export class DatabaseStorage implements IStorage {
         eq(taxProjections.manualOverride, false)
       ));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  // Cleaning services operations
+  async getCleaningServices(userId: string, filters?: {
+    propertyId?: number;
+    startDate?: string;
+    endDate?: string;
+    batchId?: number;
+  }): Promise<CleaningService[]> {
+    const conditions = [eq(cleaningServices.userId, userId)];
+
+    if (filters?.propertyId) {
+      conditions.push(eq(cleaningServices.propertyId, filters.propertyId));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(cleaningServices.executionDate, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(cleaningServices.executionDate, filters.endDate));
+    }
+    if (filters?.batchId) {
+      conditions.push(eq(cleaningServices.batchId, filters.batchId));
+    }
+
+    return await this.db
+      .select()
+      .from(cleaningServices)
+      .where(and(...conditions))
+      .orderBy(desc(cleaningServices.executionDate));
+  }
+
+  async createCleaningService(service: InsertCleaningService): Promise<CleaningService> {
+    const result = await this.db.insert(cleaningServices).values(service).returning();
+    const [newService] = result as CleaningService[];
+    return newService;
+  }
+
+  async createCleaningServices(services: InsertCleaningService[]): Promise<CleaningService[]> {
+    const result = await this.db.insert(cleaningServices).values(services).returning();
+    return result as CleaningService[];
+  }
+
+  async updateCleaningService(id: number, service: Partial<InsertCleaningService>, userId: string): Promise<CleaningService | undefined> {
+    const [updatedService] = await this.db
+      .update(cleaningServices)
+      .set({ ...service, updatedAt: new Date() })
+      .where(and(eq(cleaningServices.id, id), eq(cleaningServices.userId, userId)))
+      .returning();
+    return updatedService;
+  }
+
+  async deleteCleaningService(id: number, userId: string): Promise<boolean> {
+    const result = await this.db
+      .delete(cleaningServices)
+      .where(and(eq(cleaningServices.id, id), eq(cleaningServices.userId, userId)));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Cleaning batches operations
+  async getCleaningBatches(userId: string): Promise<CleaningBatch[]> {
+    return await this.db
+      .select()
+      .from(cleaningBatches)
+      .where(eq(cleaningBatches.userId, userId))
+      .orderBy(desc(cleaningBatches.paymentDate));
+  }
+
+  async getCleaningBatch(id: number, userId: string): Promise<CleaningBatch | undefined> {
+    const [batch] = await this.db
+      .select()
+      .from(cleaningBatches)
+      .where(and(eq(cleaningBatches.id, id), eq(cleaningBatches.userId, userId)));
+    return batch;
+  }
+
+  async createCleaningBatch(batch: InsertCleaningBatch): Promise<CleaningBatch> {
+    const result = await this.db.insert(cleaningBatches).values(batch).returning();
+    const [newBatch] = result as CleaningBatch[];
+    return newBatch;
+  }
+
+  async updateCleaningBatch(id: number, batch: Partial<InsertCleaningBatch>, userId: string): Promise<CleaningBatch | undefined> {
+    const [updatedBatch] = await this.db
+      .update(cleaningBatches)
+      .set({ ...batch, updatedAt: new Date() })
+      .where(and(eq(cleaningBatches.id, id), eq(cleaningBatches.userId, userId)))
+      .returning();
+    return updatedBatch;
+  }
+
+  async deleteCleaningBatch(id: number, userId: string): Promise<boolean> {
+    // First delete all associated cleaning services
+    await this.db
+      .delete(cleaningServices)
+      .where(and(eq(cleaningServices.batchId, id), eq(cleaningServices.userId, userId)));
+    
+    // Then delete the batch
+    const result = await this.db
+      .delete(cleaningBatches)
+      .where(and(eq(cleaningBatches.id, id), eq(cleaningBatches.userId, userId)));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Property name mappings operations
+  async getPropertyNameMappings(userId: string, propertyId?: number): Promise<PropertyNameMapping[]> {
+    const conditions = [eq(propertyNameMappings.userId, userId)];
+    
+    if (propertyId) {
+      conditions.push(eq(propertyNameMappings.propertyId, propertyId));
+    }
+
+    return await this.db
+      .select()
+      .from(propertyNameMappings)
+      .where(and(...conditions));
+  }
+
+  async createPropertyNameMapping(mapping: InsertPropertyNameMapping): Promise<PropertyNameMapping> {
+    const result = await this.db.insert(propertyNameMappings).values(mapping).returning();
+    const [newMapping] = result as PropertyNameMapping[];
+    return newMapping;
+  }
+
+  async findPropertyByVariation(userId: string, variation: string): Promise<Property | undefined> {
+    // First check for exact mapping
+    const [mapping] = await this.db
+      .select()
+      .from(propertyNameMappings)
+      .where(and(
+        eq(propertyNameMappings.userId, userId),
+        eq(propertyNameMappings.variation, variation.toUpperCase())
+      ));
+
+    if (mapping) {
+      const [property] = await this.db
+        .select()
+        .from(properties)
+        .where(and(eq(properties.id, mapping.propertyId), eq(properties.userId, userId)));
+      return property;
+    }
+
+    // If no mapping found, try fuzzy search on property names
+    const allProperties = await this.db
+      .select()
+      .from(properties)
+      .where(eq(properties.userId, userId));
+
+    const normalizedVariation = variation.toUpperCase().replace(/\s+/g, ' ').trim();
+    
+    // Try exact match first
+    const exactMatch = allProperties.find(p => 
+      p.name?.toUpperCase() === normalizedVariation ||
+      p.nickname?.toUpperCase() === normalizedVariation ||
+      p.airbnbName?.toUpperCase() === normalizedVariation
+    );
+
+    if (exactMatch) return exactMatch;
+
+    // Try partial match
+    const partialMatch = allProperties.find(p => 
+      p.name?.toUpperCase().includes(normalizedVariation) ||
+      p.nickname?.toUpperCase().includes(normalizedVariation) ||
+      p.airbnbName?.toUpperCase().includes(normalizedVariation) ||
+      normalizedVariation.includes(p.name?.toUpperCase() || '') ||
+      normalizedVariation.includes(p.nickname?.toUpperCase() || '') ||
+      normalizedVariation.includes(p.airbnbName?.toUpperCase() || '')
+    );
+
+    return partialMatch;
   }
 }
 

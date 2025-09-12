@@ -189,7 +189,41 @@ export const taxPayments: any = pgTable("tax_payments", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Cleaning service details table - for individual cleaning records
+// Cleaning services table - for individual cleaning records
+export const cleaningServices = pgTable("cleaning_services", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  propertyId: integer("property_id").notNull().references(() => properties.id),
+  executionDate: date("execution_date").notNull(), // Data de execução da limpeza
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(), // Valor da limpeza
+  batchId: integer("batch_id").references(() => cleaningBatches.id), // Agrupa limpezas em lote de pagamento
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Cleaning batches table - groups cleanings for payment
+export const cleaningBatches: any = pgTable("cleaning_batches", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  paymentDate: date("payment_date").notNull(), // Data de pagamento do lote
+  totalAmount: decimal("total_amount", { precision: 12, scale: 2 }).notNull(), // Valor total do lote
+  description: text("description"),
+  hasAdvancePayment: boolean("has_advance_payment").default(false), // Se teve adiantamento
+  advanceAmount: decimal("advance_amount", { precision: 12, scale: 2 }), // Valor do adiantamento
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Property name mappings table - for learning property name variations
+export const propertyNameMappings = pgTable("property_name_mappings", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  propertyId: integer("property_id").notNull().references(() => properties.id),
+  variation: varchar("variation").notNull(), // Variação encontrada (ex: "HADDOK LOBO")
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Cleaning service details table - for individual cleaning records (legacy table)
 export const cleaningServiceDetails = pgTable("cleaning_service_details", {
   id: serial("id").primaryKey(),
   transactionId: integer("transaction_id").notNull().references(() => transactions.id), // Reference to parent cleaning transaction
@@ -295,6 +329,9 @@ export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
   marcoZeros: many(marcoZero),
   reconciliationAdjustments: many(reconciliationAdjustments),
+  cleaningServices: many(cleaningServices),
+  cleaningBatches: many(cleaningBatches),
+  propertyNameMappings: many(propertyNameMappings),
 }));
 
 export const propertiesRelations = relations(properties, ({ one, many }) => ({
@@ -303,6 +340,8 @@ export const propertiesRelations = relations(properties, ({ one, many }) => ({
     references: [users.id],
   }),
   transactions: many(transactions),
+  cleaningServices: many(cleaningServices),
+  propertyNameMappings: many(propertyNameMappings),
 }));
 
 export const accountsRelations = relations(accounts, ({ one, many }) => ({
@@ -384,6 +423,40 @@ export const reconciliationAdjustmentsRelations = relations(reconciliationAdjust
   }),
 }));
 
+export const cleaningServicesRelations = relations(cleaningServices, ({ one }) => ({
+  user: one(users, {
+    fields: [cleaningServices.userId],
+    references: [users.id],
+  }),
+  property: one(properties, {
+    fields: [cleaningServices.propertyId],
+    references: [properties.id],
+  }),
+  batch: one(cleaningBatches, {
+    fields: [cleaningServices.batchId],
+    references: [cleaningBatches.id],
+  }),
+}));
+
+export const cleaningBatchesRelations = relations(cleaningBatches, ({ one, many }) => ({
+  user: one(users, {
+    fields: [cleaningBatches.userId],
+    references: [users.id],
+  }),
+  cleaningServices: many(cleaningServices),
+}));
+
+export const propertyNameMappingsRelations = relations(propertyNameMappings, ({ one }) => ({
+  user: one(users, {
+    fields: [propertyNameMappings.userId],
+    references: [users.id],
+  }),
+  property: one(properties, {
+    fields: [propertyNameMappings.propertyId],
+    references: [properties.id],
+  }),
+}));
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -411,6 +484,15 @@ export type MarcoZero = typeof marcoZero.$inferSelect;
 
 export type InsertReconciliationAdjustment = typeof reconciliationAdjustments.$inferInsert;
 export type ReconciliationAdjustment = typeof reconciliationAdjustments.$inferSelect;
+
+export type InsertCleaningService = typeof cleaningServices.$inferInsert;
+export type CleaningService = typeof cleaningServices.$inferSelect;
+
+export type InsertCleaningBatch = typeof cleaningBatches.$inferInsert;
+export type CleaningBatch = typeof cleaningBatches.$inferSelect;
+
+export type InsertPropertyNameMapping = typeof propertyNameMappings.$inferInsert;
+export type PropertyNameMapping = typeof propertyNameMappings.$inferSelect;
 
 // Schemas
 export const insertAccountSchema = createInsertSchema(accounts).omit({
@@ -467,4 +549,24 @@ export const insertReconciliationAdjustmentSchema = createInsertSchema(reconcili
   userId: true,
   createdAt: true,
   updatedAt: true,
+});
+
+export const insertCleaningServiceSchema = createInsertSchema(cleaningServices).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCleaningBatchSchema = createInsertSchema(cleaningBatches).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPropertyNameMappingSchema = createInsertSchema(propertyNameMappings).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
 });

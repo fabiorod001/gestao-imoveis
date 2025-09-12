@@ -62,6 +62,7 @@ const analyticsService = serviceFactory.getAnalyticsService();
 const taxService = serviceFactory.getTaxService();
 const cashFlowService = serviceFactory.getCashFlowService();
 const marcoZeroService = serviceFactory.getMarcoZeroService();
+const cleaningService = serviceFactory.getCleaningService();
 
 // Configure multer for file uploads
 const upload = multer({
@@ -732,6 +733,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error analyzing cash flow health:', error);
       res.status(500).json({ error: 'Failed to analyze cash flow health' });
+    }
+  });
+
+  // ==================== CLEANING SERVICE ROUTES ====================
+  
+  // Import cleaning batch
+  app.post('/api/cleaning/import', isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const { cleanings, paymentDate, description, advanceAmount } = req.body;
+      
+      const result = await cleaningService.importCleaningBatch(
+        userId,
+        cleanings,
+        paymentDate,
+        description,
+        advanceAmount
+      );
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error importing cleaning batch:', error);
+      res.status(500).json({ error: 'Failed to import cleaning batch' });
+    }
+  });
+  
+  // Process OCR text
+  app.post('/api/cleaning/ocr', isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const { ocrText } = req.body;
+      
+      const result = await cleaningService.processOCRText(userId, ocrText);
+      res.json(result);
+    } catch (error) {
+      console.error('Error processing OCR text:', error);
+      res.status(500).json({ error: 'Failed to process OCR text' });
+    }
+  });
+  
+  // Match cleanings to properties
+  app.post('/api/cleaning/match', isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const { cleanings } = req.body;
+      
+      const result = await cleaningService.matchCleaningsToProperties(userId, cleanings);
+      res.json(result);
+    } catch (error) {
+      console.error('Error matching cleanings:', error);
+      res.status(500).json({ error: 'Failed to match cleanings to properties' });
+    }
+  });
+  
+  // Learn property mapping
+  app.post('/api/cleaning/mapping', isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const { variation, propertyId } = req.body;
+      
+      const result = await cleaningService.learnPropertyMapping(userId, variation, propertyId);
+      res.json(result);
+    } catch (error) {
+      console.error('Error learning property mapping:', error);
+      res.status(500).json({ error: 'Failed to learn property mapping' });
+    }
+  });
+  
+  // Get cleanings for a property
+  app.get('/api/cleaning/property/:id', isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const propertyId = parseInt(req.params.id);
+      const { startDate, endDate } = req.query;
+      
+      const cleanings = await cleaningService.getCleaningsByProperty(
+        userId,
+        propertyId,
+        startDate as string,
+        endDate as string
+      );
+      
+      res.json(cleanings);
+    } catch (error) {
+      console.error('Error fetching property cleanings:', error);
+      res.status(500).json({ error: 'Failed to fetch property cleanings' });
+    }
+  });
+  
+  // Get all cleaning batches
+  app.get('/api/cleaning/batches', isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const batches = await cleaningService.getCleaningBatches(userId);
+      res.json(batches);
+    } catch (error) {
+      console.error('Error fetching cleaning batches:', error);
+      res.status(500).json({ error: 'Failed to fetch cleaning batches' });
+    }
+  });
+  
+  // Get cleaning batch with services
+  app.get('/api/cleaning/batch/:id', isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const batchId = parseInt(req.params.id);
+      
+      const result = await cleaningService.getCleaningBatchWithServices(userId, batchId);
+      res.json(result);
+    } catch (error) {
+      console.error('Error fetching cleaning batch:', error);
+      res.status(500).json({ error: 'Failed to fetch cleaning batch' });
+    }
+  });
+  
+  // Delete cleaning batch
+  app.delete('/api/cleaning/batch/:id', isAuthenticated, async (req: any, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const batchId = parseInt(req.params.id);
+      
+      const success = await cleaningService.deleteCleaningBatch(userId, batchId);
+      if (success) {
+        res.status(204).send();
+      } else {
+        res.status(404).json({ error: 'Batch not found' });
+      }
+    } catch (error) {
+      console.error('Error deleting cleaning batch:', error);
+      res.status(500).json({ error: 'Failed to delete cleaning batch' });
     }
   });
 
