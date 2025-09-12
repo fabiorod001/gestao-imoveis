@@ -147,7 +147,16 @@ export const transactions: any = pgTable("transactions", {
   accountId: integer("account_id").references(() => accounts.id), // Conta associada (Principal, Secundária, etc)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // Index for expense dashboard queries - optimized for filtering expenses by user and type
+  index("idx_transactions_user_type_property").on(table.userId, table.type, table.propertyId),
+  // Index for date ordering (common in most queries)
+  index("idx_transactions_date").on(table.date),
+  // Index for property-specific queries
+  index("idx_transactions_property").on(table.propertyId),
+  // Index for parent transaction queries (composite expenses)
+  index("idx_transactions_parent").on(table.parentTransactionId),
+]);
 
 // Composite expense components table
 export const expenseComponents = pgTable("expense_components", {

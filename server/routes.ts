@@ -386,16 +386,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // ==================== EXPENSE ROUTES ====================
-  app.get('/api/expenses/dashboard', isAuthenticated, async (req: any, res: Response) => {
-    try {
-      const userId = getUserId(req);
-      const expenseData = await transactionService.getExpenseDashboardData(userId);
-      res.json(expenseData);
-    } catch (error) {
-      console.error('Error fetching expense dashboard data:', error);
-      res.status(500).json({ error: 'Failed to fetch expense data' });
+  app.get('/api/expenses/dashboard', 
+    isAuthenticated, 
+    cacheMiddleware(60), // Cache for 60 seconds to improve performance
+    async (req: any, res: Response) => {
+      try {
+        const userId = getUserId(req);
+        
+        // Parse query parameters for pagination and filtering
+        const { 
+          limit = 100, 
+          offset = 0, 
+          startDate, 
+          endDate, 
+          propertyId 
+        } = req.query;
+
+        const options = {
+          limit: parseInt(limit as string) || 100,
+          offset: parseInt(offset as string) || 0,
+          startDate: startDate ? new Date(startDate as string) : undefined,
+          endDate: endDate ? new Date(endDate as string) : undefined,
+          propertyId: propertyId ? parseInt(propertyId as string) : undefined,
+        };
+
+        // Call the optimized service method with pagination
+        const result = await transactionService.getExpenseDashboardData(userId, options);
+        
+        // Add cache headers for better client-side caching
+        res.setHeader('Cache-Control', 'private, max-age=60');
+        res.setHeader('Vary', 'Authorization');
+        
+        res.json(result);
+      } catch (error) {
+        console.error('Error fetching expense dashboard data:', error);
+        res.status(500).json({ error: 'Failed to fetch expense data' });
+      }
     }
-  });
+  );
 
   // Management expenses
   app.get('/api/expenses/management/:id', 

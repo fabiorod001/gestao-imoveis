@@ -206,9 +206,54 @@ export class TransactionService extends BaseService {
   }
 
   /**
-   * Get expense dashboard data with Money formatting
+   * Get expense dashboard data with Money formatting - OPTIMIZED
    */
-  async getExpenseDashboardData(userId: string): Promise<any[]> {
+  async getExpenseDashboardData(
+    userId: string, 
+    options: { 
+      limit?: number; 
+      offset?: number; 
+      startDate?: Date; 
+      endDate?: Date;
+      propertyId?: number;
+    } = {}
+  ): Promise<{ data: any[]; total: number; hasMore: boolean }> {
+    const { 
+      limit = 100, // Default limit to 100 records for performance
+      offset = 0,
+      startDate,
+      endDate,
+      propertyId
+    } = options;
+
+    // Build where conditions - use isNull for better index usage
+    const whereConditions = [
+      eq(transactions.userId, userId),
+      eq(transactions.type, 'expense'),
+      isNull(transactions.parentTransactionId), // More efficient than checking propertyId IS NOT NULL
+    ];
+
+    // Add optional filters
+    if (startDate) {
+      whereConditions.push(sql`${transactions.date} >= ${startDate}`);
+    }
+    if (endDate) {
+      whereConditions.push(sql`${transactions.date} <= ${endDate}`);
+    }
+    if (propertyId) {
+      whereConditions.push(eq(transactions.propertyId, propertyId));
+    }
+
+    // Get total count for pagination (uses the new index)
+    const countQuery = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(transactions)
+      .where(and(...whereConditions))
+      .execute();
+    
+    const total = Number(countQuery[0]?.count || 0);
+
+    // Main query with limit and offset - utilizes the new composite index
     const expenseData = await db
       .select({
         id: transactions.id,
@@ -226,15 +271,13 @@ export class TransactionService extends BaseService {
       })
       .from(transactions)
       .leftJoin(properties, eq(transactions.propertyId, properties.id))
-      .where(and(
-        eq(transactions.userId, userId),
-        eq(transactions.type, 'expense'),
-        sql`${transactions.propertyId} IS NOT NULL` // Exclude parent transactions
-      ))
-      .orderBy(desc(transactions.date));
+      .where(and(...whereConditions))
+      .orderBy(desc(transactions.date))
+      .limit(limit)
+      .offset(offset);
     
-    // Format amounts using Money
-    return expenseData.map(expense => {
+    // Format amounts using Money - only for the limited results
+    const formattedData = expenseData.map(expense => {
       const amountMoney = ServerMoneyUtils.fromDecimal(expense.amount);
       return {
         ...expense,
@@ -243,6 +286,12 @@ export class TransactionService extends BaseService {
         amountValue: amountMoney.toDecimal()
       };
     });
+
+    return {
+      data: formattedData,
+      total,
+      hasMore: offset + limit < total
+    };
   }
 
   /**
@@ -311,7 +360,7 @@ export class TransactionService extends BaseService {
     const totalAmount = ServerMoneyUtils.parseUserInput(data.totalAmount);
 
     // Create the main transaction (parent) without propertyId
-    const mainTransaction = await db.insert(transactions).values({
+    const mainTransactionResult = await db.insert(transactions).values({
       userId,
       propertyId: null, // This is a consolidated payment
       type: 'expense',
@@ -325,14 +374,15 @@ export class TransactionService extends BaseService {
       notes: `Pagamento consolidado de gestão para ${data.distribution.length} propriedades`
     }).returning();
 
-    const parentId = mainTransaction[0].id;
+    const mainTransaction = (mainTransactionResult as any[])[0];
+    const parentId = mainTransaction.id;
     
     // Create child transactions for each property with Money precision
     const childTransactions = [];
     for (const item of data.distribution) {
       const itemAmount = ServerMoneyUtils.parseUserInput(item.amount);
       
-      const childTransaction = await db.insert(transactions).values({
+      const childTransactionResult = await db.insert(transactions).values({
         userId,
         propertyId: item.propertyId,
         type: 'expense',
@@ -346,8 +396,9 @@ export class TransactionService extends BaseService {
         notes: `Parte do pagamento consolidado de ${format(new Date(data.paymentDate), 'dd/MM/yyyy')}`
       }).returning();
       
+      const childTransaction = (childTransactionResult as any[])[0];
       childTransactions.push({
-        ...childTransaction[0],
+        ...childTransaction,
         amountFormatted: itemAmount.toBRL()
       });
     }
@@ -355,7 +406,7 @@ export class TransactionService extends BaseService {
     return { 
       success: true, 
       mainTransaction: {
-        ...mainTransaction[0],
+        ...mainTransaction,
         amountFormatted: totalAmount.toBRL()
       },
       transactions: childTransactions,
@@ -451,7 +502,7 @@ export class TransactionService extends BaseService {
     for (const item of distribution) {
       const itemAmount = ServerMoneyUtils.parseUserInput(item.amount);
       
-      const childTransaction = await db.insert(transactions).values({
+      const childTransactionResult = await db.insert(transactions).values({
         userId,
         propertyId: item.propertyId,
         type: 'expense',
@@ -465,8 +516,9 @@ export class TransactionService extends BaseService {
         notes: `Parte do pagamento consolidado de ${format(new Date(paymentDate), 'dd/MM/yyyy')}`
       }).returning();
       
+      const childTransaction = (childTransactionResult as any[])[0];
       childTransactions.push({
-        ...childTransaction[0],
+        ...childTransaction,
         amountFormatted: itemAmount.toBRL()
       });
     }
@@ -489,7 +541,7 @@ export class TransactionService extends BaseService {
     const totalAmountMoney = ServerMoneyUtils.parseUserInput(totalAmount);
     
     // Create parent transaction
-    const [parentTransaction] = await db.insert(transactions).values({
+    const parentTransactionResult = await db.insert(transactions).values({
       userId,
       propertyId: null,
       type: 'expense',
@@ -503,12 +555,14 @@ export class TransactionService extends BaseService {
       notes: `Distribuído proporcionalmente entre ${distribution.length} propriedades`
     }).returning();
     
+    const parentTransaction = (parentTransactionResult as any[])[0];
+    
     // Create child transactions with Money precision
     const childTransactions = [];
     for (const item of distribution) {
       const itemAmount = ServerMoneyUtils.parseUserInput(item.amount);
       
-      const [child] = await db.insert(transactions).values({
+      const childResult = await db.insert(transactions).values({
         userId,
         propertyId: item.propertyId,
         type: 'expense',
@@ -522,6 +576,7 @@ export class TransactionService extends BaseService {
         notes: `${item.percentage.toFixed(1)}% do total`
       }).returning();
       
+      const child = (childResult as any[])[0];
       childTransactions.push({
         ...child,
         amountFormatted: itemAmount.toBRL()
