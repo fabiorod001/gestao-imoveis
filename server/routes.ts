@@ -1205,6 +1205,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
   );
 
+  // ==================== ENHANCED TAX MANAGEMENT ROUTES ====================
+  
+  // Get taxes by period with filters
+  app.get('/api/taxes/period',
+    isAuthenticated,
+    asyncHandler(async (req: any, res: Response) => {
+      const userId = getUserId(req);
+      const { startDate, endDate, propertyIds, taxTypes } = req.query;
+      
+      const result = await taxService.getTaxesByPeriod(userId, {
+        startDate: startDate || format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+        endDate: endDate || format(endOfMonth(new Date()), 'yyyy-MM-dd'),
+        propertyIds: propertyIds ? propertyIds.split(',').map(Number) : undefined,
+        taxTypes: taxTypes ? taxTypes.split(',') : undefined
+      });
+      
+      res.json(result);
+    })
+  );
+
+  // Get property tax distribution
+  app.get('/api/taxes/distribution',
+    isAuthenticated,
+    asyncHandler(async (req: any, res: Response) => {
+      const userId = getUserId(req);
+      const { startDate, endDate, taxTypes } = req.query;
+      
+      const result = await taxService.getPropertyTaxDistribution(userId, {
+        startDate: startDate || format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+        endDate: endDate || format(endOfMonth(new Date()), 'yyyy-MM-dd'),
+        taxTypes: taxTypes ? taxTypes.split(',') : undefined
+      });
+      
+      res.json(result);
+    })
+  );
+
+  // Get monthly tax comparison
+  app.get('/api/taxes/monthly-comparison/:year',
+    isAuthenticated,
+    validateMultiple({ 
+      params: z.object({ 
+        year: z.coerce.number().int().min(2020).max(2100) 
+      }) 
+    }),
+    asyncHandler(async (req: any, res: Response) => {
+      const userId = getUserId(req);
+      const year = parseInt(req.params.year);
+      const result = await taxService.getMonthlyComparison(userId, year);
+      res.json(result);
+    })
+  );
+
+  // Calculate enhanced tax projections
+  app.post('/api/taxes/projections-enhanced',
+    isAuthenticated,
+    asyncHandler(async (req: any, res: Response) => {
+      const userId = getUserId(req);
+      const { months, baseOnLastMonths, seasonalAdjustment } = req.body;
+      
+      const result = await taxService.calculateTaxProjectionsEnhanced(userId, {
+        months: months || 3,
+        baseOnLastMonths: baseOnLastMonths || 3,
+        seasonalAdjustment: seasonalAdjustment || false
+      });
+      
+      res.json(result);
+    })
+  );
+
   // ==================== IMPORT ROUTES ====================
   app.post('/api/import/historical', isAuthenticated, upload.single('excel'), async (req: any, res: Response) => {
     try {

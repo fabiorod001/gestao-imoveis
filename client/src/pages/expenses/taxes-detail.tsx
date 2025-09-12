@@ -1,20 +1,48 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Edit2, Save, X, Check, FileSpreadsheet, FileText, Filter, ChevronDown, ChevronUp, Plus } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { 
+  ArrowLeft, 
+  Edit2, 
+  Save, 
+  X, 
+  Check, 
+  FileSpreadsheet, 
+  FileText, 
+  Filter, 
+  ChevronDown, 
+  ChevronUp, 
+  Plus,
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  Building2,
+  DollarSign,
+  Percent,
+  Calculator,
+  Download,
+  RefreshCw,
+  AlertCircle
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import TransactionDetailModal from '@/components/expenses/TransactionDetailModal';
 import { SimpleTaxForm } from '@/components/taxes/SimpleTaxForm';
+import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 
 interface Property {
   id: number;
@@ -24,13 +52,15 @@ interface Property {
   type: string;
   status: string;
   rentalType?: string;
-  purchasePrice?: number;
-  purchaseDate?: string;
 }
 
-// Specific subcategories for taxes - only the 5 tax types used
-const TAX_SUBCATEGORIES = [
-  'IRPJ', 'CSLL', 'PIS', 'COFINS', 'IPTU'
+// Brazilian tax types with rates
+const TAX_TYPES = [
+  { id: 'PIS', name: 'PIS', rate: 1.65, color: 'blue' },
+  { id: 'COFINS', name: 'COFINS', rate: 7.6, color: 'green' },
+  { id: 'CSLL', name: 'CSLL', rate: 2.88, color: 'purple' }, // 9% on 32% profit
+  { id: 'IRPJ', name: 'IRPJ', rate: 4.8, color: 'orange' }, // 15% on 32% profit
+  { id: 'IPTU', name: 'IPTU', rate: 0, color: 'red' } // Municipal tax, varies
 ];
 
 interface Transaction {
@@ -41,639 +71,367 @@ interface Transaction {
   category: string;
   propertyId: number;
   propertyName: string;
+  taxType?: string;
+  parentTransactionId?: number;
+  notes?: string;
 }
 
-interface TaxDetailRow {
-  taxType: string;
-  monthlyData: { [monthKey: string]: { amount: number; transactions: Transaction[] } };
-  total: number;
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
-interface TaxDetailData {
-  rows: TaxDetailRow[];
-  monthHeaders: string[];
-  columnTotals: { [monthKey: string]: number };
-  grandTotal: number;
+function formatPercentage(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'percent',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value / 100);
 }
+
+// Generate month options for filters
+function generateMonthOptions() {
+  const options = [];
+  const today = new Date();
+  
+  // Past 24 months and future 3 months
+  for (let i = -24; i <= 3; i++) {
+    const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const key = `${month}/${year}`;
+    const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const isCurrentMonth = i === 0;
+    options.push({ key, label: label.charAt(0).toUpperCase() + label.slice(1), isCurrentMonth });
+  }
+  
+  return options;
+}
+
+const monthOptions = generateMonthOptions();
 
 export default function TaxesDetailPage() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  
+  // Current year from URL or default to current
+  const currentYear = new URLSearchParams(window.location.search).get('year') || new Date().getFullYear().toString();
 
   // Filter states
-  const [selectedMonths, setSelectedMonths] = useState<string[]>(['07/2025']);
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([
+    monthOptions.find(m => m.isCurrentMonth)?.key || '09/2025'
+  ]);
   const [selectedProperties, setSelectedProperties] = useState<number[]>([]);
-  const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
-  const [filtersInitialized, setFiltersInitialized] = useState(false);
-  const [showTaxForm, setShowTaxForm] = useState(false);
+  const [selectedTaxTypes, setSelectedTaxTypes] = useState<string[]>([]);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
-  const [sortConfig, setSortConfig] = useState<{
-    key: string;
-    direction: 'asc' | 'desc';
-  } | null>(null);
-
-  // Editing state
-  const [editingCell, setEditingCell] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
-
-  // Detail modal state
+  const [showTaxForm, setShowTaxForm] = useState(false);
+  const [showProjections, setShowProjections] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailModalTitle, setDetailModalTitle] = useState('');
   const [detailModalTransactions, setDetailModalTransactions] = useState<Transaction[]>([]);
-
-  // Fetch data
-  const { data: allTransactions = [], isLoading: isLoadingTransactions } = useQuery<Transaction[]>({
-    queryKey: ['/api/expenses/dashboard'],
-  });
-
-  const { data: allProperties = [], isLoading: isLoadingProperties } = useQuery<Property[]>({
+  
+  // Fetch properties
+  const { data: properties = [] } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
   });
 
-  const isLoading = isLoadingTransactions || isLoadingProperties;
+  const activeProperties = properties.filter(p => p.status === 'active');
 
-  // Apply URL filters when component mounts and data is loaded
-  useEffect(() => {
-    if (!filtersInitialized && allProperties.length > 0) {
-      const urlParams = new URLSearchParams(window.location.search);
-      
-      // Apply months filter from URL
-      const monthsParam = urlParams.get('months');
-      if (monthsParam) {
-        setSelectedMonths(monthsParam.split(','));
-      }
-      
-      // Apply properties filter from URL (all properties if specified)
-      const propertiesParam = urlParams.get('properties');
-      if (propertiesParam) {
-        const propertyIds = propertiesParam.split(',').map(Number).filter(id => !isNaN(id));
-        setSelectedProperties(propertyIds);
-      } else {
-        // Default to all properties if no specific ones selected
-        setSelectedProperties(allProperties.map(p => p.id));
-      }
-      
-      // Subcategories start empty (only taxes category)
-      setSelectedSubcategories([]);
-      
-      setFiltersInitialized(true);
+  // Calculate date range based on selected months
+  const dateRange = useMemo(() => {
+    if (selectedMonths.length === 0) {
+      return {
+        startDate: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(new Date()), 'yyyy-MM-dd')
+      };
     }
-  }, [allProperties, filtersInitialized]);
+    
+    // Parse month/year and find min/max
+    const dates = selectedMonths.map(m => {
+      const [month, year] = m.split('/').map(Number);
+      return new Date(year, month - 1, 1);
+    });
+    
+    const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+    const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+    
+    return {
+      startDate: format(startOfMonth(minDate), 'yyyy-MM-dd'),
+      endDate: format(endOfMonth(maxDate), 'yyyy-MM-dd')
+    };
+  }, [selectedMonths]);
 
-  // Update mutation
-  const updateMutation = useMutation({
-    mutationFn: async (data: { id: number; amount: number }) => {
-      const response = await fetch(`/api/transactions/${data.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: data.amount }),
+  // Fetch tax data for selected period
+  const { data: taxData, isLoading: isLoadingTaxes, refetch: refetchTaxes } = useQuery({
+    queryKey: ['/api/taxes/period', dateRange, selectedProperties, selectedTaxTypes],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        ...(selectedProperties.length > 0 && { propertyIds: selectedProperties.join(',') }),
+        ...(selectedTaxTypes.length > 0 && { taxTypes: selectedTaxTypes.join(',') })
       });
-      if (!response.ok) throw new Error('Failed to update transaction');
+      
+      const response = await fetch(`/api/taxes/period?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch tax data');
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
-      toast({
-        title: "Transação atualizada",
-        description: "O valor foi atualizado com sucesso.",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Erro",
-        description: "Não foi possível atualizar a transação.",
-        variant: "destructive",
-      });
-    },
+    enabled: !!dateRange.startDate
   });
 
-  // Generate month options
-  const generateMonthOptions = () => {
-    const options = [];
-    const now = new Date();
-    
-    // Future 12 months
-    for (let i = 12; i >= 1; i--) {
-      const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      const monthKey = `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-      const monthName = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-      options.push({ key: monthKey, label: monthName });
-    }
-    
-    // Past 24 months
-    for (let i = 0; i <= 23; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthKey = `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-      const monthName = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-      options.push({ key: monthKey, label: monthName });
-    }
-    
-    return options;
-  };
-
-  const monthOptions = generateMonthOptions();
-
-  // Generate tax detail data
-  const generateTaxDetailData = (): TaxDetailData => {
-    const detailData: Record<string, Record<string, { amount: number; transactions: Transaction[] }>> = {};
-    
-    // Filter transactions by taxes category
-    const taxTransactions = allTransactions.filter((transaction: any) => {
-      return transaction.category === 'taxes';
-    });
-
-    taxTransactions.forEach((transaction: any) => {
-      const date = new Date(transaction.date);
-      const monthKey = `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-      
-      // Filter by selected months
-      if (!selectedMonths.includes(monthKey)) return;
-      
-      // Filter by selected properties
-      if (selectedProperties.length > 0 && !selectedProperties.includes(transaction.propertyId)) return;
-      
-      // Filter by selected subcategories
-      if (selectedSubcategories.length > 0) {
-        const matchesSubcategory = selectedSubcategories.some(subcat => 
-          transaction.description.toLowerCase().includes(subcat.toLowerCase())
-        );
-        if (!matchesSubcategory) return;
-      }
-      
-      // Determine tax type from description
-      let taxType = 'Outros Impostos';
-      const descUpper = transaction.description.toUpperCase();
-      
-      if (descUpper.includes('IRPJ')) {
-        taxType = 'IRPJ';
-      } else if (descUpper.includes('CSLL')) {
-        taxType = 'CSLL';
-      } else if (descUpper.includes('PIS')) {
-        taxType = 'PIS';
-      } else if (descUpper.includes('COFINS')) {
-        taxType = 'COFINS';
-      } else if (descUpper.includes('IPTU')) {
-        taxType = 'IPTU';
-      }
-      
-      if (!detailData[taxType]) {
-        detailData[taxType] = {};
-      }
-      
-      if (!detailData[taxType][monthKey]) {
-        detailData[taxType][monthKey] = { amount: 0, transactions: [] };
-      }
-      
-      const propertyName = allProperties.find(p => p.id === transaction.propertyId)?.name || 'Unknown';
-      
-      detailData[taxType][monthKey].amount += Math.abs(parseFloat(transaction.amount.toString()));
-      detailData[taxType][monthKey].transactions.push({
-        id: transaction.id,
-        description: transaction.description,
-        date: transaction.date,
-        amount: transaction.amount,
-        category: transaction.category,
-        propertyId: transaction.propertyId,
-        propertyName
-      });
-    });
-
-    // Convert to array format
-    const rows: TaxDetailRow[] = [];
-    const monthHeaders = selectedMonths.sort();
-    const columnTotals: { [monthKey: string]: number } = {};
-    
-    // Initialize column totals
-    monthHeaders.forEach(month => {
-      columnTotals[month] = 0;
-    });
-    
-    // Define all tax types to ensure they appear even with zero values
-    const TAX_TYPES = ['IRPJ', 'CSLL', 'PIS', 'COFINS', 'IPTU'];
-    
-    // Process all tax types (even those with zero values)
-    TAX_TYPES.forEach(taxType => {
-      const monthlyData = detailData[taxType] || {};
-      let total = 0;
-      
-      monthHeaders.forEach(month => {
-        const monthData = monthlyData[month];
-        if (monthData) {
-          total += monthData.amount;
-          columnTotals[month] += monthData.amount;
-        }
+  // Fetch property tax distribution
+  const { data: distributionData } = useQuery({
+    queryKey: ['/api/taxes/distribution', dateRange],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate
       });
       
-      rows.push({
-        taxType,
-        monthlyData,
-        total
-      });
-    });
-
-    const grandTotal = Object.values(columnTotals).reduce((sum, val) => sum + val, 0);
-
-    return {
-      rows,
-      monthHeaders,
-      columnTotals,
-      grandTotal
-    };
-  };
-
-  const taxDetailData = generateTaxDetailData();
-
-  // Handle sorting
-  const handleSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const sortedRows = [...taxDetailData.rows].sort((a, b) => {
-    if (!sortConfig) return 0;
-
-    const { key, direction } = sortConfig;
-    let aValue: number | string;
-    let bValue: number | string;
-
-    if (key === 'taxType') {
-      aValue = a.taxType;
-      bValue = b.taxType;
-    } else if (key === 'total') {
-      aValue = a.total;
-      bValue = b.total;
-    } else if (key === 'average') {
-      aValue = a.total / taxDetailData.monthHeaders.length;
-      bValue = b.total / taxDetailData.monthHeaders.length;
-    } else {
-      aValue = a.monthlyData[key]?.amount || 0;
-      bValue = b.monthlyData[key]?.amount || 0;
-    }
-
-    if (typeof aValue === 'string' && typeof bValue === 'string') {
-      return direction === 'asc' 
-        ? aValue.localeCompare(bValue) 
-        : bValue.localeCompare(aValue);
-    }
-
-    return direction === 'asc' 
-      ? (aValue as number) - (bValue as number) 
-      : (bValue as number) - (aValue as number);
+      const response = await fetch(`/api/taxes/distribution?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch distribution data');
+      return response.json();
+    },
+    enabled: !!dateRange.startDate
   });
 
-  // Handle filter changes
-  const handleMonthToggle = (monthKey: string) => {
-    setSelectedMonths(prev => 
-      prev.includes(monthKey) 
-        ? prev.filter(m => m !== monthKey)
-        : [...prev, monthKey]
-    );
-  };
-
-  const handlePropertyToggle = (propertyId: number) => {
-    setSelectedProperties(prev => 
-      prev.includes(propertyId) 
-        ? prev.filter(p => p !== propertyId)
-        : [...prev, propertyId]
-    );
-  };
-
-  const handleSubcategoryToggle = (subcategory: string) => {
-    setSelectedSubcategories(prev => 
-      prev.includes(subcategory) 
-        ? prev.filter(s => s !== subcategory)
-        : [...prev, subcategory]
-    );
-  };
-
-  const clearAllFilters = () => {
-    const now = new Date();
-    const currentMonth = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-    setSelectedMonths([currentMonth]);
-    setSelectedProperties([]);
-    setSelectedSubcategories([]);
-  };
-
-  // Handle cell edit
-  const handleCellClick = (taxType: string, monthKey: string) => {
-    const cellKey = `${taxType}-${monthKey}`;
-    const monthData = taxDetailData.rows.find(r => r.taxType === taxType)?.monthlyData[monthKey];
-    
-    if (monthData && monthData.transactions.length > 0) {
-      setEditingCell(cellKey);
-      setEditValue(monthData.amount.toString());
+  // Fetch monthly comparison
+  const { data: monthlyComparison } = useQuery({
+    queryKey: ['/api/taxes/monthly-comparison', currentYear],
+    queryFn: async () => {
+      const response = await fetch(`/api/taxes/monthly-comparison/${currentYear}`);
+      if (!response.ok) throw new Error('Failed to fetch monthly comparison');
+      return response.json();
     }
-  };
+  });
 
-  const handleSaveEdit = () => {
-    if (!editingCell) return;
-    
-    const [taxType, monthKey] = editingCell.split('-');
-    const monthData = taxDetailData.rows.find(r => r.taxType === taxType)?.monthlyData[monthKey];
-    
-    if (monthData && monthData.transactions.length > 0) {
-      const newAmount = parseFloat(editValue) || 0;
-      const transaction = monthData.transactions[0];
-      
-      updateMutation.mutate({
-        id: transaction.id,
-        amount: -Math.abs(newAmount)
+  // Fetch tax projections
+  const { data: projections, refetch: refetchProjections } = useQuery({
+    queryKey: ['/api/taxes/projections-enhanced'],
+    queryFn: async () => {
+      const response = await fetch('/api/taxes/projections-enhanced', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          months: 3,
+          baseOnLastMonths: 3,
+          seasonalAdjustment: true
+        })
       });
-    }
+      if (!response.ok) throw new Error('Failed to fetch projections');
+      return response.json();
+    },
+    enabled: showProjections
+  });
+
+  // Show transaction details
+  const showTransactionDetails = (taxType: string, month: string) => {
+    const transactions = taxData?.transactions?.filter((tx: any) => {
+      const txDate = new Date(tx.date);
+      const txMonth = `${String(txDate.getMonth() + 1).padStart(2, '0')}/${txDate.getFullYear()}`;
+      return tx.taxType === taxType && txMonth === month;
+    }) || [];
     
-    setEditingCell(null);
-    setEditValue('');
+    setDetailModalTitle(`${taxType} - ${month}`);
+    setDetailModalTransactions(transactions);
+    setDetailModalOpen(true);
   };
 
-  const handleCancelEdit = () => {
-    setEditingCell(null);
-    setEditValue('');
-  };
-
-  // Format number
-  const formatNumber = (num: number): string => {
-    if (num === 0) return '';
-    return Math.abs(num).toLocaleString('pt-BR', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    });
-  };
-
-  // Get active filter count
-  const getActiveFilterCount = () => {
-    let count = 0;
-    if (selectedMonths.length !== 1 || selectedMonths[0] !== '07/2025') count++;
-    if (selectedProperties.length > 0) count++;
-    if (selectedSubcategories.length > 0) count++;
-    return count;
-  };
-
-  const activeFilterCount = getActiveFilterCount();
-
-  // Export functions
+  // Export to Excel
   const exportToExcel = () => {
     const wb = XLSX.utils.book_new();
-    const headers = ['Tipo de Imposto', ...taxDetailData.monthHeaders];
     
-    if (taxDetailData.monthHeaders.length > 1) {
-      headers.push(`Média Mensal (÷${taxDetailData.monthHeaders.length})`);
-    }
+    // Summary sheet
+    const summaryData = taxData?.summary?.map((item: any) => ({
+      'Tipo de Imposto': item.taxType,
+      'Quantidade': item.count,
+      'Total': formatCurrency(item.total)
+    })) || [];
     
-    headers.push('Total');
-    const data = [headers];
+    const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, summarySheet, 'Resumo');
     
-    sortedRows.forEach(row => {
-      const rowData = [
-        row.taxType,
-        ...taxDetailData.monthHeaders.map(month => {
-          const monthData = row.monthlyData[month];
-          return monthData ? -monthData.amount : 0;
-        })
-      ];
+    // Transactions sheet
+    const transactionsData = taxData?.transactions?.map((tx: any) => ({
+      'Data': format(new Date(tx.date), 'dd/MM/yyyy'),
+      'Tipo': tx.taxType,
+      'Descrição': tx.description,
+      'Imóvel': tx.propertyName || 'Empresa',
+      'Valor': formatCurrency(tx.amount)
+    })) || [];
+    
+    const transactionsSheet = XLSX.utils.json_to_sheet(transactionsData);
+    XLSX.utils.book_append_sheet(wb, transactionsSheet, 'Transações');
+    
+    // Distribution sheet
+    if (distributionData?.distribution) {
+      const distData = distributionData.distribution.map((item: any) => ({
+        'Imóvel': item.propertyName,
+        'Receita': formatCurrency(item.revenue),
+        '% do Total': formatPercentage(item.percentageOfTotal),
+        'Imposto Proporcional': formatCurrency(item.taxAmount)
+      }));
       
-      if (taxDetailData.monthHeaders.length > 1) {
-        rowData.push(-row.total / taxDetailData.monthHeaders.length);
-      }
+      const distSheet = XLSX.utils.json_to_sheet(distData);
+      XLSX.utils.book_append_sheet(wb, distSheet, 'Distribuição');
+    }
+    
+    // Monthly comparison sheet
+    if (monthlyComparison?.months) {
+      const monthData = monthlyComparison.months.map((month: any) => ({
+        'Mês': month.monthName,
+        'Receita': formatCurrency(month.revenue),
+        'Impostos': formatCurrency(month.taxes),
+        'Alíquota': formatPercentage(month.taxRate)
+      }));
       
-      rowData.push(-row.total);
-      data.push(rowData);
-    });
-    
-    const totalsRow = [
-      'TOTAL',
-      ...taxDetailData.monthHeaders.map(month => -taxDetailData.columnTotals[month])
-    ];
-    
-    if (taxDetailData.monthHeaders.length > 1) {
-      totalsRow.push(-taxDetailData.grandTotal / taxDetailData.monthHeaders.length);
+      const monthSheet = XLSX.utils.json_to_sheet(monthData);
+      XLSX.utils.book_append_sheet(wb, monthSheet, 'Comparativo Mensal');
     }
     
-    totalsRow.push(-taxDetailData.grandTotal);
-    data.push(totalsRow);
-    
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-    
-    const colWidths = [{ wch: 20 }];
-    taxDetailData.monthHeaders.forEach(() => colWidths.push({ wch: 12 }));
-    
-    if (taxDetailData.monthHeaders.length > 1) {
-      colWidths.push({ wch: 15 });
-    }
-    
-    colWidths.push({ wch: 12 });
-    ws['!cols'] = colWidths;
-    
-    for (let row = 1; row <= range.e.r; row++) {
-      for (let col = 1; col <= range.e.c; col++) {
-        const cell = ws[XLSX.utils.encode_cell({ r: row, c: col })];
-        if (cell && typeof cell.v === 'number' && cell.v < 0) {
-          cell.s = {
-            font: { color: { rgb: 'FF0000' } },
-            numFmt: '#,##0'
-          };
-        }
-      }
-    }
-    
-    XLSX.utils.book_append_sheet(wb, ws, 'Impostos');
-    
-    const fileName = `Impostos_detalhes_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    XLSX.writeFile(wb, `impostos_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
     
     toast({
       title: "Exportação concluída",
-      description: `Arquivo ${fileName} foi baixado com sucesso.`,
+      description: "Os dados foram exportados para Excel com sucesso.",
     });
   };
 
+  // Export to PDF
   const exportToPDF = () => {
-    const doc = new jsPDF('landscape');
+    const doc = new jsPDF();
     
-    doc.setFontSize(16);
-    doc.text('Impostos - Detalhes por Tipo', 20, 20);
+    // Title
+    doc.setFontSize(20);
+    doc.text('Relatório de Impostos', 14, 22);
     
-    doc.setFontSize(10);
-    doc.text(`Exportado em: ${new Date().toLocaleDateString('pt-BR')}`, 20, 30);
+    // Period
+    doc.setFontSize(12);
+    doc.text(`Período: ${format(new Date(dateRange.startDate), 'dd/MM/yyyy')} a ${format(new Date(dateRange.endDate), 'dd/MM/yyyy')}`, 14, 32);
     
-    let yPosition = 40;
-    if (activeFilterCount > 0) {
-      const filterInfo = [];
-      if (selectedMonths.length > 0) filterInfo.push(`Meses: ${selectedMonths.join(', ')}`);
-      if (selectedProperties.length > 0) {
-        const propertyNames = selectedProperties.map(id => allProperties.find(p => p.id === id)?.name).join(', ');
-        filterInfo.push(`Propriedades: ${propertyNames}`);
-      }
-      if (selectedSubcategories.length > 0) filterInfo.push(`Subcategorias: ${selectedSubcategories.join(', ')}`);
-      
-      doc.setFontSize(8);
-      filterInfo.forEach(info => {
-        doc.text(info, 20, yPosition);
-        yPosition += 8;
-      });
-      yPosition += 5;
-    }
-    
-    const headers = ['Tipo de Imposto', ...taxDetailData.monthHeaders];
-    
-    if (taxDetailData.monthHeaders.length > 1) {
-      headers.push('Média Mensal');
-    }
-    
-    headers.push('Total');
-    
-    const data = sortedRows.map(row => {
-      const rowData = [
-        row.taxType,
-        ...taxDetailData.monthHeaders.map(month => {
-          const monthData = row.monthlyData[month];
-          return monthData ? formatNumber(monthData.amount) : '';
-        })
-      ];
-      
-      if (taxDetailData.monthHeaders.length > 1) {
-        rowData.push(formatNumber(row.total / taxDetailData.monthHeaders.length));
-      }
-      
-      rowData.push(formatNumber(row.total));
-      return rowData;
-    });
-    
-    const totalsRow = [
-      'TOTAL',
-      ...taxDetailData.monthHeaders.map(month => formatNumber(taxDetailData.columnTotals[month]))
-    ];
-    
-    if (taxDetailData.monthHeaders.length > 1) {
-      totalsRow.push(formatNumber(taxDetailData.grandTotal / taxDetailData.monthHeaders.length));
-    }
-    
-    totalsRow.push(formatNumber(taxDetailData.grandTotal));
-    data.push(totalsRow);
+    // Summary table
+    const summaryRows = taxData?.summary?.map((item: any) => [
+      item.taxType,
+      item.count.toString(),
+      formatCurrency(item.total)
+    ]) || [];
     
     autoTable(doc, {
-      head: [headers],
-      body: data,
-      startY: yPosition,
-      theme: 'grid',
-      styles: {
-        fontSize: 8,
-        cellPadding: 2,
-      },
-      headStyles: {
-        fillColor: [240, 240, 240],
-        textColor: [0, 0, 0],
-        fontStyle: 'bold',
-      },
-      didParseCell: function (data) {
-        if (data.row.index >= 0 && data.column.index > 0) {
-          const cellText = data.cell.text[0];
-          if (cellText && (cellText.includes('-') || parseFloat(cellText.replace(/[^\d.-]/g, '')) < 0)) {
-            data.cell.styles.textColor = [255, 0, 0];
-          }
-        }
-      }
+      head: [['Tipo de Imposto', 'Quantidade', 'Total']],
+      body: summaryRows,
+      startY: 40
     });
     
-    const fileName = `Impostos_detalhes_${new Date().toISOString().split('T')[0]}.pdf`;
-    doc.save(fileName);
+    // Add total
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    doc.setFontSize(14);
+    doc.text(`Total Geral: ${taxData?.formattedGrandTotal || 'R$ 0,00'}`, 14, finalY);
+    
+    doc.save(`impostos_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     
     toast({
-      title: "Exportação concluída",
-      description: `Arquivo ${fileName} foi baixado com sucesso.`,
+      title: "PDF gerado",
+      description: "O relatório foi exportado em PDF com sucesso.",
     });
   };
 
-  if (isLoading) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-lg">Carregando...</div>
-        </div>
-      </div>
-    );
-  }
+  const isLoading = isLoadingTaxes;
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            onClick={() => setLocation('/expenses')}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Detalhes: Impostos
-            </h1>
-            <p className="text-muted-foreground">
-              Clique nas células para editar os valores
-            </p>
+    <div className="container mx-auto p-4 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => setLocation('/expenses')}
+              data-testid="button-back-expenses"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold">Detalhamento de Impostos</h1>
+              <p className="text-muted-foreground">
+                Gestão completa de impostos e tributos
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex space-x-2">
+            <Button 
+              variant="outline"
+              onClick={() => {
+                refetchTaxes();
+                refetchProjections();
+              }}
+              data-testid="button-refresh"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Atualizar
+            </Button>
+            <Button 
+              onClick={() => setShowTaxForm(true)}
+              data-testid="button-add-tax"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar Imposto
+            </Button>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={() => setShowTaxForm(true)}
-            className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Cadastrar Impostos
-          </Button>
-          <Button onClick={exportToExcel} variant="outline" size="sm">
-            <FileSpreadsheet className="h-4 w-4 mr-2" />
-            Excel
-          </Button>
-          <Button onClick={exportToPDF} variant="outline" size="sm">
-            <FileText className="h-4 w-4 mr-2" />
-            PDF
-          </Button>
-        </div>
-      </div>
 
-      {/* Advanced Filters Panel */}
-      <Card>
-        <CardContent className="p-4">
+        {/* Filters */}
+        <Card>
           <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
             <CollapsibleTrigger asChild>
-              <Button variant="outline" className="w-full justify-between">
-                <div className="flex items-center gap-2">
-                  <Filter className="h-4 w-4" />
-                  Filtros Avançados
-                  {activeFilterCount > 0 && (
-                    <Badge variant="secondary" className="ml-2">
-                      {activeFilterCount}
-                    </Badge>
-                  )}
+              <CardHeader className="cursor-pointer">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Filter className="h-4 w-4" />
+                    <CardTitle className="text-base">Filtros</CardTitle>
+                    {(selectedMonths.length > 0 || selectedProperties.length > 0 || selectedTaxTypes.length > 0) && (
+                      <Badge variant="secondary">
+                        {selectedMonths.length + selectedProperties.length + selectedTaxTypes.length} ativos
+                      </Badge>
+                    )}
+                  </div>
+                  {isFiltersOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </div>
-                {isFiltersOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </Button>
+              </CardHeader>
             </CollapsibleTrigger>
-            <CollapsibleContent className="mt-4 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
                 {/* Month Filter */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Meses</label>
-                  <div className="max-h-40 overflow-y-auto border rounded p-2 bg-white">
-                    {monthOptions.map(month => (
-                      <div key={month.key} className="flex items-center space-x-2 p-1">
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                    {monthOptions.slice(-15).map((month) => (
+                      <div key={month.key} className="flex items-center space-x-2">
                         <Checkbox
-                          id={`month-${month.key}`}
+                          id={month.key}
                           checked={selectedMonths.includes(month.key)}
-                          onCheckedChange={() => handleMonthToggle(month.key)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedMonths([...selectedMonths, month.key]);
+                            } else {
+                              setSelectedMonths(selectedMonths.filter(m => m !== month.key));
+                            }
+                          }}
+                          data-testid={`checkbox-month-${month.key}`}
                         />
                         <label
-                          htmlFor={`month-${month.key}`}
-                          className="text-sm cursor-pointer flex-1"
+                          htmlFor={month.key}
+                          className={cn(
+                            "text-sm cursor-pointer",
+                            month.isCurrentMonth && "font-bold text-primary"
+                          )}
                         >
-                          {month.label}
+                          {month.label.slice(0, 3)}/{month.key.split('/')[1]}
                         </label>
                       </div>
                     ))}
@@ -682,18 +440,25 @@ export default function TaxesDetailPage() {
 
                 {/* Property Filter */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Propriedades</label>
-                  <div className="max-h-40 overflow-y-auto border rounded p-2 bg-white">
-                    {allProperties.map(property => (
-                      <div key={property.id} className="flex items-center space-x-2 p-1">
+                  <label className="text-sm font-medium">Imóveis</label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {activeProperties.map((property) => (
+                      <div key={property.id} className="flex items-center space-x-2">
                         <Checkbox
-                          id={`property-${property.id}`}
+                          id={`prop-${property.id}`}
                           checked={selectedProperties.includes(property.id)}
-                          onCheckedChange={() => handlePropertyToggle(property.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedProperties([...selectedProperties, property.id]);
+                            } else {
+                              setSelectedProperties(selectedProperties.filter(p => p !== property.id));
+                            }
+                          }}
+                          data-testid={`checkbox-property-${property.id}`}
                         />
                         <label
-                          htmlFor={`property-${property.id}`}
-                          className="text-sm cursor-pointer flex-1"
+                          htmlFor={`prop-${property.id}`}
+                          className="text-sm cursor-pointer"
                         >
                           {property.name}
                         </label>
@@ -702,251 +467,563 @@ export default function TaxesDetailPage() {
                   </div>
                 </div>
 
-                {/* Subcategory Filter */}
+                {/* Tax Type Filter */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Tipos de Impostos</label>
-                  <div className="max-h-40 overflow-y-auto border rounded p-2 bg-white">
-                    {TAX_SUBCATEGORIES.map(subcategory => (
-                      <div key={subcategory} className="flex items-center space-x-2 p-1">
+                  <label className="text-sm font-medium">Tipos de Imposto</label>
+                  <div className="flex flex-wrap gap-2">
+                    {TAX_TYPES.map((tax) => (
+                      <div key={tax.id} className="flex items-center space-x-2">
                         <Checkbox
-                          id={`subcat-${subcategory}`}
-                          checked={selectedSubcategories.includes(subcategory)}
-                          onCheckedChange={() => handleSubcategoryToggle(subcategory)}
+                          id={`tax-${tax.id}`}
+                          checked={selectedTaxTypes.includes(tax.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedTaxTypes([...selectedTaxTypes, tax.id]);
+                            } else {
+                              setSelectedTaxTypes(selectedTaxTypes.filter(t => t !== tax.id));
+                            }
+                          }}
+                          data-testid={`checkbox-tax-${tax.id}`}
                         />
                         <label
-                          htmlFor={`subcat-${subcategory}`}
-                          className="text-sm cursor-pointer flex-1"
+                          htmlFor={`tax-${tax.id}`}
+                          className="text-sm cursor-pointer"
                         >
-                          {subcategory}
+                          <Badge variant="outline" className={`border-${tax.color}-500`}>
+                            {tax.name} {tax.rate > 0 && `(${tax.rate}%)`}
+                          </Badge>
                         </label>
                       </div>
                     ))}
                   </div>
                 </div>
-              </div>
 
-              {/* Filter Actions */}
-              <div className="flex justify-between items-center">
-                <div className="flex gap-2">
-                  {activeFilterCount > 0 && (
-                    <Button variant="outline" size="sm" onClick={clearAllFilters}>
-                      Limpar Filtros
-                    </Button>
-                  )}
+                {/* Action Buttons */}
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedMonths([monthOptions.find(m => m.isCurrentMonth)?.key || '09/2025']);
+                      setSelectedProperties([]);
+                      setSelectedTaxTypes([]);
+                    }}
+                    data-testid="button-clear-filters"
+                  >
+                    Limpar Filtros
+                  </Button>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  {taxDetailData.rows.length} propriedades | Total: {formatNumber(taxDetailData.grandTotal)}
-                </div>
-              </div>
+              </CardContent>
             </CollapsibleContent>
           </Collapsible>
-        </CardContent>
-      </Card>
+        </Card>
+      </div>
 
-      <Card>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {TAX_TYPES.map((tax) => {
+          const taxSummary = taxData?.summary?.find((s: any) => s.taxType === tax.id);
+          return (
+            <Card key={tax.id} data-testid={`card-tax-${tax.id}`}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center justify-between">
+                  <span>{tax.name}</span>
+                  {tax.rate > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {tax.rate}%
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {taxSummary?.formattedTotal || 'R$ 0,00'}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {taxSummary?.count || 0} lançamentos
+                </p>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Total Summary */}
+      <Card className="bg-primary/5">
         <CardHeader>
-          <CardTitle>
-            Impostos - Por Tipo
+          <CardTitle className="flex items-center justify-between">
+            <span>Total de Impostos no Período</span>
+            <div className="flex space-x-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={exportToExcel}
+                data-testid="button-export-excel"
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-1" />
+                Excel
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={exportToPDF}
+                data-testid="button-export-pdf"
+              >
+                <FileText className="h-4 w-4 mr-1" />
+                PDF
+              </Button>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-gray-200">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="border border-gray-200 p-3 text-left font-medium">
-                    <button 
-                      onClick={() => handleSort('taxType')}
-                      className="flex items-center gap-2 hover:text-blue-600"
-                    >
-                      Tipo de Imposto
-                      {sortConfig?.key === 'taxType' && (
-                        <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                      )}
-                    </button>
-                  </th>
-                  {taxDetailData.monthHeaders.map(month => (
-                    <th key={month} className="border border-gray-200 p-3 text-center font-medium">
-                      <button 
-                        onClick={() => handleSort(month)}
-                        className="flex items-center gap-2 hover:text-blue-600 mx-auto"
-                      >
-                        {month}
-                        {sortConfig?.key === month && (
-                          <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                        )}
-                      </button>
-                    </th>
-                  ))}
-                  {taxDetailData.monthHeaders.length > 1 && (
-                    <th className="border border-gray-200 p-3 text-center font-medium bg-blue-50">
-                      <button 
-                        onClick={() => handleSort('average')}
-                        className="flex items-center gap-2 hover:text-blue-600 mx-auto"
-                      >
-                        Média Mensal (÷{taxDetailData.monthHeaders.length})
-                        {sortConfig?.key === 'average' && (
-                          <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                        )}
-                      </button>
-                    </th>
-                  )}
-                  <th className="border border-gray-200 p-3 text-center font-medium">
-                    <button 
-                      onClick={() => handleSort('total')}
-                      className="flex items-center gap-2 hover:text-blue-600 mx-auto"
-                    >
-                      Total
-                      {sortConfig?.key === 'total' && (
-                        <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                      )}
-                    </button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedRows.map((row, index) => (
-                  <tr 
-                    key={row.taxType}
-                    className={`hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}
-                  >
-                    <td className="border border-gray-200 p-3 font-medium">
-                      <button
-                        className="text-left hover:text-blue-600 hover:underline transition-colors"
-                        onClick={() => {
-                          const allTransactions: Transaction[] = [];
-                          Object.entries(row.monthlyData).forEach(([month, data]) => {
-                            if (data.transactions) {
-                              allTransactions.push(...data.transactions);
-                            }
-                          });
-                          setDetailModalTitle(`Detalhes - ${row.taxType}`);
-                          setDetailModalTransactions(allTransactions);
-                          setDetailModalOpen(true);
-                        }}
-                      >
-                        {row.taxType}
-                      </button>
-                    </td>
-                    {taxDetailData.monthHeaders.map(month => {
-                      const cellKey = `${row.taxType}-${month}`;
-                      const monthData = row.monthlyData[month];
-                      const isEditing = editingCell === cellKey;
-                      
-                      return (
-                        <td key={month} className="border border-gray-200 p-3 text-center">
-                          {isEditing ? (
-                            <div className="flex items-center gap-2">
-                              <Input
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                className="w-20 text-center"
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleSaveEdit();
-                                  if (e.key === 'Escape') handleCancelEdit();
-                                }}
-                                autoFocus
-                              />
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={handleSaveEdit}
-                                className="p-1"
-                              >
-                                <Check className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={handleCancelEdit}
-                                className="p-1"
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <div
-                              className="flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded"
-                              onClick={() => handleCellClick(row.taxType, month)}
-                            >
-                              <span className="text-red-600 font-medium">
-                                {monthData ? formatNumber(monthData.amount) : ''}
-                              </span>
-                              {monthData && monthData.transactions.length > 0 && (
-                                <Edit2 className="h-3 w-3 text-gray-400" />
-                              )}
-                            </div>
-                          )}
-                        </td>
-                      );
-                    })}
-                    {taxDetailData.monthHeaders.length > 1 && (
-                      <td className="border border-gray-200 p-3 text-center font-semibold bg-blue-50">
-                        <span className="text-red-600">
-                          {formatNumber(row.total / taxDetailData.monthHeaders.length)}
-                        </span>
-                      </td>
-                    )}
-                    <td className="border border-gray-200 p-3 text-center font-semibold">
-                      <span className="text-red-600">
-                        {formatNumber(row.total)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-gray-100 font-bold">
-                  <td className="border border-gray-200 p-3">TOTAL</td>
-                  {taxDetailData.monthHeaders.map(month => (
-                    <td key={month} className="border border-gray-200 p-3 text-center">
-                      <span className="text-red-600 font-bold">
-                        {formatNumber(taxDetailData.columnTotals[month])}
-                      </span>
-                    </td>
-                  ))}
-                  {taxDetailData.monthHeaders.length > 1 && (
-                    <td className="border border-gray-200 p-3 text-center bg-blue-50">
-                      <span className="text-red-600 font-bold">
-                        {formatNumber(taxDetailData.grandTotal / taxDetailData.monthHeaders.length)}
-                      </span>
-                    </td>
-                  )}
-                  <td className="border border-gray-200 p-3 text-center">
-                    <span className="text-red-600 font-bold">
-                      {formatNumber(taxDetailData.grandTotal)}
-                    </span>
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Total Pago</p>
+              <p className="text-3xl font-bold text-primary">
+                {taxData?.formattedGrandTotal || 'R$ 0,00'}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Receita no Período</p>
+              <p className="text-2xl font-semibold">
+                {distributionData?.formattedTotalRevenue || 'R$ 0,00'}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Alíquota Efetiva</p>
+              <p className="text-2xl font-semibold">
+                {distributionData?.totalRevenue > 0 
+                  ? formatPercentage((taxData?.grandTotal || 0) / distributionData.totalRevenue * 100)
+                  : '0,00%'
+                }
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Transaction Detail Modal */}
-      <TransactionDetailModal
-        isOpen={detailModalOpen}
-        onClose={() => setDetailModalOpen(false)}
-        title={detailModalTitle}
-        transactions={detailModalTransactions}
-        showPropertyColumn={true}
-      />
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="breakdown" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="breakdown" data-testid="tab-breakdown">
+            Detalhamento
+          </TabsTrigger>
+          <TabsTrigger value="distribution" data-testid="tab-distribution">
+            Distribuição
+          </TabsTrigger>
+          <TabsTrigger value="comparison" data-testid="tab-comparison">
+            Comparativo Mensal
+          </TabsTrigger>
+          <TabsTrigger value="projections" data-testid="tab-projections">
+            Projeções
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Tax Form Modal */}
+        {/* Tax Breakdown Tab */}
+        <TabsContent value="breakdown" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Detalhamento de Impostos</CardTitle>
+              <CardDescription>
+                Todos os pagamentos de impostos no período selecionado
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : taxData?.transactions?.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <AlertCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                  <p>Nenhum imposto encontrado no período selecionado</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Data</th>
+                        <th className="text-left p-2">Tipo</th>
+                        <th className="text-left p-2">Descrição</th>
+                        <th className="text-left p-2">Imóvel</th>
+                        <th className="text-right p-2">Valor</th>
+                        <th className="text-center p-2">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {taxData?.transactions?.map((tx: any) => (
+                        <tr key={tx.id} className="border-b hover:bg-muted/50">
+                          <td className="p-2">
+                            {format(new Date(tx.date), 'dd/MM/yyyy')}
+                          </td>
+                          <td className="p-2">
+                            <Badge variant="outline">
+                              {tx.taxType}
+                            </Badge>
+                          </td>
+                          <td className="p-2">{tx.description}</td>
+                          <td className="p-2">{tx.propertyName || 'Empresa'}</td>
+                          <td className="p-2 text-right font-medium">
+                            {formatCurrency(tx.amount)}
+                          </td>
+                          <td className="p-2 text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const txDate = new Date(tx.date);
+                                const txMonth = `${String(txDate.getMonth() + 1).padStart(2, '0')}/${txDate.getFullYear()}`;
+                                showTransactionDetails(tx.taxType, txMonth);
+                              }}
+                              data-testid={`button-details-${tx.id}`}
+                            >
+                              Detalhes
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="font-bold bg-muted/30">
+                        <td colSpan={4} className="p-2">TOTAL</td>
+                        <td className="p-2 text-right">
+                          {taxData?.formattedGrandTotal || 'R$ 0,00'}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Property Distribution Tab */}
+        <TabsContent value="distribution" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Distribuição por Imóvel</CardTitle>
+              <CardDescription>
+                Como os impostos são distribuídos baseado na receita de cada imóvel
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {distributionData?.distribution?.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Building2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                  <p>Nenhuma distribuição disponível para o período</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Imóvel</th>
+                        <th className="text-right p-2">Receita Bruta</th>
+                        <th className="text-right p-2">% do Total</th>
+                        <th className="text-right p-2">Imposto Proporcional</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {distributionData?.distribution?.map((item: any) => (
+                        <tr key={item.propertyId} className="border-b hover:bg-muted/50">
+                          <td className="p-2 font-medium">{item.propertyName}</td>
+                          <td className="p-2 text-right">{item.formattedRevenue}</td>
+                          <td className="p-2 text-right">
+                            <Badge variant="secondary">
+                              {formatPercentage(item.percentageOfTotal)}
+                            </Badge>
+                          </td>
+                          <td className="p-2 text-right font-medium">
+                            {item.formattedTaxAmount}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="font-bold bg-muted/30">
+                        <td className="p-2">TOTAL</td>
+                        <td className="p-2 text-right">
+                          {distributionData?.formattedTotalRevenue || 'R$ 0,00'}
+                        </td>
+                        <td className="p-2 text-right">100,00%</td>
+                        <td className="p-2 text-right">
+                          {distributionData?.formattedTotalTax || 'R$ 0,00'}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Monthly Comparison Tab */}
+        <TabsContent value="comparison" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Comparativo Mensal - {currentYear}</CardTitle>
+              <CardDescription>
+                Evolução mensal de receitas e impostos
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {monthlyComparison?.months?.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                  <p>Nenhum dado disponível para comparação</p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Receita Total</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-2xl font-bold">
+                          {monthlyComparison?.totals?.formattedRevenue || 'R$ 0,00'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Média: {monthlyComparison?.averages?.formattedRevenue || 'R$ 0,00'}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Impostos Totais</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-2xl font-bold">
+                          {monthlyComparison?.totals?.formattedTaxes || 'R$ 0,00'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Média: {monthlyComparison?.averages?.formattedTaxes || 'R$ 0,00'}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Alíquota Efetiva</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-2xl font-bold">
+                          {formatPercentage(monthlyComparison?.totals?.effectiveRate || 0)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left p-2">Mês</th>
+                          <th className="text-right p-2">Receita</th>
+                          <th className="text-right p-2">Impostos</th>
+                          <th className="text-right p-2">Alíquota</th>
+                          <th className="text-center p-2">Tendência</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlyComparison?.months?.map((month: any, index: number) => {
+                          const prevMonth = monthlyComparison.months[index - 1];
+                          const trend = prevMonth 
+                            ? month.taxes > prevMonth.taxes ? 'up' : 'down'
+                            : 'neutral';
+                          
+                          return (
+                            <tr key={month.month} className="border-b hover:bg-muted/50">
+                              <td className="p-2 font-medium">{month.monthName}</td>
+                              <td className="p-2 text-right">{month.formattedRevenue}</td>
+                              <td className="p-2 text-right">{month.formattedTaxes}</td>
+                              <td className="p-2 text-right">
+                                <Badge variant="secondary">
+                                  {formatPercentage(month.taxRate)}
+                                </Badge>
+                              </td>
+                              <td className="p-2 text-center">
+                                {trend === 'up' && <TrendingUp className="h-4 w-4 text-red-500 inline" />}
+                                {trend === 'down' && <TrendingDown className="h-4 w-4 text-green-500 inline" />}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Projections Tab */}
+        <TabsContent value="projections" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>Projeções de Impostos</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowProjections(true);
+                    refetchProjections();
+                  }}
+                  data-testid="button-calculate-projections"
+                >
+                  <Calculator className="h-4 w-4 mr-2" />
+                  Recalcular
+                </Button>
+              </CardTitle>
+              <CardDescription>
+                Projeção para os próximos 3 meses baseada no histórico
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!showProjections ? (
+                <div className="text-center py-8">
+                  <Calculator className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                  <Button 
+                    onClick={() => setShowProjections(true)}
+                    data-testid="button-show-projections"
+                  >
+                    Calcular Projeções
+                  </Button>
+                </div>
+              ) : projections?.projections?.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <AlertCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                  <p>Dados insuficientes para gerar projeções</p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Receita Projetada (3 meses)</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-2xl font-bold">
+                          {projections?.totals?.formattedRevenue || 'R$ 0,00'}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Impostos Projetados (3 meses)</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-2xl font-bold text-red-600">
+                          {projections?.totals?.formattedTax || 'R$ 0,00'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Alíquota efetiva: {formatPercentage(projections?.totals?.effectiveRate || 0)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="space-y-4">
+                    {projections?.projections?.map((month: any) => (
+                      <Card key={month.month}>
+                        <CardHeader>
+                          <CardTitle className="text-base">
+                            {month.monthName}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Receita Projetada</p>
+                              <p className="text-xl font-semibold">{month.formattedRevenue}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">Impostos Projetados</p>
+                              <p className="text-xl font-semibold text-red-600">{month.formattedTax}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium">Detalhamento por Imposto:</p>
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                              {month.taxes?.map((tax: any) => (
+                                <div key={tax.taxType} className="text-sm">
+                                  <span className="font-medium">{tax.taxType}:</span>{' '}
+                                  <span>{tax.formattedAmount}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {month.propertyDistribution?.length > 0 && (
+                            <div className="mt-4 pt-4 border-t">
+                              <p className="text-sm font-medium mb-2">Distribuição por Imóvel:</p>
+                              <div className="space-y-1">
+                                {month.propertyDistribution.map((prop: any) => (
+                                  <div key={prop.propertyId} className="flex justify-between text-sm">
+                                    <span>{prop.propertyName}</span>
+                                    <span className="text-muted-foreground">
+                                      {prop.formattedRevenue}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {projections?.parameters && (
+                    <Card className="bg-muted/30">
+                      <CardContent className="pt-6">
+                        <p className="text-sm text-muted-foreground">
+                          <strong>Parâmetros da Projeção:</strong> Baseado nos últimos {projections.parameters.basedOnLastMonths} meses,
+                          {projections.parameters.seasonalAdjustment ? ' com ajuste sazonal' : ' sem ajuste sazonal'}.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Tax Form Dialog */}
       <Dialog open={showTaxForm} onOpenChange={setShowTaxForm}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Cadastrar Impostos</DialogTitle>
+            <DialogTitle>Adicionar Pagamento de Imposto</DialogTitle>
           </DialogHeader>
-          <SimpleTaxForm 
+          <SimpleTaxForm
             onSuccess={() => {
               setShowTaxForm(false);
-              queryClient.invalidateQueries({ queryKey: ['/api/expenses/dashboard'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/taxes'] });
+              toast({
+                title: "Imposto registrado",
+                description: "O pagamento foi registrado com sucesso.",
+              });
             }}
+            onCancel={() => setShowTaxForm(false)}
           />
         </DialogContent>
       </Dialog>
+
+      {/* Transaction Detail Modal */}
+      <TransactionDetailModal
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+        title={detailModalTitle}
+        transactions={detailModalTransactions}
+      />
     </div>
   );
 }

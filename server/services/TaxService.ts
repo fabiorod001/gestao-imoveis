@@ -513,6 +513,462 @@ export class TaxService extends BaseService {
   }
 
   /**
+   * Get all tax transactions for a specific period with filters
+   */
+  async getTaxesByPeriod(userId: string, params: {
+    startDate: string;
+    endDate: string;
+    propertyIds?: number[];
+    taxTypes?: string[];
+  }): Promise<any> {
+    try {
+      // Base query for tax transactions
+      const conditions = [
+        eq(transactions.userId, userId),
+        eq(transactions.type, 'expense'),
+        eq(transactions.category, 'taxes'),
+        gte(transactions.date, params.startDate),
+        lte(transactions.date, params.endDate)
+      ];
+      
+      let query = db
+        .select({
+          id: transactions.id,
+          date: transactions.date,
+          amount: transactions.amount,
+          description: transactions.description,
+          notes: transactions.notes,
+          propertyId: transactions.propertyId,
+          propertyName: properties.name,
+          parentTransactionId: transactions.parentTransactionId,
+          createdAt: transactions.createdAt
+        })
+        .from(transactions)
+        .leftJoin(properties, eq(transactions.propertyId, properties.id))
+        .where(and(...conditions))
+        .orderBy(desc(transactions.date));
+
+      const allTaxTransactions = await query;
+
+      // Process transactions to extract tax type and calculate totals
+      const processedTransactions = allTaxTransactions.map(tx => {
+        let taxType = 'OUTROS';
+        const description = (tx.description || '').toUpperCase();
+        const notes = (tx.notes || '').toUpperCase();
+        
+        // Identify tax type from description or notes
+        if (description.includes('IPTU') || notes.includes('IPTU')) taxType = 'IPTU';
+        else if (description.includes('IRPJ') || notes.includes('IRPJ')) taxType = 'IRPJ';
+        else if (description.includes('CSLL') || notes.includes('CSLL')) taxType = 'CSLL';
+        else if (description.includes('PIS') || notes.includes('PIS')) taxType = 'PIS';
+        else if (description.includes('COFINS') || notes.includes('COFINS')) taxType = 'COFINS';
+        else if (description.includes('ISS') || notes.includes('ISS')) taxType = 'ISS';
+        else if (description.includes('SIMPLES') || notes.includes('SIMPLES')) taxType = 'SIMPLES';
+
+        const amount = ServerMoneyUtils.fromDecimal(tx.amount);
+        
+        return {
+          ...tx,
+          taxType,
+          amount: amount.toDecimal(),
+          formattedAmount: amount.toBRL()
+        };
+      });
+
+      // Apply additional filters
+      let filteredTransactions = processedTransactions;
+      
+      if (params.propertyIds && params.propertyIds.length > 0) {
+        filteredTransactions = filteredTransactions.filter(tx => 
+          tx.propertyId && params.propertyIds!.includes(tx.propertyId)
+        );
+      }
+
+      if (params.taxTypes && params.taxTypes.length > 0) {
+        filteredTransactions = filteredTransactions.filter(tx => 
+          params.taxTypes!.includes(tx.taxType)
+        );
+      }
+
+      // Calculate summary by tax type
+      const summary: Record<string, { count: number; total: Money }> = {};
+      
+      filteredTransactions.forEach(tx => {
+        if (!summary[tx.taxType]) {
+          summary[tx.taxType] = { 
+            count: 0, 
+            total: ServerMoneyUtils.zero() 
+          };
+        }
+        summary[tx.taxType].count++;
+        summary[tx.taxType].total = summary[tx.taxType].total.add(
+          ServerMoneyUtils.fromDecimal(tx.amount)
+        );
+      });
+
+      const summaryFormatted = Object.entries(summary).map(([type, data]) => ({
+        taxType: type,
+        count: data.count,
+        total: data.total.toDecimal(),
+        formattedTotal: data.total.toBRL()
+      }));
+
+      const grandTotal = MoneyUtils.sum(
+        Object.values(summary).map(s => s.total)
+      );
+
+      return {
+        transactions: filteredTransactions,
+        summary: summaryFormatted,
+        grandTotal: grandTotal.toDecimal(),
+        formattedGrandTotal: grandTotal.toBRL(),
+        period: {
+          startDate: params.startDate,
+          endDate: params.endDate
+        }
+      };
+    } catch (error) {
+      console.error('Error getting taxes by period:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get property tax distribution based on revenue
+   */
+  async getPropertyTaxDistribution(userId: string, params: {
+    startDate: string;
+    endDate: string;
+    taxTypes?: string[];
+  }): Promise<any> {
+    try {
+      // Get revenue by property for the period
+      const revenueData = await db
+        .select({
+          propertyId: transactions.propertyId,
+          propertyName: properties.name,
+          totalRevenue: sql<string>`SUM(${transactions.amount})`
+        })
+        .from(transactions)
+        .leftJoin(properties, eq(transactions.propertyId, properties.id))
+        .where(and(
+          eq(transactions.userId, userId),
+          eq(transactions.type, 'revenue'),
+          gte(transactions.date, params.startDate),
+          lte(transactions.date, params.endDate),
+          sql`${transactions.propertyId} IS NOT NULL`
+        ))
+        .groupBy(transactions.propertyId, properties.name);
+
+      // Get tax transactions for the period
+      const taxData = await this.getTaxesByPeriod(userId, params);
+      
+      // Convert revenue to Money and calculate total
+      const revenueWithMoney = revenueData.map(prop => ({
+        ...prop,
+        revenueMoney: ServerMoneyUtils.fromDecimal(prop.totalRevenue)
+      }));
+
+      const totalRevenue = MoneyUtils.sum(revenueWithMoney.map(p => p.revenueMoney));
+      
+      // Calculate distribution
+      const distribution = revenueWithMoney.map(prop => {
+        const percentage = totalRevenue.toDecimal() > 0 
+          ? (prop.revenueMoney.toDecimal() / totalRevenue.toDecimal()) * 100
+          : 0;
+        
+        // Calculate proportional tax amount
+        const proportionalTax = ServerMoneyUtils.fromDecimal(taxData.grandTotal)
+          .percentage(percentage);
+        
+        return {
+          propertyId: prop.propertyId,
+          propertyName: prop.propertyName,
+          revenue: prop.revenueMoney.toDecimal(),
+          formattedRevenue: prop.revenueMoney.toBRL(),
+          percentageOfTotal: percentage,
+          taxAmount: proportionalTax.toDecimal(),
+          formattedTaxAmount: proportionalTax.toBRL()
+        };
+      });
+
+      // Sort by revenue descending
+      distribution.sort((a, b) => b.revenue - a.revenue);
+
+      return {
+        distribution,
+        totalRevenue: totalRevenue.toDecimal(),
+        formattedTotalRevenue: totalRevenue.toBRL(),
+        totalTax: taxData.grandTotal,
+        formattedTotalTax: taxData.formattedGrandTotal,
+        period: {
+          startDate: params.startDate,
+          endDate: params.endDate
+        }
+      };
+    } catch (error) {
+      console.error('Error getting property tax distribution:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get monthly tax comparison for a year
+   */
+  async getMonthlyComparison(userId: string, year: number): Promise<any> {
+    try {
+      const { ptBR } = await import('date-fns/locale');
+      const months = [];
+      const monthlyData: Record<string, any> = {};
+      
+      // Process each month of the year
+      for (let month = 1; month <= 12; month++) {
+        const monthKey = `${String(month).padStart(2, '0')}/${year}`;
+        const startDate = format(new Date(year, month - 1, 1), 'yyyy-MM-dd');
+        const endDate = format(endOfMonth(new Date(year, month - 1, 1)), 'yyyy-MM-dd');
+        
+        // Get tax data for the month
+        const monthData = await this.getTaxesByPeriod(userId, {
+          startDate,
+          endDate
+        });
+        
+        // Get revenue for the month
+        const revenueResult = await db
+          .select({
+            total: sql<string>`COALESCE(SUM(${transactions.amount}), '0')`
+          })
+          .from(transactions)
+          .where(and(
+            eq(transactions.userId, userId),
+            eq(transactions.type, 'revenue'),
+            gte(transactions.date, startDate),
+            lte(transactions.date, endDate)
+          ));
+        
+        const revenue = ServerMoneyUtils.fromDecimal(revenueResult[0]?.total || '0');
+        const taxes = ServerMoneyUtils.fromDecimal(monthData.grandTotal);
+        
+        monthlyData[monthKey] = {
+          month: monthKey,
+          monthName: format(new Date(year, month - 1, 1), 'MMMM', { locale: ptBR }),
+          revenue: revenue.toDecimal(),
+          formattedRevenue: revenue.toBRL(),
+          taxes: taxes.toDecimal(),
+          formattedTaxes: taxes.toBRL(),
+          taxRate: revenue.toDecimal() > 0 
+            ? (taxes.toDecimal() / revenue.toDecimal()) * 100 
+            : 0,
+          summary: monthData.summary
+        };
+        
+        months.push(monthlyData[monthKey]);
+      }
+
+      // Calculate year totals
+      const yearRevenue = MoneyUtils.sum(
+        months.map(m => ServerMoneyUtils.fromDecimal(m.revenue))
+      );
+      const yearTaxes = MoneyUtils.sum(
+        months.map(m => ServerMoneyUtils.fromDecimal(m.taxes))
+      );
+      
+      // Calculate averages
+      const avgRevenue = yearRevenue.divide(12);
+      const avgTaxes = yearTaxes.divide(12);
+      
+      return {
+        year,
+        months,
+        totals: {
+          revenue: yearRevenue.toDecimal(),
+          formattedRevenue: yearRevenue.toBRL(),
+          taxes: yearTaxes.toDecimal(),
+          formattedTaxes: yearTaxes.toBRL(),
+          effectiveRate: yearRevenue.toDecimal() > 0 
+            ? (yearTaxes.toDecimal() / yearRevenue.toDecimal()) * 100 
+            : 0
+        },
+        averages: {
+          revenue: avgRevenue.toDecimal(),
+          formattedRevenue: avgRevenue.toBRL(),
+          taxes: avgTaxes.toDecimal(),
+          formattedTaxes: avgTaxes.toBRL()
+        }
+      };
+    } catch (error) {
+      console.error('Error getting monthly comparison:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate tax projections for future months (enhanced version)
+   */
+  async calculateTaxProjectionsEnhanced(userId: string, params: {
+    months: number;
+    baseOnLastMonths?: number;
+    seasonalAdjustment?: boolean;
+  }): Promise<any> {
+    try {
+      const monthsToProject = params.months || 3;
+      const baseMonths = params.baseOnLastMonths || 3;
+      
+      // Get historical data for base calculation
+      const today = new Date();
+      const startDate = format(addMonths(today, -baseMonths), 'yyyy-MM-dd');
+      const endDate = format(today, 'yyyy-MM-dd');
+      
+      // Get average revenue from last N months
+      const revenueResult = await db
+        .select({
+          propertyId: transactions.propertyId,
+          propertyName: properties.name,
+          totalRevenue: sql<string>`SUM(${transactions.amount})`,
+          monthCount: sql<number>`COUNT(DISTINCT DATE_TRUNC('month', ${transactions.date}::date))`
+        })
+        .from(transactions)
+        .leftJoin(properties, eq(transactions.propertyId, properties.id))
+        .where(and(
+          eq(transactions.userId, userId),
+          eq(transactions.type, 'revenue'),
+          gte(transactions.date, startDate),
+          lte(transactions.date, endDate)
+        ))
+        .groupBy(transactions.propertyId, properties.name);
+
+      // Calculate projections
+      const projections = [];
+      const taxRates = {
+        PIS: 1.65,
+        COFINS: 7.6,
+        CSLL: 2.88, // 9% on 32% profit margin
+        IRPJ: 4.8, // 15% on 32% profit margin (base)
+        IPTU: 0 // Municipal tax, needs manual input
+      };
+      
+      const { ptBR } = await import('date-fns/locale');
+      
+      for (let i = 1; i <= monthsToProject; i++) {
+        const projectionDate = addMonths(today, i);
+        const monthKey = format(projectionDate, 'MM/yyyy');
+        
+        // Calculate total projected revenue
+        let totalProjectedRevenue = ServerMoneyUtils.zero();
+        const propertyProjections = [];
+        
+        for (const prop of revenueResult) {
+          const monthlyAvg = ServerMoneyUtils.fromDecimal(prop.totalRevenue)
+            .divide(prop.monthCount || 1);
+          
+          // Apply seasonal adjustment if requested
+          let adjustedRevenue = monthlyAvg;
+          if (params.seasonalAdjustment) {
+            const month = projectionDate.getMonth();
+            // Summer months (Dec-Feb) typically have higher revenue
+            if (month === 11 || month === 0 || month === 1) {
+              adjustedRevenue = monthlyAvg.multiply(1.2);
+            }
+            // Winter months (Jun-Aug) typically have lower revenue
+            else if (month >= 5 && month <= 7) {
+              adjustedRevenue = monthlyAvg.multiply(0.8);
+            }
+          }
+          
+          totalProjectedRevenue = totalProjectedRevenue.add(adjustedRevenue);
+          
+          propertyProjections.push({
+            propertyId: prop.propertyId,
+            propertyName: prop.propertyName,
+            projectedRevenue: adjustedRevenue.toDecimal(),
+            formattedRevenue: adjustedRevenue.toBRL()
+          });
+        }
+        
+        // Calculate taxes based on projected revenue
+        const projectedTaxes: Record<string, Money> = {};
+        let totalTax = ServerMoneyUtils.zero();
+        
+        // PIS
+        projectedTaxes.PIS = totalProjectedRevenue.percentage(taxRates.PIS);
+        totalTax = totalTax.add(projectedTaxes.PIS);
+        
+        // COFINS
+        projectedTaxes.COFINS = totalProjectedRevenue.percentage(taxRates.COFINS);
+        totalTax = totalTax.add(projectedTaxes.COFINS);
+        
+        // CSLL (on profit)
+        projectedTaxes.CSLL = totalProjectedRevenue.percentage(taxRates.CSLL);
+        totalTax = totalTax.add(projectedTaxes.CSLL);
+        
+        // IRPJ (15% base + 10% additional on amount exceeding R$20,000/month)
+        const baseIRPJ = totalProjectedRevenue.percentage(taxRates.IRPJ);
+        let additionalIRPJ = ServerMoneyUtils.zero();
+        
+        const monthlyProfit = totalProjectedRevenue.percentage(32);
+        const excess = monthlyProfit.subtract(ServerMoneyUtils.fromReal(20000));
+        if (excess.toDecimal() > 0) {
+          additionalIRPJ = excess.percentage(10);
+        }
+        
+        projectedTaxes.IRPJ = baseIRPJ.add(additionalIRPJ);
+        totalTax = totalTax.add(projectedTaxes.IRPJ);
+        
+        // Format tax projections
+        const taxProjections = Object.entries(projectedTaxes).map(([type, amount]) => ({
+          taxType: type,
+          amount: amount.toDecimal(),
+          formattedAmount: amount.toBRL(),
+          rate: taxRates[type as keyof typeof taxRates]
+        }));
+        
+        projections.push({
+          month: monthKey,
+          monthName: format(projectionDate, 'MMMM yyyy', { locale: ptBR }),
+          projectedRevenue: totalProjectedRevenue.toDecimal(),
+          formattedRevenue: totalProjectedRevenue.toBRL(),
+          projectedTax: totalTax.toDecimal(),
+          formattedTax: totalTax.toBRL(),
+          effectiveRate: totalProjectedRevenue.toDecimal() > 0
+            ? (totalTax.toDecimal() / totalProjectedRevenue.toDecimal()) * 100
+            : 0,
+          taxes: taxProjections,
+          propertyDistribution: propertyProjections
+        });
+      }
+      
+      // Calculate totals
+      const totalProjectedRevenue = MoneyUtils.sum(
+        projections.map(p => ServerMoneyUtils.fromDecimal(p.projectedRevenue))
+      );
+      const totalProjectedTax = MoneyUtils.sum(
+        projections.map(p => ServerMoneyUtils.fromDecimal(p.projectedTax))
+      );
+      
+      return {
+        projections,
+        totals: {
+          revenue: totalProjectedRevenue.toDecimal(),
+          formattedRevenue: totalProjectedRevenue.toBRL(),
+          tax: totalProjectedTax.toDecimal(),
+          formattedTax: totalProjectedTax.toBRL(),
+          effectiveRate: totalProjectedRevenue.toDecimal() > 0
+            ? (totalProjectedTax.toDecimal() / totalProjectedRevenue.toDecimal()) * 100
+            : 0
+        },
+        parameters: {
+          monthsProjected: monthsToProject,
+          basedOnLastMonths: baseMonths,
+          seasonalAdjustment: params.seasonalAdjustment || false
+        }
+      };
+    } catch (error) {
+      console.error('Error calculating tax projections:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Calculate tax summary for a period with Money precision
    */
   async getTaxSummary(userId: string, year: number): Promise<any> {
