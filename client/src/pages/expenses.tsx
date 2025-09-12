@@ -127,7 +127,7 @@ export default function ExpensesPage() {
       'Condomínio': { key: 'condominium', route: '/expenses/condominium-detail' },
       'Financiamento': { key: 'financing', route: '/expenses/financing-detail' },
       'Limpezas': { key: 'cleaning', route: '/expenses/cleaning-detail' },
-      'Gestão - Maurício': { key: 'management', route: '/expenses/management-detail' },
+      'Gestão - Maurício': { key: 'management', route: '/expenses/mauricio' },
       'Despesas Gerais': { key: 'other', route: '/expenses/other-detail' }
     };
     

@@ -24,6 +24,7 @@ const Reports = lazy(() => import("@/pages/reports"));
 const Import = lazy(() => import("@/pages/import"));
 const Taxes = lazy(() => import("@/pages/taxes"));
 const ManagementExpenses = lazy(() => import("@/pages/expenses/management"));
+const MauricioExpenses = lazy(() => import("@/pages/expenses/mauricio"));
 const CleaningExpenses = lazy(() => import("@/pages/expenses/cleaning"));
 const CondominiumExpenses = lazy(() => import("@/pages/expenses/condominium"));
 const OtherExpenses = lazy(() => import("@/pages/expenses/others"));
@@ -83,6 +84,7 @@ function Router() {
             <Route path="/import" component={Import} />
             <Route path="/taxes" component={Taxes} />
             <Route path="/expenses/management" component={ManagementExpenses} />
+            <Route path="/expenses/mauricio" component={MauricioExpenses} />
             <Route path="/expenses/cleaning" component={CleaningExpenses} />
             <Route path="/expenses/condominium" component={CondominiumExpenses} />
             <Route path="/expenses/others" component={OtherExpenses} />
