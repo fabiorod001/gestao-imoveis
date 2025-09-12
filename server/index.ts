@@ -12,7 +12,7 @@ import {
 import {
   apiCacheControl,
   connectionOptimization,
-  compressJson
+  cacheMiddleware
 } from "./middleware/performance";
 
 // Load and validate environment variables
@@ -27,7 +27,8 @@ const app = express();
 app.disable('x-powered-by');
 
 // Enable trust proxy for proper client IP detection when behind a proxy
-app.set('trust proxy', true);
+// Use 1 to trust only the first hop for better security
+app.set('trust proxy', 1);
 
 // Enable compression for all responses with aggressive settings
 app.use(compression({
@@ -46,7 +47,7 @@ app.use(compression({
 // Performance optimizations
 app.use(connectionOptimization); // Connection keep-alive optimization
 app.use(apiCacheControl); // API cache control headers
-app.use(compressJson); // Additional JSON compression
+// Note: cacheMiddleware is applied selectively in routes.ts for specific endpoints
 
 // Security and optimization middlewares
 app.use(requestTimeout(60)); // 60 second timeout for requests

@@ -32,8 +32,8 @@ export function apiCacheControl(req: Request, res: Response, next: NextFunction)
     res.setHeader('Cache-Control', 'no-store');
   }
   
-  // Add ETag support for all responses
-  res.setHeader('ETag', 'W/"' + Date.now() + '"');
+  // ETag support is handled by Express's built-in etag middleware
+  // which generates proper content-based ETags
   
   next();
 }
@@ -185,32 +185,12 @@ export const dbOptimizations = {
 };
 
 /**
- * Response compression for JSON
- * Additional compression on top of gzip for large responses
- */
-export function compressJson(req: Request, res: Response, next: NextFunction) {
-  const originalJson = res.json;
-  
-  res.json = function(data: any) {
-    // For large responses, remove unnecessary whitespace
-    if (JSON.stringify(data).length > 10000) {
-      // Use compact JSON formatting
-      return originalJson.call(this, JSON.parse(JSON.stringify(data)));
-    }
-    
-    return originalJson.call(this, data);
-  };
-  
-  next();
-}
-
-/**
  * Connection pooling and keep-alive headers
  */
 export function connectionOptimization(req: Request, res: Response, next: NextFunction) {
-  // Enable keep-alive
+  // Enable keep-alive with timeout matching server.keepAliveTimeout (65 seconds)
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Keep-Alive', 'timeout=5, max=1000');
+  res.setHeader('Keep-Alive', 'timeout=65, max=1000');
   
   next();
 }

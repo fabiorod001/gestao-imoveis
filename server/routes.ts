@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { ServiceFactory } from "./services";
 import { z } from "zod";
+import { cacheMiddleware } from "./middleware/performance";
 import multer from "multer";
 import * as fs from "fs";
 import { format, addDays } from "date-fns";
@@ -136,7 +137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
   // ==================== AUTH ROUTES ====================
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res: Response) => {
+  app.get('/api/auth/user', isAuthenticated, cacheMiddleware(60), async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const user = await storage.getUser(userId);
@@ -148,7 +149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== PROPERTY ROUTES ====================
-  app.get('/api/properties', isAuthenticated, async (req: any, res: Response) => {
+  app.get('/api/properties', isAuthenticated, cacheMiddleware(300), async (req: any, res: Response) => {
     try {
       const userId = getUserId(req);
       const properties = await propertyService.getProperties(userId);

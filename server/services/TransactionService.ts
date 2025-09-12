@@ -7,7 +7,6 @@ import { db } from "../db";
 import { eq, and, desc, sql, or, isNull } from "drizzle-orm";
 import { format } from "date-fns";
 import { Money, ServerMoneyUtils, MoneyUtils } from "../utils/money";
-import { queryCache } from "../middleware/performance";
 
 /**
  * Service for managing transaction-related operations with precise Money handling
