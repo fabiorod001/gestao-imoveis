@@ -597,7 +597,7 @@ export class TaxService extends BaseService {
         if (!summary[tx.taxType]) {
           summary[tx.taxType] = { 
             count: 0, 
-            total: ServerMoneyUtils.zero() 
+            total: Money.zero() 
           };
         }
         summary[tx.taxType].count++;
@@ -854,7 +854,7 @@ export class TaxService extends BaseService {
         const monthKey = format(projectionDate, 'MM/yyyy');
         
         // Calculate total projected revenue
-        let totalProjectedRevenue = ServerMoneyUtils.zero();
+        let totalProjectedRevenue = Money.zero();
         const propertyProjections = [];
         
         for (const prop of revenueResult) {
@@ -887,7 +887,7 @@ export class TaxService extends BaseService {
         
         // Calculate taxes based on projected revenue
         const projectedTaxes: Record<string, Money> = {};
-        let totalTax = ServerMoneyUtils.zero();
+        let totalTax = Money.zero();
         
         // PIS
         projectedTaxes.PIS = totalProjectedRevenue.percentage(taxRates.PIS);
@@ -903,7 +903,7 @@ export class TaxService extends BaseService {
         
         // IRPJ (15% base + 10% additional on amount exceeding R$20,000/month)
         const baseIRPJ = totalProjectedRevenue.percentage(taxRates.IRPJ);
-        let additionalIRPJ = ServerMoneyUtils.zero();
+        let additionalIRPJ = Money.zero();
         
         const monthlyProfit = totalProjectedRevenue.percentage(32);
         const excess = monthlyProfit.subtract(ServerMoneyUtils.fromReal(20000));
