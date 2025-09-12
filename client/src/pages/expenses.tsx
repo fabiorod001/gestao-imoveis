@@ -156,9 +156,12 @@ export default function ExpensesPage() {
   });
 
   // Fetch expense transactions - optimized endpoint
-  const { data: expenses = [], isLoading } = useQuery<Transaction[]>({
+  const { data: expenseResponse, isLoading } = useQuery<{ data: Transaction[]; total: number; hasMore: boolean }>({
     queryKey: ['/api/expenses/dashboard'],
   });
+  
+  // Extract the expenses array from the response
+  const expenses = expenseResponse?.data || [];
 
   // Handle expense completion from AdvancedExpenseManager
   const handleExpenseComplete = () => {
@@ -197,7 +200,7 @@ export default function ExpensesPage() {
   // Generate pivot table data
   const generatePivotData = (): PivotTableData => {
     // Filter expenses based on selected filters
-    const filteredExpenses = expenses.filter((expense) => {
+    const filteredExpenses = expenses.filter((expense: Transaction) => {
       const expenseDate = new Date(expense.date);
       const monthKey = `${String(expenseDate.getMonth() + 1).padStart(2, '0')}/${expenseDate.getFullYear()}`;
       
@@ -290,7 +293,7 @@ export default function ExpensesPage() {
     };
   };
 
-  const pivotData = generatePivotData();
+  const pivotData = expenses.length > 0 ? generatePivotData() : { rows: [], monthHeaders: [], columnTotals: {}, grandTotal: 0 };
 
   // Sorting logic
   const sortData = (data: PivotRow[]) => {
@@ -360,7 +363,7 @@ export default function ExpensesPage() {
       const wb = XLSX.utils.book_new();
       const wsData = [
         ['Data', 'Propriedade', 'Categoria', 'Descrição', 'Fornecedor', 'Valor'],
-        ...expenses.map((expense) => [
+        ...expenses.map((expense: Transaction) => [
           new Date(expense.date).toLocaleDateString('pt-BR'),
           expense.propertyName || '-',
           EXPENSE_CATEGORY_LABELS[expense.category] || expense.category,
@@ -426,7 +429,7 @@ export default function ExpensesPage() {
       doc.setFontSize(10);
       doc.text(`Exportado em: ${new Date().toLocaleDateString('pt-BR')}`, 14, 28);
       
-      const tableData = expenses.map((expense) => [
+      const tableData = expenses.map((expense: Transaction) => [
         new Date(expense.date).toLocaleDateString('pt-BR'),
         expense.propertyName || '-',
         EXPENSE_CATEGORY_LABELS[expense.category] || expense.category,
