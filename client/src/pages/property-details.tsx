@@ -71,7 +71,7 @@ export default function PropertyDetails() {
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showPropertyEdit, setShowPropertyEdit] = useState(false);
   const [showDetailedHistory, setShowDetailedHistory] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<any>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [transactionForm, setTransactionForm] = useState<TransactionForm>({
     type: 'revenue',
     category: '',
@@ -891,7 +891,7 @@ export default function PropertyDetails() {
                     <Label>Descrição</Label>
                     <Input 
                       value={editingTransaction.description}
-                      onChange={(e) => setEditingTransaction(prev => ({ ...prev, description: e.target.value }))}
+                      onChange={(e) => setEditingTransaction((prev: Transaction | null) => prev ? { ...prev, description: e.target.value } : null)}
                       placeholder="Descrição da transação"
                     />
                   </div>
@@ -901,7 +901,7 @@ export default function PropertyDetails() {
                       type="number"
                       step="0.01"
                       value={editingTransaction.amount}
-                      onChange={(e) => setEditingTransaction(prev => ({ ...prev, amount: e.target.value }))}
+                      onChange={(e) => setEditingTransaction((prev: Transaction | null) => prev ? { ...prev, amount: e.target.value } : null)}
                       placeholder="0,00"
                     />
                   </div>
@@ -910,14 +910,14 @@ export default function PropertyDetails() {
                     <Input 
                       type="date"
                       value={editingTransaction.date}
-                      onChange={(e) => setEditingTransaction(prev => ({ ...prev, date: e.target.value }))}
+                      onChange={(e) => setEditingTransaction((prev: Transaction | null) => prev ? { ...prev, date: e.target.value } : null)}
                     />
                   </div>
                   <div>
                     <Label>Fornecedor</Label>
                     <Input 
                       value={editingTransaction.supplier || ''}
-                      onChange={(e) => setEditingTransaction(prev => ({ ...prev, supplier: e.target.value }))}
+                      onChange={(e) => setEditingTransaction((prev: Transaction | null) => prev ? { ...prev, supplier: e.target.value } : null)}
                       placeholder="Nome do fornecedor"
                     />
                   </div>
@@ -928,7 +928,7 @@ export default function PropertyDetails() {
                     <Label>CPF/CNPJ</Label>
                     <Input 
                       value={editingTransaction.cpfCnpj || ''}
-                      onChange={(e) => setEditingTransaction(prev => ({ ...prev, cpfCnpj: e.target.value }))}
+                      onChange={(e) => setEditingTransaction((prev: Transaction | null) => prev ? { ...prev, cpfCnpj: e.target.value } : null)}
                       placeholder="000.000.000-00 ou 00.000.000/0001-00"
                     />
                   </div>
@@ -936,7 +936,7 @@ export default function PropertyDetails() {
                     <Label>Categoria</Label>
                     <Select 
                       value={editingTransaction.category} 
-                      onValueChange={(value) => setEditingTransaction(prev => ({ ...prev, category: value }))}
+                      onValueChange={(value) => setEditingTransaction((prev: Transaction | null) => prev ? { ...prev, category: value } : null)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione a categoria" />
@@ -971,9 +971,11 @@ export default function PropertyDetails() {
                   </Button>
                   <Button 
                     onClick={() => {
-                      const updateData = {
+                      if (!editingTransaction) return;
+                      
+                      const updateData: any = {
                         description: editingTransaction.description,
-                        amount: parseFloat(editingTransaction.amount),
+                        amount: parseFloat(editingTransaction.amount.toString()),
                         date: editingTransaction.date,
                         category: editingTransaction.category
                       };

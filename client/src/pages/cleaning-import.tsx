@@ -88,10 +88,11 @@ export default function CleaningImport() {
   // Process OCR text mutation
   const processOcrMutation = useMutation({
     mutationFn: async (text: string) => {
-      return apiRequest('/api/cleaning/ocr', {
+      const response = await apiRequest('/api/cleaning/ocr', {
         method: 'POST',
         body: JSON.stringify({ ocrText: text }),
       });
+      return await response.json();
     },
     onSuccess: (data) => {
       setCleanings(data.cleanings);
@@ -116,10 +117,11 @@ export default function CleaningImport() {
   // Match cleanings to properties mutation
   const matchCleaningsMutation = useMutation({
     mutationFn: async (items: CleaningItem[]) => {
-      return apiRequest('/api/cleaning/match', {
+      const response = await apiRequest('/api/cleaning/match', {
         method: 'POST',
         body: JSON.stringify({ cleanings: items }),
       });
+      return await response.json();
     },
     onSuccess: (data) => {
       setCleanings(data.cleanings);
@@ -142,13 +144,14 @@ export default function CleaningImport() {
   // Learn property mapping mutation
   const learnMappingMutation = useMutation({
     mutationFn: async (mapping: PropertyMapping) => {
-      return apiRequest('/api/cleaning/mapping', {
+      const response = await apiRequest('/api/cleaning/mapping', {
         method: 'POST',
         body: JSON.stringify({
           variation: mapping.variation,
           propertyId: mapping.propertyId,
         }),
       });
+      return await response.json();
     },
     onSuccess: () => {
       toast({
@@ -167,7 +170,7 @@ export default function CleaningImport() {
         amount: c.amount,
       }));
 
-      return apiRequest('/api/cleaning/import', {
+      const response = await apiRequest('/api/cleaning/import', {
         method: 'POST',
         body: JSON.stringify({
           cleanings: cleaningData,
@@ -176,6 +179,7 @@ export default function CleaningImport() {
           advanceAmount: hasAdvance ? advanceAmount : undefined,
         }),
       });
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/cleaning/batches'] });
@@ -206,9 +210,10 @@ export default function CleaningImport() {
   // Delete batch mutation
   const deleteBatchMutation = useMutation({
     mutationFn: async (batchId: number) => {
-      return apiRequest(`/api/cleaning/batch/${batchId}`, {
+      const response = await apiRequest(`/api/cleaning/batch/${batchId}`, {
         method: 'DELETE',
       });
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/cleaning/batches'] });
