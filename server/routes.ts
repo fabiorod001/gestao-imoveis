@@ -938,6 +938,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Tax import from Excel
+  app.post('/api/taxes/import/excel', 
+    isAuthenticated,
+    upload.single('file'),
+    asyncHandler(async (req: any, res: Response) => {
+      const userId = getUserId(req);
+      if (!req.file) {
+        return res.status(400).json({ message: 'Nenhum arquivo enviado' });
+      }
+      
+      const fileBuffer = await fs.promises.readFile(req.file.path);
+      const result = await taxService.importTaxesFromExcel(userId, fileBuffer);
+      
+      // Clean up uploaded file
+      await fs.promises.unlink(req.file.path);
+      
+      res.json(result);
+    })
+  );
+
+  // Tax import from CSV
+  app.post('/api/taxes/import/csv',
+    isAuthenticated,
+    uploadCSV.single('file'),
+    asyncHandler(async (req: any, res: Response) => {
+      const userId = getUserId(req);
+      if (!req.file) {
+        return res.status(400).json({ message: 'Nenhum arquivo enviado' });
+      }
+      
+      const csvContent = req.file.buffer.toString('utf-8');
+      const result = await taxService.importTaxesFromCSV(userId, csvContent);
+      
+      res.json(result);
+    })
+  );
+
   app.post('/api/taxes/payments', 
     isAuthenticated,
     validate(createTaxPaymentSchema),

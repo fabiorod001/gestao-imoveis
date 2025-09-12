@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import TaxPaymentForm from '@/components/taxes/TaxPaymentForm';
+import { TaxImportDialog } from '@/components/taxes/TaxImportDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calculator, TrendingUp, Building2, DollarSign, ArrowLeft, Calendar, Edit2 } from 'lucide-react';
+import { Calculator, TrendingUp, Building2, DollarSign, ArrowLeft, Calendar, Edit2, Upload, FileSpreadsheet } from 'lucide-react';
 import { Link } from 'wouter';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function TaxesPage() {
   const [selectedTab, setSelectedTab] = useState<'new' | 'list'>('new');
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   // Query to fetch tax expenses
   const { data: taxExpenses = [] } = useQuery({
@@ -67,13 +69,35 @@ export default function TaxesPage() {
               Sistema completo para cadastro e rateio de impostos
             </p>
           </div>
-          <Link href="/expenses">
-            <Button variant="outline">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
+          <div className="flex gap-2">
+            <Button 
+              variant="outline"
+              onClick={() => setImportDialogOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              Importar
             </Button>
-          </Link>
+            <Link href="/expenses/taxes-detail">
+              <Button variant="outline" className="flex items-center gap-2">
+                <FileSpreadsheet className="h-4 w-4" />
+                Tabela Detalhada
+              </Button>
+            </Link>
+            <Link href="/expenses">
+              <Button variant="outline">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Voltar
+              </Button>
+            </Link>
+          </div>
         </div>
+
+        {/* Tax Import Dialog */}
+        <TaxImportDialog 
+          open={importDialogOpen} 
+          onOpenChange={setImportDialogOpen} 
+        />
 
         {/* Tab Navigation */}
         <div className="bg-white rounded-lg shadow-sm p-1 inline-flex">

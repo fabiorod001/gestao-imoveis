@@ -12,9 +12,11 @@ import {
   type TaxProjection
 } from "@shared/schema";
 import { eq, and, gte, lte, sql, desc, isNull, or } from "drizzle-orm";
-import { format, addMonths, lastDayOfMonth, startOfMonth, endOfMonth } from "date-fns";
+import { format, addMonths, lastDayOfMonth, startOfMonth, endOfMonth, parse } from "date-fns";
 import { z } from "zod";
 import { Money, ServerMoneyUtils, MoneyUtils } from "../utils/money";
+import * as XLSX from 'xlsx';
+import { parse as csvParse } from 'csv-parse/sync';
 
 /**
  * Service for tax calculation and payment operations with precise Money handling
@@ -28,33 +30,50 @@ export class TaxService extends BaseService {
   }
 
   /**
-   * Record simple tax payment with Money precision
+   * Record simple tax payment with parent/child structure and Money precision
    */
   async recordSimpleTaxPayment(userId: string, data: {
     amount: number | string;
     date: string;
     description?: string;
     type: string;
+    selectedPropertyIds?: number[];
+    competencyMonth?: string;
   }): Promise<any> {
     // Use Money for precise amount handling
-    const amount = ServerMoneyUtils.parseUserInput(data.amount);
+    const totalAmount = ServerMoneyUtils.parseUserInput(data.amount);
+    const taxType = data.type;
+    const competencyMonth = data.competencyMonth || format(new Date(data.date), 'MM/yyyy');
+    
+    // If properties selected, create parent/child structure
+    if (data.selectedPropertyIds && data.selectedPropertyIds.length > 0) {
+      return this.createDistributedTaxPayment(userId, {
+        taxType,
+        totalAmount: totalAmount.toDecimalString(),
+        date: data.date,
+        competencyMonth,
+        selectedPropertyIds: data.selectedPropertyIds,
+        description: data.description || `${taxType} - Competência ${competencyMonth}`
+      });
+    }
 
+    // Single transaction for company-level tax
     const transaction = await this.transactionService.createTransaction(userId, {
       propertyId: null, // Company-level tax
       type: 'expense',
       category: 'taxes',
-      description: data.description || `Pagamento de ${data.type}`,
-      amount: amount.toDecimalString(), // Convert Money to string for transaction service
+      description: data.description || `${taxType} - Competência ${competencyMonth}`,
+      amount: totalAmount.toDecimalString(),
       date: data.date,
       supplier: 'Receita Federal',
-      notes: `Imposto: ${data.type}`
+      notes: `Imposto: ${taxType}\nCompetência: ${competencyMonth}`
     });
 
     return {
       success: true,
       transaction,
       message: 'Pagamento de imposto registrado com sucesso',
-      formattedAmount: amount.toBRL()
+      formattedAmount: totalAmount.toBRL()
     };
   }
 
@@ -201,6 +220,133 @@ export class TaxService extends BaseService {
           cofinsFormatted: propCofins.toBRL(),
           total: propTotal.toDecimal(),
           totalFormatted: propTotal.toBRL()
+        };
+      })
+    };
+  }
+
+  /**
+   * Create distributed tax payment with parent/child structure
+   */
+  async createDistributedTaxPayment(userId: string, data: {
+    taxType: string;
+    totalAmount: number | string;
+    date: string;
+    competencyMonth: string;
+    selectedPropertyIds: number[];
+    description?: string;
+    cota1?: boolean;
+    cota2?: boolean;
+    cota3?: boolean;
+  }): Promise<any> {
+    const totalAmount = ServerMoneyUtils.parseUserInput(data.totalAmount);
+    const propertyCount = data.selectedPropertyIds.length;
+    
+    if (propertyCount === 0) {
+      throw new Error("Pelo menos um imóvel deve ser selecionado para rateio");
+    }
+
+    // Get revenue for each property in the competency month
+    const [month, year] = data.competencyMonth.split('/').map(Number);
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+
+    // Fetch revenue data for proportional distribution
+    const revenueData = await db
+      .select({
+        propertyId: transactions.propertyId,
+        propertyName: properties.name,
+        revenue: sql<string>`SUM(${transactions.amount})`
+      })
+      .from(transactions)
+      .leftJoin(properties, eq(transactions.propertyId, properties.id))
+      .where(and(
+        eq(transactions.userId, userId),
+        eq(transactions.type, 'revenue'),
+        gte(transactions.date, format(startDate, 'yyyy-MM-dd')),
+        lte(transactions.date, format(endDate, 'yyyy-MM-dd')),
+        sql`${transactions.propertyId} IN (${data.selectedPropertyIds.join(',')})`
+      ))
+      .groupBy(transactions.propertyId, properties.name);
+
+    // Calculate proportional distribution based on revenue
+    const weights = revenueData.map(prop => ({
+      id: prop.propertyId!,
+      weight: ServerMoneyUtils.fromDecimal(prop.revenue).toDecimal()
+    }));
+
+    // If no revenue data, distribute equally
+    const distribution = weights.length > 0 
+      ? ServerMoneyUtils.distributeProportionally(totalAmount, weights)
+      : ServerMoneyUtils.distributeEqually(totalAmount, data.selectedPropertyIds);
+
+    // Create parent transaction
+    const parentDescription = data.description || `${data.taxType} - Competência ${data.competencyMonth}`;
+    const parent = await this.transactionService.createTransaction(userId, {
+      type: 'expense',
+      category: 'taxes',
+      description: parentDescription,
+      amount: totalAmount.toDecimalString(),
+      date: data.date,
+      isCompositeParent: true,
+      supplier: 'Receita Federal',
+      notes: `Imposto: ${data.taxType}\nCompetência: ${data.competencyMonth}\nRateado entre ${propertyCount} imóveis`
+    });
+
+    // Create child transactions for each property
+    const children = [];
+    for (const [propertyId, amount] of distribution.entries()) {
+      const prop = revenueData.find(p => p.propertyId === propertyId);
+      const child = await this.transactionService.createTransaction(userId, {
+        propertyId,
+        type: 'expense',
+        category: 'taxes',
+        description: `${parentDescription} - Rateio`,
+        amount: amount.toDecimalString(),
+        date: data.date,
+        parentTransactionId: parent.id,
+        supplier: 'Receita Federal',
+        notes: `Parte proporcional: ${prop?.propertyName || 'Imóvel'}`
+      });
+      children.push(child);
+    }
+
+    // Handle quotas for CSLL and IRPJ
+    const quotas = [];
+    if ((data.taxType === 'CSLL' || data.taxType === 'IRPJ') && 
+        (data.cota1 || data.cota2 || data.cota3)) {
+      
+      const baseDate = new Date(data.date);
+      if (data.cota1) {
+        quotas.push({ number: 1, date: baseDate });
+      }
+      if (data.cota2) {
+        const cota2Date = new Date(baseDate);
+        cota2Date.setMonth(cota2Date.getMonth() + 1);
+        quotas.push({ number: 2, date: cota2Date });
+      }
+      if (data.cota3) {
+        const cota3Date = new Date(baseDate);
+        cota3Date.setMonth(cota3Date.getMonth() + 2);
+        quotas.push({ number: 3, date: cota3Date });
+      }
+    }
+
+    return {
+      success: true,
+      parent,
+      children,
+      quotas,
+      message: `${data.taxType} cadastrado com sucesso e distribuído entre ${propertyCount} imóveis`,
+      totalAmount: totalAmount.toDecimal(),
+      totalAmountFormatted: totalAmount.toBRL(),
+      distribution: Array.from(distribution.entries()).map(([propertyId, amount]) => {
+        const prop = revenueData.find(p => p.propertyId === propertyId);
+        return {
+          propertyId,
+          propertyName: prop?.propertyName || 'Unknown',
+          amount: amount.toDecimal(),
+          amountFormatted: amount.toBRL()
         };
       })
     };
@@ -1097,5 +1243,248 @@ export class TaxService extends BaseService {
     }
 
     return months;
+  }
+
+  /**
+   * Import taxes from Excel file
+   */
+  async importTaxesFromExcel(userId: string, fileBuffer: Buffer): Promise<{
+    success: boolean;
+    imported: number;
+    errors: string[];
+    summary: any;
+  }> {
+    const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+
+    const errors: string[] = [];
+    const imported: any[] = [];
+    const summary = {
+      totalAmount: Money.zero(),
+      byType: {} as Record<string, Money>,
+      byMonth: {} as Record<string, Money>,
+      byProperty: {} as Record<string, Money>
+    };
+
+    // Get user properties for mapping
+    const userProperties = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.userId, userId));
+    
+    const propertyMap = new Map(userProperties.map(p => [p.name.toLowerCase(), p.id]));
+
+    for (const [index, row] of rows.entries()) {
+      try {
+        // Parse row data
+        const taxType = this.normalizeText(row['Tipo'] || row['Tax Type'] || '');
+        const competencyMonth = this.parseCompetencyMonth(row['Competencia'] || row['Competency'] || '');
+        const amount = this.parseAmount(row['Valor'] || row['Amount'] || row['Value'] || 0);
+        const paymentDate = this.parseDate(row['Data Pagamento'] || row['Payment Date'] || new Date());
+        const propertyName = this.normalizeText(row['Imovel'] || row['Property'] || '');
+        
+        // Validate tax type
+        if (!['PIS', 'COFINS', 'CSLL', 'IRPJ', 'IPTU'].includes(taxType.toUpperCase())) {
+          errors.push(`Linha ${index + 2}: Tipo de imposto inválido: ${taxType}`);
+          continue;
+        }
+
+        // Map property if specified
+        let propertyId: number | null = null;
+        if (propertyName) {
+          propertyId = propertyMap.get(propertyName.toLowerCase()) || null;
+          if (!propertyId) {
+            errors.push(`Linha ${index + 2}: Imóvel não encontrado: ${propertyName}`);
+            continue;
+          }
+        }
+
+        // Create tax transaction
+        const transaction = await this.transactionService.createTransaction(userId, {
+          propertyId,
+          type: 'expense',
+          category: 'taxes',
+          description: `${taxType.toUpperCase()} - Competência ${competencyMonth}`,
+          amount: amount.toDecimalString(),
+          date: format(paymentDate, 'yyyy-MM-dd'),
+          supplier: 'Receita Federal',
+          notes: `Importado de Excel`
+        });
+
+        imported.push(transaction);
+
+        // Update summary
+        summary.totalAmount = summary.totalAmount.add(amount);
+        
+        const typeKey = taxType.toUpperCase();
+        summary.byType[typeKey] = (summary.byType[typeKey] || Money.zero()).add(amount);
+        
+        const monthKey = competencyMonth;
+        summary.byMonth[monthKey] = (summary.byMonth[monthKey] || Money.zero()).add(amount);
+        
+        if (propertyName) {
+          summary.byProperty[propertyName] = (summary.byProperty[propertyName] || Money.zero()).add(amount);
+        }
+      } catch (error) {
+        errors.push(`Linha ${index + 2}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      }
+    }
+
+    return {
+      success: errors.length === 0,
+      imported: imported.length,
+      errors,
+      summary: {
+        totalAmount: summary.totalAmount.toDecimal(),
+        totalAmountFormatted: summary.totalAmount.toBRL(),
+        byType: Object.fromEntries(
+          Object.entries(summary.byType).map(([key, value]) => [key, value.toBRL()])
+        ),
+        byMonth: Object.fromEntries(
+          Object.entries(summary.byMonth).map(([key, value]) => [key, value.toBRL()])
+        ),
+        byProperty: Object.fromEntries(
+          Object.entries(summary.byProperty).map(([key, value]) => [key, value.toBRL()])
+        )
+      }
+    };
+  }
+
+  /**
+   * Import taxes from CSV file
+   */
+  async importTaxesFromCSV(userId: string, csvContent: string): Promise<{
+    success: boolean;
+    imported: number;
+    errors: string[];
+    summary: any;
+  }> {
+    const rows = csvParse(csvContent, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true
+    });
+
+    const errors: string[] = [];
+    const imported: any[] = [];
+    const summary = {
+      totalAmount: Money.zero(),
+      byType: {} as Record<string, Money>,
+      byMonth: {} as Record<string, Money>
+    };
+
+    for (const [index, row] of rows.entries()) {
+      try {
+        // Parse CSV row
+        const taxType = this.normalizeText(row['Tipo'] || row['TaxType'] || '');
+        const competencyMonth = this.parseCompetencyMonth(row['Competencia'] || row['Competency'] || '');
+        const amount = this.parseAmount(row['Valor'] || row['Amount'] || 0);
+        const paymentDate = this.parseDate(row['DataPagamento'] || row['PaymentDate'] || new Date());
+        
+        // Validate and create transaction
+        if (!['PIS', 'COFINS', 'CSLL', 'IRPJ', 'IPTU'].includes(taxType.toUpperCase())) {
+          errors.push(`Linha ${index + 2}: Tipo de imposto inválido: ${taxType}`);
+          continue;
+        }
+
+        const transaction = await this.transactionService.createTransaction(userId, {
+          type: 'expense',
+          category: 'taxes',
+          description: `${taxType.toUpperCase()} - Competência ${competencyMonth}`,
+          amount: amount.toDecimalString(),
+          date: format(paymentDate, 'yyyy-MM-dd'),
+          supplier: 'Receita Federal',
+          notes: `Importado de CSV`
+        });
+
+        imported.push(transaction);
+        
+        // Update summary
+        summary.totalAmount = summary.totalAmount.add(amount);
+        summary.byType[taxType.toUpperCase()] = (summary.byType[taxType.toUpperCase()] || Money.zero()).add(amount);
+        summary.byMonth[competencyMonth] = (summary.byMonth[competencyMonth] || Money.zero()).add(amount);
+      } catch (error) {
+        errors.push(`Linha ${index + 2}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      }
+    }
+
+    return {
+      success: errors.length === 0,
+      imported: imported.length,
+      errors,
+      summary: {
+        totalAmount: summary.totalAmount.toDecimal(),
+        totalAmountFormatted: summary.totalAmount.toBRL(),
+        byType: Object.fromEntries(
+          Object.entries(summary.byType).map(([key, value]) => [key, value.toBRL()])
+        ),
+        byMonth: Object.fromEntries(
+          Object.entries(summary.byMonth).map(([key, value]) => [key, value.toBRL()])
+        )
+      }
+    };
+  }
+
+  /**
+   * Helper methods for import parsing
+   */
+  private normalizeText(text: any): string {
+    return String(text).trim().replace(/\s+/g, ' ');
+  }
+
+  private parseAmount(value: any): Money {
+    if (typeof value === 'number') {
+      return ServerMoneyUtils.fromDecimal(value);
+    }
+    const normalized = String(value)
+      .replace(/[^\d.,-]/g, '')
+      .replace(',', '.');
+    return ServerMoneyUtils.parseUserInput(normalized);
+  }
+
+  private parseDate(value: any): Date {
+    if (value instanceof Date) return value;
+    
+    // Try various date formats
+    const dateStr = String(value);
+    const formats = [
+      'dd/MM/yyyy',
+      'MM/dd/yyyy',
+      'yyyy-MM-dd',
+      'dd-MM-yyyy'
+    ];
+
+    for (const fmt of formats) {
+      try {
+        const parsed = parse(dateStr, fmt, new Date());
+        if (!isNaN(parsed.getTime())) return parsed;
+      } catch {}
+    }
+
+    // Excel serial date
+    if (!isNaN(Number(value))) {
+      const excelDate = new Date((Number(value) - 25569) * 86400 * 1000);
+      if (!isNaN(excelDate.getTime())) return excelDate;
+    }
+
+    return new Date();
+  }
+
+  private parseCompetencyMonth(value: any): string {
+    const str = String(value);
+    
+    // Try MM/YYYY format
+    if (/^\d{2}\/\d{4}$/.test(str)) return str;
+    
+    // Try YYYY-MM format
+    if (/^\d{4}-\d{2}$/.test(str)) {
+      const [year, month] = str.split('-');
+      return `${month}/${year}`;
+    }
+    
+    // Default to current month
+    return format(new Date(), 'MM/yyyy');
   }
 }
