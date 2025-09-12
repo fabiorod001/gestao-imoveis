@@ -7,6 +7,7 @@ import {
   dateSchema,
   moneySchema,
   idSchema,
+  idsArraySchema,
   propertyStatusSchema,
   propertyTypeSchema,
   rentalTypeSchema,
@@ -234,6 +235,21 @@ export const createCompositeExpenseSchema = z.object({
     path: ["totalAmount"],
   }
 );
+
+/**
+ * ====================================
+ * MAURÍCIO EXPENSE SCHEMAS  
+ * ====================================
+ */
+
+export const createMauricioExpenseSchema = z.object({
+  totalAmount: moneySchema.refine((val) => val > 0, "Valor deve ser positivo"),
+  date: dateSchema,
+  description: z.string().min(1, "Descrição é obrigatória").max(1000),
+  selectedPropertyIds: z.array(idSchema).min(1, "Selecione pelo menos um imóvel"),
+  supplier: z.string().default("Maurício"),
+  notes: z.string().max(5000).optional(),
+});
 
 /**
  * ====================================

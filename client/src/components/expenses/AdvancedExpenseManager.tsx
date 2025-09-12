@@ -20,6 +20,7 @@ import ExpenseTypeSelector from "./ExpenseTypeSelector";
 import CondominiumExpenseForm from "./CondominiumExpenseForm";
 import TaxExpenseForm from "./TaxExpenseForm";
 import ManagementExpenseForm from "./ManagementExpenseForm";
+import MauricioExpenseForm from "./MauricioExpenseForm";
 import SingleExpenseForm from "./SingleExpenseForm";
 import RecurringExpenseForm from "./RecurringExpenseForm";
 
@@ -27,6 +28,7 @@ export type ExpenseType =
   | 'condominium'
   | 'taxes'
   | 'management'
+  | 'mauricio'
   | 'utilities'
   | 'maintenance'
   | 'financing'
@@ -131,11 +133,18 @@ export default function AdvancedExpenseManager() {
       color: 'bg-red-50 hover:bg-red-100 border-red-200'
     },
     {
-      type: 'management' as ExpenseType,
-      title: 'Gestão - Maurício',
-      description: 'Taxas de gestão divididas entre imóveis',
+      type: 'mauricio' as ExpenseType,
+      title: 'Maurício',
+      description: 'Pagamento mensal para Maurício com divisão igual',
       icon: FileText,
       color: 'bg-green-50 hover:bg-green-100 border-green-200'
+    },
+    {
+      type: 'management' as ExpenseType,
+      title: 'Gestão (outras)',
+      description: 'Taxas de gestão com percentuais variáveis',
+      icon: FileText,
+      color: 'bg-teal-50 hover:bg-teal-100 border-teal-200'
     },
     {
       type: 'maintenance' as ExpenseType,
@@ -207,6 +216,10 @@ export default function AdvancedExpenseManager() {
             onComplete={handleExpenseComplete}
             onCancel={handleBack}
           />
+        );
+      case 'mauricio':
+        return (
+          <MauricioExpenseForm />
         );
       case 'management':
         return (

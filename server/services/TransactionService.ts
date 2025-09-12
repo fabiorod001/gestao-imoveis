@@ -206,6 +206,93 @@ export class TransactionService extends BaseService {
   }
 
   /**
+   * Create Maurício expense with equal distribution among selected properties
+   */
+  async createMauricioExpense(
+    userId: string,
+    data: {
+      totalAmount: number | string;
+      date: string | Date;
+      description: string;
+      selectedPropertyIds: number[];
+      supplier?: string;
+      notes?: string;
+    }
+  ): Promise<{ parent: Transaction; children: Transaction[] }> {
+    try {
+      // Parse amount using Money for precision
+      const totalAmount = ServerMoneyUtils.parseUserInput(data.totalAmount);
+      
+      // Calculate amount per property (equal distribution)
+      const propertyCount = data.selectedPropertyIds.length;
+      if (propertyCount === 0) {
+        throw new Error("Pelo menos um imóvel deve ser selecionado");
+      }
+      
+      const amountPerProperty = totalAmount.divide(propertyCount);
+      const paymentDate = data.date ? new Date(data.date) : new Date();
+      
+      // Create parent transaction
+      const parentData: InsertTransaction = {
+        userId,
+        type: 'expense',
+        category: 'Maurício',
+        description: data.description,
+        amount: totalAmount.toDecimal(),
+        date: paymentDate,
+        isCompositeParent: true,
+        supplier: data.supplier || 'Maurício',
+        notes: data.notes,
+      };
+      
+      const parent = await this.storage.createTransaction(parentData);
+      
+      // Create child transactions for each property
+      const children: Transaction[] = [];
+      for (const propertyId of data.selectedPropertyIds) {
+        const childData: InsertTransaction = {
+          userId,
+          propertyId,
+          type: 'expense',
+          category: 'Maurício',
+          description: `${data.description} - Rateio`,
+          amount: amountPerProperty.toDecimal(),
+          date: paymentDate,
+          parentTransactionId: parent.id,
+          supplier: data.supplier || 'Maurício',
+        };
+        
+        const child = await this.storage.createTransaction(childData);
+        children.push(child);
+      }
+      
+      // Return with formatted amounts
+      const parentAmount = ServerMoneyUtils.fromDecimal(parent.amount);
+      const formattedParent = {
+        ...parent,
+        amountFormatted: parentAmount.toBRL(),
+        amountValue: parentAmount.toDecimal()
+      } as any;
+      
+      const formattedChildren = children.map(child => {
+        const childAmount = ServerMoneyUtils.fromDecimal(child.amount);
+        return {
+          ...child,
+          amountFormatted: childAmount.toBRL(),
+          amountValue: childAmount.toDecimal()
+        } as any;
+      });
+      
+      return { parent: formattedParent, children: formattedChildren };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new Error(`Erro de validação: ${error.errors.map(e => e.message).join(', ')}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Get expense dashboard data with Money formatting - OPTIMIZED
    */
   async getExpenseDashboardData(

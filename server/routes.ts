@@ -28,6 +28,7 @@ import {
   createManagementExpenseSchema,
   updateManagementExpenseSchema,
   createDistributedExpenseSchema,
+  createMauricioExpenseSchema,
   createCleaningBatchSchema,
   createTaxPaymentSchema,
   updateTaxPaymentSchema,
@@ -504,6 +505,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const result = await transactionService.createCleaningBatch(userId, req.body);
       res.json(result);
+    })
+  );
+  
+  // Maurício expense with equal distribution
+  app.post('/api/expenses/mauricio', 
+    isAuthenticated,
+    validate(createMauricioExpenseSchema),
+    asyncHandler(async (req: any, res: Response) => {
+      const userId = getUserId(req);
+      const result = await transactionService.createMauricioExpense(userId, req.body);
+      res.status(201).json(result);
     })
   );
 
