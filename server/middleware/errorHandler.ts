@@ -276,7 +276,7 @@ export function rateLimit(
  */
 export function validateContentType(expectedType: string) {
   return (req: Request, res: Response, next: NextFunction) => {
-    if (req.method === "GET" || req.method === "DELETE") {
+    if (req.method === "GET" || req.method === "DELETE" || req.method === "HEAD") {
       return next();
     }
 

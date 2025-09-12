@@ -7,6 +7,7 @@ import { db } from "../db";
 import { eq, and, desc, sql, or, isNull } from "drizzle-orm";
 import { format } from "date-fns";
 import { Money, ServerMoneyUtils, MoneyUtils } from "../utils/money";
+import { queryCache } from "../middleware/performance";
 
 /**
  * Service for managing transaction-related operations with precise Money handling
@@ -24,38 +25,57 @@ export class TransactionService extends BaseService {
   }
 
   /**
-   * Get all transactions for a user with enriched property names
+   * Get all transactions for a user with enriched property names - OPTIMIZED
    */
   async getTransactions(userId: string, type?: string, limit?: number): Promise<any[]> {
-    let transactions;
-    
-    if (type) {
-      transactions = await this.storage.getTransactionsByType(userId, type, limit);
-    } else {
-      transactions = await this.storage.getTransactions(userId, limit);
-    }
-    
-    // Include property names and formatted amounts in transactions
-    const enrichedTransactions = await Promise.all(
-      transactions.map(async (transaction) => {
-        const amountMoney = ServerMoneyUtils.fromDecimal(transaction.amount);
-        const enriched: any = {
-          ...transaction,
-          amountMoney,
-          amountFormatted: amountMoney.toBRL(),
-          amountValue: amountMoney.toDecimal()
-        };
-        
-        if (transaction.propertyId) {
-          const property = await this.storage.getProperty(transaction.propertyId, userId);
-          enriched.propertyName = property?.name || 'Unknown Property';
-        }
-        
-        return enriched;
+    // Use a single optimized query with JOIN to avoid N+1 problem
+    const query = db
+      .select({
+        id: transactions.id,
+        userId: transactions.userId,
+        propertyId: transactions.propertyId,
+        type: transactions.type,
+        category: transactions.category,
+        amount: transactions.amount,
+        date: transactions.date,
+        description: transactions.description,
+        referenceCode: transactions.referenceCode,
+        paymentMethod: transactions.paymentMethod,
+        notes: transactions.notes,
+        tags: transactions.tags,
+        isRecurring: transactions.isRecurring,
+        recurringFrequency: transactions.recurringFrequency,
+        supplier: transactions.supplier,
+        propertyName: properties.name,
+        isBeforeMarco: transactions.isBeforeMarco,
+        isHistorical: transactions.isHistorical,
+        createdAt: transactions.createdAt,
+        updatedAt: transactions.updatedAt,
       })
-    );
+      .from(transactions)
+      .leftJoin(properties, eq(transactions.propertyId, properties.id))
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          type ? eq(transactions.type, type) : sql`true`
+        )
+      )
+      .orderBy(desc(transactions.date))
+      .limit(limit || 1000);
+
+    const results = await query;
     
-    return enrichedTransactions;
+    // Enrich with formatted amounts
+    return results.map(transaction => {
+      const amountMoney = ServerMoneyUtils.fromDecimal(transaction.amount);
+      return {
+        ...transaction,
+        amountMoney,
+        amountFormatted: amountMoney.toBRL(),
+        amountValue: amountMoney.toDecimal(),
+        propertyName: transaction.propertyName || 'Unknown Property'
+      };
+    });
   }
 
   /**
@@ -542,7 +562,7 @@ export class TransactionService extends BaseService {
       .select({
         propertyId: transactions.propertyId,
         propertyName: properties.name,
-        totalRevenue: sql<string>`SUM(${transactions.amount})` // Changed to string for Money conversion
+        totalRevenue: sql<string>`COALESCE(SUM(${transactions.amount}), '0')` // Changed to string for Money conversion
       })
       .from(transactions)
       .innerJoin(properties, eq(transactions.propertyId, properties.id))

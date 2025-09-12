@@ -73,40 +73,62 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      // Otimizações para mobile - cache agressivo
-      staleTime: 5 * 60 * 1000, // 5 minutos - dados ficam "frescos" por mais tempo
-      gcTime: 30 * 60 * 1000, // 30 minutos - mantém cache por mais tempo
+      // SUPER AGGRESSIVE CACHING FOR MAXIMUM PERFORMANCE
+      staleTime: 10 * 60 * 1000, // 10 minutes - data stays fresh much longer
+      gcTime: 60 * 60 * 1000, // 1 hour - keep cache for much longer
       retry: false,
-      // Otimização: evita re-fetch desnecessário ao retornar para aba
+      // Avoid unnecessary refetches
       refetchOnMount: false,
-      refetchOnReconnect: 'always', // Mas refetch ao reconectar (importante no mobile)
+      refetchOnReconnect: 'always',
+      // Enable background fetching for better UX
+      refetchIntervalInBackground: false,
+      structuralSharing: true, // Optimize re-renders by reusing unchanged data
     },
     mutations: {
       retry: false,
-      // Otimização: callback de sucesso padrão para limpar caches relacionados
+      // Smart cache invalidation
       onSuccess: () => {
-        // Invalidação inteligente será feita caso a caso
+        // Handled case by case
       },
     },
   },
 });
 
-// Configurações específicas por tipo de dado
+// OPTIMIZED CACHE CONFIGURATIONS FOR DIFFERENT DATA TYPES
 export const queryOptions = {
-  // Dados estáveis (propriedades, configurações)
+  // Static data (properties, users, settings) - cache forever until invalidated
+  static: {
+    staleTime: Infinity, // Never stale
+    gcTime: 24 * 60 * 60 * 1000, // 24 hours
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  },
+  // Stable data (rarely changes)
   stable: {
-    staleTime: 30 * 60 * 1000, // 30 minutos
-    gcTime: 60 * 60 * 1000, // 1 hora
+    staleTime: 60 * 60 * 1000, // 1 hour
+    gcTime: 2 * 60 * 60 * 1000, // 2 hours
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   },
-  // Dados dinâmicos (transações, dashboard)
+  // Dynamic data (transactions, dashboard)
   dynamic: {
-    staleTime: 2 * 60 * 1000, // 2 minutos
-    gcTime: 10 * 60 * 1000, // 10 minutos
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   },
-  // Dados em tempo real (fluxo de caixa)
+  // Real-time data (cash flow, live updates)
   realtime: {
-    staleTime: 30 * 1000, // 30 segundos
-    gcTime: 5 * 60 * 1000, // 5 minutos
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+  },
+  // List data with pagination
+  paginated: {
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    keepPreviousData: true, // Smooth pagination
   },
 };
 
@@ -134,6 +156,41 @@ export function smartInvalidate(keys: string[]) {
       exact: false,
     });
   });
+}
+
+// Batch fetch helper for multiple queries
+export async function batchFetch(urls: string[]) {
+  const promises = urls.map(url => 
+    fetch(url, { credentials: 'include' }).then(r => r.json())
+  );
+  return Promise.all(promises);
+}
+
+// Optimistic update helper
+export function optimisticUpdate<T>(
+  queryKey: string[],
+  updater: (old: T) => T
+) {
+  queryClient.setQueryData(queryKey, updater);
+}
+
+// Performance monitoring
+export function measureQueryPerformance() {
+  const cache = queryClient.getQueryCache();
+  const queries = cache.getAll();
+  
+  console.group('Query Cache Performance');
+  console.log('Total queries in cache:', queries.length);
+  queries.forEach(query => {
+    const state = query.state;
+    console.log(query.queryKey, {
+      status: state.status,
+      dataUpdatedAt: state.dataUpdatedAt,
+      isStale: query.isStale(),
+      observerCount: query.getObserversCount(),
+    });
+  });
+  console.groupEnd();
 }
 
 // Helper para cache offline
