@@ -132,8 +132,18 @@ function normalizeOcrText(text: string): string {
   normalized = normalized.replace(/(\d)[:−-]+(\d)/g, '$1$2');
   normalized = normalized.replace(/(\d)[:−-]+$/gm, '$1');
   
-  // Standardize whitespace
-  normalized = normalized.replace(/\s+/g, ' ').trim();
+  // CRITICAL FIX: Robust newline preservation - DO NOT use /\s+/ as \s includes newlines!
+  // Convert all line breaks to \n
+  normalized = normalized
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[\u000b\u000c\u0085\u2028\u2029]/g, "\n");
+  
+  // Collapse spaces/tabs only (NOT newlines)
+  normalized = normalized.replace(/[ \t]+/g, " ");
+  
+  // Coalesce multiple blank lines
+  normalized = normalized.replace(/\n{2,}/g, "\n").trim();
   
   // Standardize month labels (normalize Portuguese accents and variations)
   const monthNormalization = {
@@ -169,6 +179,15 @@ function parseBillText(text: string): CondominiumBillData | null {
   // First normalize the OCR text
   const normalizedText = normalizeOcrText(text);
   const lines = normalizedText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  
+  // VERIFICATION LOGGING: Prove line breaks survived normalization
+  const newlineCount = (normalizedText.match(/\n/g) || []).length;
+  console.log(`=== VERIFICATION LOGGING ===`);
+  console.log(`Total text length: ${normalizedText.length}`);
+  console.log(`Newline count: ${newlineCount}`);
+  console.log(`Lines array length: ${lines.length}`);
+  console.log(`First 5 lines:`, lines.slice(0, 5));
+  console.log(`=== END VERIFICATION ===`);
   
   console.log('Parsing bill with', lines.length, 'lines');
   
@@ -334,6 +353,13 @@ function extractItemsEnhanced(lines: string[]): { name: string; amount: number }
             for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
               const nextLine = lines[j];
               console.log(`Checking next line ${j}: ${nextLine}`);
+              
+              // Skip lines that look like barcode/bank codes (15+ digits)
+              if (nextLine.replace(/\D/g, '').length >= 15) {
+                console.log('Skipping line with 15+ digits (likely barcode)');
+                continue;
+              }
+              
               value = parsePossibleCurrency(nextLine);
               if (value > 0) {
                 console.log(`Found value ${value} on line ${j}`);
@@ -363,6 +389,14 @@ function extractItemsEnhanced(lines: string[]): { name: string; amount: number }
  * Robust currency parsing function that handles OCR errors
  */
 function parsePossibleCurrency(text: string): number {
+  // Skip lines that look like bank codes (15+ digits, no currency markers)
+  const digitCount = text.replace(/\D/g, '').length;
+  const hasCurrencyMarkers = /r\$|real|reais/gi.test(text);
+  if (digitCount >= 15 && !hasCurrencyMarkers) {
+    console.log('Skipping potential bank code line (15+ digits, no currency markers)');
+    return 0;
+  }
+  
   // Extract all potential currency patterns including malformed ones
   const patterns = [
     // Standard patterns
@@ -417,8 +451,11 @@ function parsePossibleCurrency(text: string): number {
         value = parseFloat(candidate.replace(/\./g, ''));
       }
     } else {
-      // Pure digits: if 4-6 digits, assume last two are cents
-      if (candidate.length >= 4 && candidate.length <= 6) {
+      // DEFENSIVE PARSING: Check if line contains 12+ digit run (likely bank code)
+      const hasLongDigitRun = /(?:\d[\s./-]?){12,}/.test(text);
+      
+      // Pure digits: if 4-6 digits, assume last two are cents, but NOT if bank code present
+      if (candidate.length >= 4 && candidate.length <= 6 && !hasLongDigitRun) {
         const cents = candidate.slice(-2);
         const reais = candidate.slice(0, -2);
         value = parseFloat(reais + '.' + cents);
