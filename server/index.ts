@@ -51,7 +51,21 @@ app.use(apiCacheControl); // API cache control headers
 
 // Security and optimization middlewares
 app.use(requestTimeout(60)); // 60 second timeout for requests
-app.use(validateContentType("application/json")); // Validate content-type
+
+// Validate content-type for JSON routes only (exclude file upload routes)
+app.use((req, res, next) => {
+  // Skip content-type validation for file upload routes
+  if (req.path.includes('/ocr') || 
+      req.path.includes('/upload') || 
+      req.path.includes('/import') ||
+      req.method === 'GET' || 
+      req.method === 'DELETE' || 
+      req.method === 'HEAD') {
+    return next();
+  }
+  
+  return validateContentType("application/json")(req, res, next);
+});
 
 // Optimized JSON parsing with reasonable limits
 app.use(express.json({ 

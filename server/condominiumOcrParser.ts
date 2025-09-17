@@ -1,4 +1,4 @@
-import * as Tesseract from 'tesseract.js';
+import { createWorker } from 'tesseract.js';
 
 export interface CondominiumBillData {
   propertyName: string;
@@ -73,10 +73,10 @@ export async function parseCondominiumBill(imageBuffer: Buffer): Promise<Condomi
   try {
     console.log('Starting OCR processing for condominium bill...');
     
-    // Execute OCR
-    const { data: { text } } = await Tesseract.recognize(imageBuffer, 'por', {
-      logger: m => console.log('OCR Progress:', m)
-    });
+    // Execute OCR with worker approach for Node.js
+    const worker = await createWorker('por');
+    const { data: { text } } = await worker.recognize(imageBuffer);
+    await worker.terminate();
 
     console.log('Raw OCR text extracted');
     
