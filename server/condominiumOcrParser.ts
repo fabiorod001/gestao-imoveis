@@ -47,6 +47,7 @@ const KNOWN_ITEMS = [
   'taxa condominial',
   'condomínio',
   'enel',
+  'ene',
   'luz',
   'energia',
   'energia elétrica',
@@ -303,27 +304,29 @@ function extractItems(text: string): { name: string; amount: number }[] {
  * Extract total amount
  */
 function extractTotalAmount(text: string): number {
-  // Look for total patterns
-  const totalPatterns = [
-    /valor\s+(?:do\s+)?documento[:\s]*(?:r\$)?\s*([\d.,]+)/gi,
-    /total[:\s]*(?:r\$)?\s*([\d.,]+)/gi,
-    /(?:r\$)?\s*([\d.,]+)/g
-  ];
-
-  const amounts: number[] = [];
+  // Look for total at end of lines with reasonable values
+  const lines = text.split('\n');
   
-  for (const pattern of totalPatterns) {
-    const matches = text.matchAll(pattern);
-    for (const match of matches) {
-      const value = parseValue(match[1]);
-      if (value > 0) {
-        amounts.push(value);
+  for (const line of lines) {
+    // Look for total amount patterns with date (like "05/06/2025 1.145,75")
+    if (line.match(/\d{2}\/\d{2}\/\d{4}/)) {
+      const totalMatch = line.match(/\d{2}\/\d{2}\/\d{4}\s+([\d.,]+)/);
+      if (totalMatch) {
+        const value = parseValue(totalMatch[1]);
+        if (value > 0 && value < 100000) { // Reasonable total value
+          return value;
+        }
       }
     }
   }
+  
+  // Fallback: sum extracted items
+  const items = extractItems(text);
+  if (items.length > 0) {
+    return items.reduce((sum, item) => sum + item.amount, 0);
+  }
 
-  // Return the largest amount found (likely the total)
-  return amounts.length > 0 ? Math.max(...amounts) : 0;
+  return 0;
 }
 
 /**
@@ -354,12 +357,21 @@ function extractLawyerFee(text: string): number | undefined {
  * Extract value from a single line
  */
 function extractValueFromLine(line: string): number {
-  // Look for monetary values in the line
-  const valueMatches = line.match(/(?:r\$)?\s*([\d.,]+)/gi);
+  // Look for monetary values at the end of lines (after item names)
+  // Pattern: item name followed by value
+  const valueMatches = line.match(/(?:r\$)?\s*([\d]{1,4}[.,]\d{2})\s*$/i);
   
   if (valueMatches) {
-    const values = valueMatches.map(match => parseValue(match));
-    return Math.max(...values.filter(v => v > 0));
+    return parseValue(valueMatches[1]);
+  }
+  
+  // Fallback: look for any reasonable monetary value (avoiding large numbers)
+  const fallbackMatches = line.match(/(?:r\$)?\s*([\d]{1,4}[.,]\d{2})/gi);
+  if (fallbackMatches) {
+    const values = fallbackMatches.map(match => parseValue(match.replace(/r\$/gi, '')));
+    // Return reasonable values only (under R$ 10,000)
+    const reasonableValues = values.filter(v => v > 0 && v < 10000);
+    return reasonableValues.length > 0 ? Math.max(...reasonableValues) : 0;
   }
 
   return 0;
@@ -371,12 +383,21 @@ function extractValueFromLine(line: string): number {
 function parseValue(valueStr: string): number {
   if (!valueStr) return 0;
   
-  // Remove R$, spaces, and convert comma to dot
-  const cleanValue = valueStr
+  // Remove R$, spaces
+  let cleanValue = valueStr
     .replace(/r\$/gi, '')
-    .replace(/\s/g, '')
-    .replace(/\./g, '') // Remove thousand separators
-    .replace(',', '.'); // Convert decimal comma to dot
+    .replace(/\s/g, '');
+    
+  // Handle Brazilian number format (1.234,56 -> 1234.56)
+  if (cleanValue.includes(',')) {
+    // If has both . and , then . is thousand separator
+    if (cleanValue.includes('.') && cleanValue.includes(',')) {
+      cleanValue = cleanValue.replace(/\./g, '').replace(',', '.');
+    } else {
+      // Only comma, it's decimal separator
+      cleanValue = cleanValue.replace(',', '.');
+    }
+  }
 
   const parsed = parseFloat(cleanValue);
   return isNaN(parsed) ? 0 : parsed;
