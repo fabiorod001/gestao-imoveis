@@ -9,6 +9,7 @@ Preferred communication style: Simple, everyday language.
 Work approach: Thorough, systematic implementation with attention to detail.
 Priority: Data accuracy and comprehensive expense management system.
 UI Design preference: Minimalist design with thin bars instead of large buttons, drag-and-drop reordering functionality.
+**Mobile-First Usage**: **CRITICAL** - User will use the system 99% of the time on mobile/smartphone. All interfaces must be optimized for mobile experience, touch interactions, and small screens.
 Platform Independence: **CRITICAL REQUIREMENT** - System must be 1000% independent and extractable to other platforms without any proprietary dependencies.
 
 ## System Architecture
