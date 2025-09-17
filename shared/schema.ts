@@ -112,7 +112,7 @@ export const properties = pgTable("properties", {
 });
 
 // Transactions table (revenues and expenses)
-export const transactions: any = pgTable("transactions", {
+export const transactions = pgTable("transactions", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   propertyId: integer("property_id").references(() => properties.id),
