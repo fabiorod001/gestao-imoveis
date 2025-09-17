@@ -11,14 +11,14 @@ export default function Revenues() {
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   const { data: transactions = [], isLoading } = useQuery<Transaction[]>({
-    queryKey: ['/api/transactions'],
+    queryKey: ['/api/transactions', { type: 'revenue', limit: 100 }],
   });
 
   const { data: properties = [] } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
   });
 
-  const revenues = transactions.filter(t => t.type === 'revenue');
+  const revenues = transactions; // Already filtered by API
   const totalRevenue = revenues.reduce((sum, t) => sum + Number(t.amount), 0);
 
   if (isLoading) {

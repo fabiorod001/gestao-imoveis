@@ -43,7 +43,7 @@ export class TransactionService extends BaseService {
         )
       )
       .orderBy(desc(transactions.date))
-      .limit(limit || 1000);
+      .limit(limit || 50);
 
     const results = await query;
     
