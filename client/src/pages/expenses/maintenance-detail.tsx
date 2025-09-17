@@ -150,7 +150,9 @@ export default function MaintenanceDetailPage() {
   const generateMaintenanceDetailData = (): MaintenanceDetailData => {
     const detailData: Record<string, Record<string, { amount: number; transactions: Transaction[] }>> = {};
     
-    const maintenanceTransactions = allTransactions.filter((transaction: any) => 
+    // Ensure allTransactions is always an array to prevent filter error
+    const safeTransactions = Array.isArray(allTransactions) ? allTransactions : [];
+    const maintenanceTransactions = safeTransactions.filter((transaction: any) => 
       transaction.category === 'maintenance'
     );
 

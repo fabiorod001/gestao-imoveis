@@ -7,11 +7,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertTransactionSchema, type Property } from "@shared/schema";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { z } from "zod";
+import { useState } from "react";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // Schema específico para o formulário com validações personalizadas
 const formSchema = z.object({
@@ -81,6 +86,88 @@ const recurringPeriods = [
   { value: 'quarterly', label: 'Trimestral' },
   { value: 'yearly', label: 'Anual' },
 ];
+
+// Smart Description Input Component  
+function SmartDescriptionInput({ value, onChange, category, placeholder }: {
+  value: string;
+  onChange: (value: string) => void;
+  category: string;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(value);
+
+  // Fetch suggestions for current category
+  const { data: suggestions = [] } = useQuery<string[]>({
+    queryKey: ['/api/transactions/suggestions', category],
+    enabled: !!category && category !== "",
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+  });
+
+  const handleSelect = (selectedValue: string) => {
+    setInputValue(selectedValue);
+    onChange(selectedValue);
+    setOpen(false);
+  };
+
+  const handleInputChange = (newValue: string) => {
+    setInputValue(newValue);
+    onChange(newValue);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <div className="relative">
+          <Textarea
+            value={inputValue}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onFocus={() => setOpen(true)}
+            placeholder={placeholder}
+            className="resize-none pr-8"
+            rows={2}
+          />
+          {suggestions.length > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute right-1 top-1 h-6 w-6 p-0 hover:bg-gray-100"
+              onClick={() => setOpen(!open)}
+            >
+              <ChevronsUpDown className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Buscar sugestões..." />
+          <CommandList>
+            <CommandEmpty>Nenhuma sugestão encontrada.</CommandEmpty>
+            <CommandGroup>
+              {suggestions.map((suggestion) => (
+                <CommandItem
+                  key={suggestion}
+                  value={suggestion}
+                  onSelect={() => handleSelect(suggestion)}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      inputValue === suggestion ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {suggestion}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function TransactionForm({ type, onSuccess }: TransactionFormProps) {
   const { toast } = useToast();
@@ -246,13 +333,20 @@ export default function TransactionForm({ type, onSuccess }: TransactionFormProp
           name="description"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Descrição (Opcional)</FormLabel>
+              <FormLabel>
+                Descrição (Opcional) 
+                {form.watch('category') && (
+                  <span className="text-xs text-gray-500 ml-1">
+                    - Escolha ou digite uma nova
+                  </span>
+                )}
+              </FormLabel>
               <FormControl>
-                <Textarea 
+                <SmartDescriptionInput
+                  value={field.value || ""}
+                  onChange={field.onChange}
+                  category={form.watch('category') || ""}
                   placeholder={`Descreva a ${type === 'revenue' ? 'receita' : 'despesa'} (opcional)...`}
-                  className="resize-none"
-                  rows={2}
-                  {...field} 
                 />
               </FormControl>
               <FormMessage />

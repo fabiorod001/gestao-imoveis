@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 import { 
   Building, 
   BarChart3, 
@@ -12,7 +13,9 @@ import {
   Calculator,
   X,
   DollarSign,
-  SprayCanIcon
+  SprayCanIcon,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 
 const navigation = [
@@ -20,10 +23,21 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: BarChart3 },
   { name: 'Imóveis', href: '/properties', icon: Building },
   { name: 'Receitas', href: '/revenues', icon: TrendingUp },
-  { name: 'Despesas', href: '/expenses', icon: TrendingDown },
+  { 
+    name: 'Despesas', 
+    href: '/expenses', 
+    icon: TrendingDown,
+    subItems: [
+      {
+        name: 'Limpezas',
+        subItems: [
+          { name: 'Importar Limpezas', href: '/cleaning/import', icon: SprayCanIcon }
+        ]
+      }
+    ]
+  },
   { name: 'Relatórios', href: '/reports', icon: FileText },
   { name: 'Importar Dados', href: '/import', icon: Upload },
-  { name: 'Importar Limpezas', href: '/cleaning/import', icon: SprayCanIcon },
 ];
 
 const settings = [
@@ -38,6 +52,15 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
+  const [expandedItems, setExpandedItems] = useState<string[]>(['Despesas', 'Despesas-Limpezas']);
+
+  const toggleExpand = (itemName: string) => {
+    setExpandedItems(prev => 
+      prev.includes(itemName) 
+        ? prev.filter(name => name !== itemName)
+        : [...prev, itemName]
+    );
+  };
 
   return (
     <>
@@ -81,22 +104,88 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             {navigation.map((item) => {
               const isActive = location === item.href || 
                 (item.href !== '/' && location.startsWith(item.href));
+              const hasSubItems = item.subItems && item.subItems.length > 0;
+              const isExpanded = expandedItems.includes(item.name);
               
               return (
-                <Link key={item.name} href={item.href}>
-                  <div className={cn(
-                    "group flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer",
-                    isActive
-                      ? "bg-primary-50 border-r-4 border-primary-600 text-primary-700"
-                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                  )}>
-                    <item.icon className={cn(
-                      "mr-3 h-5 w-5",
-                      isActive ? "text-primary-500" : "text-gray-400"
-                    )} />
-                    {item.name}
+                <div key={item.name}>
+                  {/* Main item */}
+                  <div className="flex items-center">
+                    <Link href={item.href || '#'} className="flex-1">
+                      <div className={cn(
+                        "group flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer",
+                        isActive
+                          ? "bg-primary-50 border-r-4 border-primary-600 text-primary-700"
+                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      )}>
+                        <item.icon className={cn(
+                          "mr-3 h-5 w-5",
+                          isActive ? "text-primary-500" : "text-gray-400"
+                        )} />
+                        {item.name}
+                      </div>
+                    </Link>
+                    {hasSubItems && (
+                      <button
+                        onClick={() => toggleExpand(item.name)}
+                        className="p-1 mr-2 hover:bg-gray-100 rounded"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-gray-400" />
+                        )}
+                      </button>
+                    )}
                   </div>
-                </Link>
+
+                  {/* Sub items */}
+                  {hasSubItems && isExpanded && (
+                    <div className="ml-4 mt-1 space-y-1">
+                      {item.subItems.map((subItem) => {
+                        const hasSubSubItems = subItem.subItems && subItem.subItems.length > 0;
+                        const isSubExpanded = expandedItems.includes(`${item.name}-${subItem.name}`);
+                        
+                        return (
+                          <div key={subItem.name}>
+                            {/* Sub item */}
+                            <div className="flex items-center">
+                              <div className="flex-1 px-4 py-1.5 text-sm font-medium text-gray-700">
+                                {subItem.name}
+                              </div>
+                              {hasSubSubItems && (
+                                <button
+                                  onClick={() => toggleExpand(`${item.name}-${subItem.name}`)}
+                                  className="p-1 mr-2 hover:bg-gray-100 rounded"
+                                >
+                                  {isSubExpanded ? (
+                                    <ChevronDown className="h-3 w-3 text-gray-400" />
+                                  ) : (
+                                    <ChevronRight className="h-3 w-3 text-gray-400" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Sub-sub items */}
+                            {hasSubSubItems && isSubExpanded && (
+                              <div className="ml-6 mt-1 space-y-1">
+                                {subItem.subItems.map((subSubItem) => (
+                                  <Link key={subSubItem.name} href={subSubItem.href}>
+                                    <div className="group flex items-center px-4 py-1.5 text-sm rounded-lg transition-colors cursor-pointer text-gray-600 hover:bg-gray-50 hover:text-gray-900">
+                                      {subSubItem.icon && <subSubItem.icon className="mr-2 h-4 w-4 text-gray-400" />}
+                                      {subSubItem.name}
+                                    </div>
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

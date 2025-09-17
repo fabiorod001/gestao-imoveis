@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, TestTube } from 'lucide-react';
+import { ArrowLeft, FileSearch } from 'lucide-react';
 import { useLocation } from 'wouter';
 import CondominiumOcrUploader from '@/components/condominium/CondominiumOcrUploader';
 
@@ -35,7 +35,7 @@ export default function CondominiumOcrTestPage() {
             </Button>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-                <TestTube className="h-8 w-8 text-blue-600" />
+                <FileSearch className="h-8 w-8 text-blue-600" />
                 Teste OCR - Boletos de Condomínio
               </h1>
               <p className="text-gray-600 mt-1">

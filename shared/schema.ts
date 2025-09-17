@@ -180,8 +180,8 @@ export const cashFlowSettings = pgTable("cash_flow_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Tax payments table - for PIS, COFINS, CSLL, IRPJ
-export const taxPayments: any = pgTable("tax_payments", {
+// Tax payments table - for PIS, COFINS, CSLL, IRPJ  
+export const taxPayments = pgTable("tax_payments", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   taxType: varchar("tax_type").notNull(), // PIS, COFINS, CSLL, IRPJ
@@ -211,7 +211,7 @@ export const cleaningServices = pgTable("cleaning_services", {
 });
 
 // Cleaning batches table - groups cleanings for payment
-export const cleaningBatches: any = pgTable("cleaning_batches", {
+export const cleaningBatches = pgTable("cleaning_batches", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   paymentDate: date("payment_date").notNull(), // Data de pagamento do lote

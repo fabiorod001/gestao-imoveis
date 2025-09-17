@@ -9,12 +9,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Lightbulb, Wrench, CreditCard, Trash2 } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Lightbulb, Wrench, CreditCard, Trash2, Check, ChevronsUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Property } from "@shared/schema";
 import type { ExpenseType } from "./AdvancedExpenseManager";
 import { z } from "zod";
+import { cn } from "@/lib/utils";
 
 const singleExpenseSchema = z.object({
   propertyId: z.string().min(1, "Selecione uma propriedade"),
@@ -33,6 +36,90 @@ interface SingleExpenseFormProps {
   includeSupplier?: boolean;
   onComplete: (expense: any) => void;
   onCancel: () => void;
+}
+
+// Smart Description Input Component for SingleExpenseForm  
+function SmartDescriptionInput({ value, onChange, category, placeholder }: {
+  value: string;
+  onChange: (value: string) => void;
+  category: string;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(value);
+
+  // Fetch suggestions for current category
+  const { data: suggestions = [] } = useQuery<string[]>({
+    queryKey: ['/api/transactions/suggestions', category],
+    enabled: !!category && category !== "",
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+  });
+
+  const handleSelect = (selectedValue: string) => {
+    setInputValue(selectedValue);
+    onChange(selectedValue);
+    setOpen(false);
+  };
+
+  const handleInputChange = (newValue: string) => {
+    setInputValue(newValue);
+    onChange(newValue);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <div className="relative">
+          <Input
+            value={inputValue}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onFocus={() => setOpen(true)}
+            placeholder={placeholder}
+            className="pr-8"
+            data-testid="description-input"
+          />
+          {suggestions.length > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-gray-100"
+              onClick={() => setOpen(!open)}
+              data-testid="suggestions-toggle"
+            >
+              <ChevronsUpDown className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Buscar sugestões..." />
+          <CommandList>
+            <CommandEmpty>Nenhuma sugestão encontrada.</CommandEmpty>
+            <CommandGroup>
+              {suggestions.map((suggestion) => (
+                <CommandItem
+                  key={suggestion}
+                  value={suggestion}
+                  onSelect={() => handleSelect(suggestion)}
+                  data-testid={`suggestion-${suggestion}`}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      inputValue === suggestion ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {suggestion}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 const expenseTypeConfig = {
@@ -130,11 +217,11 @@ export default function SingleExpenseForm({
       type: 'expense',
       category: config.category,
       description: data.description,
-      amount: data.amount, // Keep as string, backend expects string
-      date: data.date,
+      amount: data.amount.toString(), // Ensure string for backend validation
+      date: typeof data.date === 'string' ? data.date : data.date.toISOString().split('T')[0], // Ensure YYYY-MM-DD string format
       currency: 'BRL',
-      supplier: includeSupplier ? data.supplier : undefined,
-      cpfCnpj: includeSupplier ? data.cpfCnpj : undefined,
+      supplier: includeSupplier ? data.supplier || undefined : undefined,
+      cpfCnpj: includeSupplier && data.cpfCnpj && data.cpfCnpj.trim() !== "" ? data.cpfCnpj.trim() : undefined,
     };
 
     try {
@@ -234,11 +321,18 @@ export default function SingleExpenseForm({
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Descrição</FormLabel>
+                    <FormLabel>
+                      Descrição
+                      <span className="text-xs text-gray-500 ml-1">
+                        - Escolha ou digite uma nova
+                      </span>
+                    </FormLabel>
                     <FormControl>
-                      <Input 
+                      <SmartDescriptionInput
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        category={config.category}
                         placeholder={config.placeholderDescription}
-                        {...field} 
                       />
                     </FormControl>
                     <FormMessage />

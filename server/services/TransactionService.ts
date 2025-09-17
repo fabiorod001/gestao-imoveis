@@ -61,6 +61,28 @@ export class TransactionService extends BaseService {
   }
 
   /**
+   * Get description suggestions for a category (smart autocomplete)
+   */
+  async getDescriptionSuggestions(userId: string, category: string): Promise<string[]> {
+    const suggestions = await db
+      .selectDistinct({ description: transactions.description })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          eq(transactions.category, category),
+          sql`${transactions.description} IS NOT NULL AND ${transactions.description} != ''`
+        )
+      )
+      .orderBy(transactions.description);
+    
+    return suggestions
+      .map(s => s.description)
+      .filter((desc): desc is string => desc !== null && desc !== "")
+      .sort();
+  }
+
+  /**
    * Get transactions for a specific property
    */
   async getTransactionsByProperty(propertyId: number, userId: string): Promise<Transaction[]> {

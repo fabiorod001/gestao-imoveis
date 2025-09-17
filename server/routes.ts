@@ -322,6 +322,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
   );
 
+  // Get description suggestions for a category (smart suggestions)
+  app.get('/api/transactions/suggestions/:category',
+    isAuthenticated,
+    asyncHandler(async (req: any, res: Response) => {
+      const userId = getUserId(req);
+      const category = req.params.category;
+      const suggestions = await transactionService.getDescriptionSuggestions(userId, category);
+      res.json(suggestions);
+    })
+  );
+
   app.get('/api/transactions/property/:propertyId', 
     isAuthenticated,
     validateMultiple({ params: z.object({ propertyId: idSchema }) }),
