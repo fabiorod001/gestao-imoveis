@@ -41,6 +41,7 @@ const Settings = lazy(() => import("@/pages/settings"));
 const TaxSettings = lazy(() => import("@/pages/tax-settings"));
 const MarcoZero = lazy(() => import("@/pages/marco-zero"));
 const CleaningImport = lazy(() => import("@/pages/cleaning-import"));
+const CondominiumOcrTest = lazy(() => import("@/pages/condominium-ocr-test"));
 
 // Componente de fallback para lazy loading
 function PageLoader() {
@@ -101,6 +102,7 @@ function Router() {
             <Route path="/settings/taxes" component={TaxSettings} />
             <Route path="/marco-zero" component={MarcoZero} />
             <Route path="/cleaning/import" component={CleaningImport} />
+            <Route path="/condominium/ocr-test" component={CondominiumOcrTest} />
           </Suspense>
         </Layout>
       )}

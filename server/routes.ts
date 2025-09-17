@@ -117,6 +117,32 @@ const uploadPDF = multer({
   },
 });
 
+// Configure multer for image file uploads (OCR processing)
+const uploadImage = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = [
+      'image/jpeg', 
+      'image/jpg', 
+      'image/png', 
+      'image/gif', 
+      'image/bmp', 
+      'image/webp',
+      'image/tiff'
+    ];
+    
+    if (allowedMimes.includes(file.mimetype) || 
+        file.originalname.match(/\.(jpg|jpeg|png|gif|bmp|webp|tiff)$/i)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Apenas arquivos de imagem são permitidos (jpg, png, gif, bmp, webp, tiff)'));
+    }
+  },
+});
+
 // Helper function to get userId from request
 function getUserId(req: any): string {
   // For Replit auth
@@ -1475,6 +1501,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(404).json({
           success: false,
           message: 'Ajuste não encontrado'
+        });
+      }
+    })
+  );
+
+  // ==================== CONDOMINIUM OCR ROUTES ====================
+  
+  // Process condominium bill OCR
+  app.post('/api/condominium/ocr',
+    isAuthenticated,
+    uploadImage.single('image'),
+    asyncHandler(async (req: any, res: Response) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({
+            success: false,
+            error: 'Nenhuma imagem foi enviada'
+          });
+        }
+
+        // Import the OCR parser
+        const { parseCondominiumBill } = await import('./condominiumOcrParser');
+        
+        // Process the image with OCR
+        const result = await parseCondominiumBill(req.file.buffer);
+        
+        res.json(result);
+      } catch (error) {
+        console.error('Error in condominium OCR:', error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Erro no processamento OCR'
         });
       }
     })
