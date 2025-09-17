@@ -52,7 +52,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
-  const [expandedItems, setExpandedItems] = useState<string[]>(['Despesas', 'Despesas-Limpezas']);
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   const toggleExpand = (itemName: string) => {
     setExpandedItems(prev => 
