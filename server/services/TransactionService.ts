@@ -4,7 +4,7 @@ import type { Transaction, InsertTransaction } from "@shared/schema";
 import { insertTransactionSchema, transactions, properties } from "@shared/schema";
 import { z } from "zod";
 import { db } from "../db";
-import { eq, and, desc, sql, or, isNull } from "drizzle-orm";
+import { eq, and, desc, sql, or, isNull, getTableColumns } from "drizzle-orm";
 import { format } from "date-fns";
 import { Money, ServerMoneyUtils, MoneyUtils } from "../utils/money";
 
@@ -27,29 +27,12 @@ export class TransactionService extends BaseService {
    * Get all transactions for a user with enriched property names - OPTIMIZED
    */
   async getTransactions(userId: string, type?: string, limit?: number): Promise<any[]> {
-    // Use a single optimized query with JOIN to avoid N+1 problem
+    // Use a single optimized query with JOIN to avoid N+1 problem - SAFE SCHEMA APPROACH
+    const t = getTableColumns(transactions);
     const query = db
       .select({
-        id: transactions.id,
-        userId: transactions.userId,
-        propertyId: transactions.propertyId,
-        type: transactions.type,
-        category: transactions.category,
-        amount: transactions.amount,
-        date: transactions.date,
-        description: transactions.description,
-        referenceCode: transactions.referenceCode,
-        paymentMethod: transactions.paymentMethod,
-        notes: transactions.notes,
-        tags: transactions.tags,
-        isRecurring: transactions.isRecurring,
-        recurringFrequency: transactions.recurringFrequency,
-        supplier: transactions.supplier,
-        propertyName: properties.name,
-        isBeforeMarco: transactions.isBeforeMarco,
-        isHistorical: transactions.isHistorical,
-        createdAt: transactions.createdAt,
-        updatedAt: transactions.updatedAt,
+        ...t,
+        propertyName: sql<string>`COALESCE(${properties.name}, 'Propriedade Desconhecida')`.as('propertyName'),
       })
       .from(transactions)
       .leftJoin(properties, eq(transactions.propertyId, properties.id))
