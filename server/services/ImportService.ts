@@ -318,14 +318,14 @@ export class ImportService extends BaseService {
       }
     }
 
-    // Process adjustments
+    // Process adjustments (for dates/properties but NOT for totalRevenue calculation)
     for (const adjustment of adjustments) {
       const propertyName = mapListingToProperty(adjustment.listing);
       if (propertyName && propertyName !== 'IGNORE') {
         propertiesFound.add(propertyName);
         const date = new Date(adjustment.date);
         periods.add(format(date, 'MM/yyyy'));
-        totalRevenue += adjustment.amount; // Can be negative
+        // NOTE: NOT adding adjustment.amount to totalRevenue to avoid massive negative adjustments
         
         if (!minDate || date < minDate) minDate = date;
         if (!maxDate || date > maxDate) maxDate = date;
