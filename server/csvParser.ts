@@ -166,10 +166,11 @@ export function parseAirbnbCSV(content: string): ParseResult {
         guest: record['Hóspede'] || '',
         listing: record['Anúncio'] || '',
         amount: parseAmount(record['Valor'] || '0'),
+        grossEarnings: parseAmount(record['Ganhos brutos'] || '0'),
         currency: record['Moeda'] || 'BRL',
         isPayout: type === 'Payout',
         isReservation: type === 'Reserva' || type === 'Ajuste' || type === 'Ajuste de Resolução',
-        isFutureReservation: isFutureReservation,
+        isFutureReservation: !!isFutureReservation,
       };
       
       // For historical format, include paid amount
