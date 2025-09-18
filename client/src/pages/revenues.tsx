@@ -3,12 +3,19 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, TrendingUp, Calendar, CheckCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, TrendingUp, Upload, CheckCircle, Calendar } from "lucide-react";
 import TransactionForm from "@/components/transactions/TransactionForm";
+import AirbnbImport from "@/components/import/AirbnbImport";
 import type { Transaction, Property } from "@shared/schema";
+import { format, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 export default function Revenues() {
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isAirbnbOpen, setIsAirbnbOpen] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState('current');
+  const [selectedProperty, setSelectedProperty] = useState('all');
 
   const { data: transactions = [], isLoading } = useQuery<Transaction[]>({
     queryKey: ['/api/transactions', { type: 'revenue', limit: 100 }],
@@ -18,19 +25,57 @@ export default function Revenues() {
     queryKey: ['/api/properties'],
   });
 
-  const revenues = transactions; // Already filtered by API
-  const totalRevenue = revenues.reduce((sum, t) => sum + Number(t.amount), 0);
+  // Filtrar por período
+  const getDateRange = () => {
+    const today = new Date();
+    switch(selectedPeriod) {
+      case 'previous':
+        return { 
+          start: startOfMonth(subMonths(today, 1)), 
+          end: endOfMonth(subMonths(today, 1))
+        };
+      case 'current':
+        return { 
+          start: startOfMonth(today), 
+          end: endOfMonth(today)
+        };
+      case 'next':
+        return { 
+          start: startOfMonth(addMonths(today, 1)), 
+          end: endOfMonth(addMonths(today, 1))
+        };
+      default:
+        return { start: startOfMonth(today), end: endOfMonth(today) };
+    }
+  };
   
-  // Separar receitas Airbnb Actual (até hoje) e Pending (futuras)
+  const { start, end } = getDateRange();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  const airbnbRevenues = revenues.filter(r => r.category === 'airbnb');
+  // Filtrar transações
+  let filteredRevenues = transactions;
+  
+  // Filtrar por período
+  filteredRevenues = filteredRevenues.filter(t => {
+    const date = new Date(t.date);
+    return date >= start && date <= end;
+  });
+  
+  // Filtrar por propriedade
+  if (selectedProperty !== 'all') {
+    filteredRevenues = filteredRevenues.filter(t => t.propertyId === parseInt(selectedProperty));
+  }
+  
+  // Separar Airbnb Actual e Pending
+  const airbnbRevenues = filteredRevenues.filter(r => r.category === 'airbnb');
   const actualRevenues = airbnbRevenues.filter(r => new Date(r.date) <= today);
   const pendingRevenues = airbnbRevenues.filter(r => new Date(r.date) > today);
   
+  // Calcular totais
   const totalActual = actualRevenues.reduce((sum, t) => sum + Number(t.amount), 0);
   const totalPending = pendingRevenues.reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalMonth = totalActual + totalPending;
 
   if (isLoading) {
     return (
@@ -48,86 +93,115 @@ export default function Revenues() {
           <p className="text-gray-500">Gerencie todas as receitas dos seus imóveis</p>
         </div>
 
-        <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Nova Receita
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Registrar Nova Receita</DialogTitle>
-            </DialogHeader>
-            <TransactionForm 
-              type="revenue" 
-              onSuccess={() => setIsFormOpen(false)} 
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          {/* Botão Upload CSV Airbnb */}
+          <Dialog open={isAirbnbOpen} onOpenChange={setIsAirbnbOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Upload className="w-4 h-4 mr-2" />
+                Upload CSV Airbnb
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Importar Dados do Airbnb</DialogTitle>
+              </DialogHeader>
+              <AirbnbImport />
+            </DialogContent>
+          </Dialog>
+
+          {/* Botão Nova Receita */}
+          <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Nova Receita
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Registrar Nova Receita</DialogTitle>
+              </DialogHeader>
+              <TransactionForm 
+                type="revenue" 
+                onSuccess={() => setIsFormOpen(false)} 
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {/* Cards de resumo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Card Receita Total */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <TrendingUp className="w-5 h-5 mr-2 text-green-600" />
-              Total de Receitas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-600">
-              R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </div>
-            <p className="text-gray-500 mt-1">{revenues.length} receitas registradas</p>
-          </CardContent>
-        </Card>
+      {/* Filtros */}
+      <div className="flex gap-4 mb-4">
+        <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Período" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="previous">Mês Anterior</SelectItem>
+            <SelectItem value="current">Mês Atual</SelectItem>
+            <SelectItem value="next">Próximo Mês</SelectItem>
+          </SelectContent>
+        </Select>
 
-        {/* Card Airbnb Actual - Receitas já recebidas */}
-        <Card className="border-blue-200 bg-blue-50/30">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <CheckCircle className="w-5 h-5 mr-2 text-blue-600" />
-              Airbnb Actual
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-blue-600">
-              R$ {totalActual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </div>
-            <p className="text-gray-500 mt-1">
-              {actualRevenues.length} receitas recebidas (até hoje)
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Card Airbnb Pending - Receitas futuras */}
-        <Card className="border-amber-200 bg-amber-50/30">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Calendar className="w-5 h-5 mr-2 text-amber-600" />
-              Airbnb Pending
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-amber-600">
-              R$ {totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </div>
-            <p className="text-gray-500 mt-1">
-              {pendingRevenues.length} receitas futuras (a partir de amanhã)
-            </p>
-          </CardContent>
-        </Card>
+        <Select value={selectedProperty} onValueChange={setSelectedProperty}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Imóvel" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            {properties.map(p => (
+              <SelectItem key={p.id} value={p.id.toString()}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
+
+      {/* Tabela Dinâmica com Actual, Pending e Total */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Resumo do Período - {format(start, 'MMMM yyyy', { locale: ptBR })}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <table className="w-full">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-2">Tipo</th>
+                <th className="text-right py-2">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="py-2">Actual (recebido até hoje)</td>
+                <td className="text-right font-semibold text-blue-600">
+                  R$ {totalActual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+              <tr>
+                <td className="py-2">Pending (a receber)</td>
+                <td className="text-right font-semibold text-amber-600">
+                  R$ {totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+              <tr className="border-t font-bold">
+                <td className="py-2">Total do Mês</td>
+                <td className="text-right text-green-600">
+                  R$ {totalMonth.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
           <CardTitle>Histórico de Receitas</CardTitle>
         </CardHeader>
         <CardContent>
-          {revenues.length === 0 ? (
+          {filteredRevenues.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               Nenhuma receita registrada ainda.
             </div>
@@ -145,7 +219,7 @@ export default function Revenues() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {revenues.map((revenue) => {
+                  {filteredRevenues.map((revenue: any) => {
                     const property = properties.find(p => p.id === revenue.propertyId);
                     const categoryLabels: Record<string, string> = {
                       'airbnb': 'Airbnb',
