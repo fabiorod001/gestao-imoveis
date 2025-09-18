@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, TrendingUp } from "lucide-react";
+import { Plus, TrendingUp, Calendar, CheckCircle } from "lucide-react";
 import TransactionForm from "@/components/transactions/TransactionForm";
 import type { Transaction, Property } from "@shared/schema";
 
@@ -20,6 +20,17 @@ export default function Revenues() {
 
   const revenues = transactions; // Already filtered by API
   const totalRevenue = revenues.reduce((sum, t) => sum + Number(t.amount), 0);
+  
+  // Separar receitas Airbnb Actual (até hoje) e Pending (futuras)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const airbnbRevenues = revenues.filter(r => r.category === 'airbnb');
+  const actualRevenues = airbnbRevenues.filter(r => new Date(r.date) <= today);
+  const pendingRevenues = airbnbRevenues.filter(r => new Date(r.date) > today);
+  
+  const totalActual = actualRevenues.reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalPending = pendingRevenues.reduce((sum, t) => sum + Number(t.amount), 0);
 
   if (isLoading) {
     return (
@@ -56,20 +67,60 @@ export default function Revenues() {
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <TrendingUp className="w-5 h-5 mr-2 text-green-600" />
-            Total de Receitas
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-green-600">
-            R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </div>
-          <p className="text-gray-500 mt-1">{revenues.length} receitas registradas</p>
-        </CardContent>
-      </Card>
+      {/* Cards de resumo */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Card Receita Total */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <TrendingUp className="w-5 h-5 mr-2 text-green-600" />
+              Total de Receitas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-600">
+              R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+            <p className="text-gray-500 mt-1">{revenues.length} receitas registradas</p>
+          </CardContent>
+        </Card>
+
+        {/* Card Airbnb Actual - Receitas já recebidas */}
+        <Card className="border-blue-200 bg-blue-50/30">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <CheckCircle className="w-5 h-5 mr-2 text-blue-600" />
+              Airbnb Actual
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-blue-600">
+              R$ {totalActual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+            <p className="text-gray-500 mt-1">
+              {actualRevenues.length} receitas recebidas (até hoje)
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Card Airbnb Pending - Receitas futuras */}
+        <Card className="border-amber-200 bg-amber-50/30">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Calendar className="w-5 h-5 mr-2 text-amber-600" />
+              Airbnb Pending
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-amber-600">
+              R$ {totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+            <p className="text-gray-500 mt-1">
+              {pendingRevenues.length} receitas futuras (a partir de amanhã)
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
