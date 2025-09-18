@@ -69,7 +69,7 @@ export default function AirbnbImport() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [importType, setImportType] = useState<'historical' | 'future'>('historical');
+  const [importType, setImportType] = useState<'historical' | 'future'>('historical'); // Padrão é histórico pois é o mais comum
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
