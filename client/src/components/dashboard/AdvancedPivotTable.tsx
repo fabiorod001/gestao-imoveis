@@ -483,6 +483,11 @@ export default function AdvancedPivotTable() {
   };
 
   const formatCurrency = (amount: number) => {
+    // Handle NaN, null, undefined, and Infinity values
+    if (amount == null || isNaN(amount) || !isFinite(amount)) {
+      return 'R$ 0,00';
+    }
+    
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
@@ -490,6 +495,10 @@ export default function AdvancedPivotTable() {
   };
 
   const getValueStyle = (amount: number) => {
+    // Handle NaN, null, undefined values safely
+    if (amount == null || isNaN(amount) || !isFinite(amount)) {
+      return '';
+    }
     return amount < 0 ? 'text-red-600 font-semibold' : '';
   };
 
@@ -1258,36 +1267,45 @@ export default function AdvancedPivotTable() {
                         <>
                           <td className={`border border-gray-200 p-3 text-right font-semibold bg-blue-50 ${getValueStyle((() => {
                             const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                            return singleMonthProperty ? singleMonthProperty.realResult : 0;
+                            const value = singleMonthProperty?.realResult ?? 0;
+                            return isNaN(value) ? 0 : value;
                           })())}`}>
                             {formatCurrency((() => {
                               const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                              return singleMonthProperty ? singleMonthProperty.realResult : 0;
+                              const value = singleMonthProperty?.realResult ?? 0;
+                              return isNaN(value) ? 0 : value;
                             })())}
                           </td>
                           <td className={`border border-gray-200 p-3 text-right font-semibold bg-yellow-50 ${getValueStyle((() => {
                             const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                            return singleMonthProperty ? singleMonthProperty.pendingResult : 0;
+                            const value = singleMonthProperty?.pendingResult ?? 0;
+                            return isNaN(value) ? 0 : value;
                           })())}`}>
                             {formatCurrency((() => {
                               const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                              return singleMonthProperty ? singleMonthProperty.pendingResult : 0;
+                              const value = singleMonthProperty?.pendingResult ?? 0;
+                              return isNaN(value) ? 0 : value;
                             })())}
                           </td>
                           <td className={`border border-gray-200 p-3 text-right font-semibold bg-gray-50 ${getValueStyle((() => {
                             const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                            return singleMonthProperty ? singleMonthProperty.totalResult : 0;
+                            const value = singleMonthProperty?.totalResult ?? 0;
+                            return isNaN(value) ? 0 : value;
                           })())}`}>
                             {formatCurrency((() => {
                               const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                              return singleMonthProperty ? singleMonthProperty.totalResult : 0;
+                              const value = singleMonthProperty?.totalResult ?? 0;
+                              return isNaN(value) ? 0 : value;
                             })())}
                           </td>
                           <td className="border border-gray-200 p-3 text-right font-semibold bg-green-50">
                             {(() => {
                               const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
                               
-                              if (!singleMonthProperty || singleMonthProperty.ipcaCorrectedAcquisitionCost === 0) {
+                              if (!singleMonthProperty || 
+                                  singleMonthProperty.ipcaCorrectedAcquisitionCost === 0 ||
+                                  isNaN(singleMonthProperty.profitMarginIPCA) ||
+                                  !isFinite(singleMonthProperty.profitMarginIPCA)) {
                                 return <span className="text-gray-400">-</span>;
                               }
                               
@@ -1329,22 +1347,40 @@ export default function AdvancedPivotTable() {
                       // Single month view: show 5 columns totals ONLY for current month
                       <>
                         <td className={`border border-gray-200 p-3 text-right bg-blue-100 ${getValueStyle((() => {
-                          const totalReal = singleMonthData.reduce((sum, item) => sum + item.realResult, 0);
+                          const totalReal = singleMonthData.reduce((sum, item) => {
+                            const value = item?.realResult ?? 0;
+                            return sum + (isNaN(value) ? 0 : value);
+                          }, 0);
                           return totalReal;
                         })())}`}>
-                          {formatCurrency(singleMonthData.reduce((sum, item) => sum + item.realResult, 0))}
+                          {formatCurrency(singleMonthData.reduce((sum, item) => {
+                            const value = item?.realResult ?? 0;
+                            return sum + (isNaN(value) ? 0 : value);
+                          }, 0))}
                         </td>
                         <td className={`border border-gray-200 p-3 text-right bg-yellow-100 ${getValueStyle((() => {
-                          const totalPending = singleMonthData.reduce((sum, item) => sum + item.pendingResult, 0);
+                          const totalPending = singleMonthData.reduce((sum, item) => {
+                            const value = item?.pendingResult ?? 0;
+                            return sum + (isNaN(value) ? 0 : value);
+                          }, 0);
                           return totalPending;
                         })())}`}>
-                          {formatCurrency(singleMonthData.reduce((sum, item) => sum + item.pendingResult, 0))}
+                          {formatCurrency(singleMonthData.reduce((sum, item) => {
+                            const value = item?.pendingResult ?? 0;
+                            return sum + (isNaN(value) ? 0 : value);
+                          }, 0))}
                         </td>
                         <td className={`border border-gray-200 p-3 text-right bg-gray-200 ${getValueStyle((() => {
-                          const totalResult = singleMonthData.reduce((sum, item) => sum + item.totalResult, 0);
+                          const totalResult = singleMonthData.reduce((sum, item) => {
+                            const value = item?.totalResult ?? 0;
+                            return sum + (isNaN(value) ? 0 : value);
+                          }, 0);
                           return totalResult;
                         })())}`}>
-                          {formatCurrency(singleMonthData.reduce((sum, item) => sum + item.totalResult, 0))}
+                          {formatCurrency(singleMonthData.reduce((sum, item) => {
+                            const value = item?.totalResult ?? 0;
+                            return sum + (isNaN(value) ? 0 : value);
+                          }, 0))}
                         </td>
                         <td className="border border-gray-200 p-3 text-right bg-green-100 font-semibold">
                           {(() => {
