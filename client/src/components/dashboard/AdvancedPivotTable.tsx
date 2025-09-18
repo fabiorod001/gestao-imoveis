@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,6 +87,10 @@ export default function AdvancedPivotTable() {
   const [isResizing, setIsResizing] = useState<string | null>(null);
   const [showIPCAMargins, setShowIPCAMargins] = useState(false);
   
+  // Refs for scroll control in month dropdown
+  const currentMonthRef = useRef<HTMLDivElement>(null);
+  const monthsPopoverRef = useRef<HTMLDivElement>(null);
+  
   // Navigation hook
   const [, setLocation] = useLocation();
 
@@ -116,69 +120,76 @@ export default function AdvancedPivotTable() {
     staleTime: 60000, // Cache for 1 minute
   });
 
-  // Generate month options (prioritize historical data, then add current + few future months)
+  // Generate month options centered around current month
   const generateMonthOptions = () => {
-    const options = [];
     const now = new Date();
+    const currentKey = getCurrentMonth();
     const uniqueMonths = new Set<string>();
     
-    // FIRST: Add all months from database (historical data with transactions)
-    // These are the most important as they contain actual data
+    // Create all possible months from database + current + future
+    const allMonths: { key: string; label: string; type: 'past' | 'current' | 'future' }[] = [];
+    
+    // Add all months from database (historical data with transactions)
     availableMonths.forEach(month => {
       if (!uniqueMonths.has(month.key)) {
-        options.push(month);
+        allMonths.push({
+          ...month,
+          type: month.key === currentKey ? 'current' : 
+                (month.key < currentKey ? 'past' : 'future')
+        });
         uniqueMonths.add(month.key);
       }
     });
     
-    // SECOND: Add current month if not already included
-    const currentDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    const currentKey = `${String(currentDate.getMonth() + 1).padStart(2, '0')}/${currentDate.getFullYear()}`;
-    const currentName = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+    // Add current month if not already included
     if (!uniqueMonths.has(currentKey)) {
-      options.push({ key: currentKey, label: currentName });
+      const currentDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      const currentName = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+      allMonths.push({ key: currentKey, label: currentName, type: 'current' });
       uniqueMonths.add(currentKey);
     }
     
-    // THIRD: Add only next 3 future months for planning purposes
+    // Add only next 3 future months for planning purposes
     for (let i = 1; i <= 3; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
       const monthKey = `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
       const monthName = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
       if (!uniqueMonths.has(monthKey)) {
-        options.push({ key: monthKey, label: monthName });
+        allMonths.push({ key: monthKey, label: monthName, type: 'future' });
         uniqueMonths.add(monthKey);
       }
     }
     
-    // Debug: log detailed information about months
-    console.log(`✅ Generated ${options.length} month options: ${availableMonths.length} historical months from API + current + 3 future`);
+    // Separate months by type
+    const pastMonths = allMonths.filter(m => m.type === 'past');
+    const currentMonth = allMonths.filter(m => m.type === 'current');
+    const futureMonths = allMonths.filter(m => m.type === 'future');
     
-    // Sort options chronologically (oldest first) - opposite of original logic
-    options.sort((a, b) => {
-      // Add safety checks for undefined keys
-      if (!a?.key || !b?.key) return 0;
-      
-      const [monthA, yearA] = a.key.split('/');
-      const [monthB, yearB] = b.key.split('/');
-      
-      // Add safety checks for split results
-      if (!monthA || !yearA || !monthB || !yearB) return 0;
-      
-      const dateA = new Date(parseInt(yearA), parseInt(monthA) - 1);
-      const dateB = new Date(parseInt(yearB), parseInt(monthB) - 1);
-      
-      // Changed to oldest first (dateA - dateB instead of dateB - dateA)
+    // Sort past months (most recent first - descending)
+    pastMonths.sort((a, b) => {
+      if (!a.key || !b.key) return 0;
+      const dateA = new Date(parseInt(a.key.split('/')[1]), parseInt(a.key.split('/')[0]) - 1);
+      const dateB = new Date(parseInt(b.key.split('/')[1]), parseInt(b.key.split('/')[0]) - 1);
+      return dateB.getTime() - dateA.getTime();
+    });
+    
+    // Sort future months (nearest first - ascending)
+    futureMonths.sort((a, b) => {
+      if (!a.key || !b.key) return 0;
+      const dateA = new Date(parseInt(a.key.split('/')[1]), parseInt(a.key.split('/')[0]) - 1);
+      const dateB = new Date(parseInt(b.key.split('/')[1]), parseInt(b.key.split('/')[0]) - 1);
       return dateA.getTime() - dateB.getTime();
     });
     
-    // Additional debug info about the range
-    if (options.length > 0) {
-      console.log(`   📅 Range: ${options[0].label} até ${options[options.length - 1].label}`);
-      console.log(`   🔍 Total de meses históricos disponíveis: ${availableMonths.length}`);
-    }
+    // Combine: futures (ascending) + current + pasts (descending)
+    const orderedOptions = [...futureMonths, ...currentMonth, ...pastMonths];
     
-    return options;
+    console.log(`✅ Generated ${orderedOptions.length} month options centered on current month:`);
+    console.log(`   🔮 ${futureMonths.length} future months (nearest first)`);
+    console.log(`   🎯 ${currentMonth.length} current month (${currentKey})`);
+    console.log(`   📜 ${pastMonths.length} past months (most recent first)`);
+    
+    return orderedOptions;
   };
 
   const monthOptions = generateMonthOptions();
