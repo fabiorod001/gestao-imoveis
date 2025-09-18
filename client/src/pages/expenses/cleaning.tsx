@@ -99,15 +99,16 @@ export default function CleaningExpensesPage() {
   // Import expenses mutation
   const importMutation = useMutation({
     mutationFn: async (data: { entries: CleaningEntry[]; supplier: string; paymentDate: string }) => {
-      return apiRequest("/api/cleaning/import-pdf", {
+      const response = await apiRequest("/api/cleaning/import-pdf", {
         method: "POST",
         body: JSON.stringify(data),
       });
+      return response.json();
     },
     onSuccess: (data) => {
       toast({
         title: "Importação concluída",
-        description: data.message,
+        description: data.message || "Despesas importadas com sucesso",
         variant: "default",
       });
       // Reset state

@@ -67,8 +67,7 @@ class TestRunner {
         name,
         type: "apartment", // Added required type field
         status: "active",
-        purchasePrice: 1000000,
-        monthlyRent: 5000
+        purchasePrice: "1000000"
       }).returning();
       this.testPropertyIds.push(property.id);
     }
@@ -301,7 +300,7 @@ class TestRunner {
       
       // Simulate tax distribution calculation
       const amountPerProperty = totalAmount / numProperties;
-      const distribution = [];
+      const distribution: { propertyId: number; amount: number }[] = [];
       
       for (let i = 0; i < numProperties; i++) {
         distribution.push({

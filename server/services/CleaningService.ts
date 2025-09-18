@@ -1,7 +1,7 @@
 import { BaseService } from "./BaseService";
 import type { IStorage } from "../storage";
 import type { 
-  CleaningService, 
+  CleaningService as CleaningServiceType, 
   CleaningBatch,
   InsertCleaningService,
   InsertCleaningBatch,
@@ -30,7 +30,7 @@ export class CleaningService extends BaseService {
     paymentDate: string,
     description?: string,
     advanceAmount?: number
-  ): Promise<{ batch: CleaningBatch; services: CleaningService[] }> {
+  ): Promise<{ batch: CleaningBatch; services: CleaningServiceType[] }> {
     try {
       // Calculate total amount
       const totalAmount = cleanings.reduce((sum, c) => sum + Number(c.amount), 0);
@@ -39,10 +39,10 @@ export class CleaningService extends BaseService {
       const batch = await this.storage.createCleaningBatch({
         userId,
         paymentDate,
-        totalAmount,
+        totalAmount: totalAmount.toString(),
         description: description || `Limpeza - ${new Date(paymentDate).toLocaleDateString('pt-BR')}`,
         hasAdvancePayment: !!advanceAmount && advanceAmount > 0,
-        advanceAmount: advanceAmount || null,
+        advanceAmount: advanceAmount ? advanceAmount.toString() : null,
       });
 
       // Create individual cleaning services
@@ -51,7 +51,7 @@ export class CleaningService extends BaseService {
           userId,
           propertyId: cleaning.propertyId,
           executionDate: cleaning.executionDate,
-          amount: cleaning.amount,
+          amount: cleaning.amount.toString(),
           batchId: batch.id,
         }))
       );
@@ -71,7 +71,7 @@ export class CleaningService extends BaseService {
     propertyId: number,
     startDate?: string,
     endDate?: string
-  ): Promise<CleaningService[]> {
+  ): Promise<CleaningServiceType[]> {
     return await this.storage.getCleaningServices(userId, {
       propertyId,
       startDate,
@@ -92,7 +92,7 @@ export class CleaningService extends BaseService {
   async getCleaningBatchWithServices(
     userId: string,
     batchId: number
-  ): Promise<{ batch: CleaningBatch | undefined; services: CleaningService[] }> {
+  ): Promise<{ batch: CleaningBatch | undefined; services: CleaningServiceType[] }> {
     const batch = await this.storage.getCleaningBatch(batchId, userId);
     const services = batch
       ? await this.storage.getCleaningServices(userId, { batchId })

@@ -42,15 +42,8 @@ export class TransactionService extends BaseService {
           type ? eq(transactions.type, type) : sql`true`
         )
       )
-      .orderBy(desc(transactions.date));
-    
-    // Apply limit only if not fetching children
-    if (!includeChildren) {
-      query = query.limit(limit || 50);
-    } else {
-      // If includeChildren is true, we need to fetch all to ensure we get all children
-      query = query.limit(limit || 1000); // Higher limit when including children
-    }
+      .orderBy(desc(transactions.date))
+      .limit(includeChildren ? 1000 : (limit || 50));
 
     const results = await query;
     
