@@ -477,14 +477,14 @@ export default function AirbnbImport() {
               <div className="space-y-2">
                 <h4 className="font-semibold text-sm">Período dos Pagamentos:</h4>
                 <p className="text-sm bg-white p-2 rounded border">
-                  <strong>De:</strong> {analysisResult.dateRange.start ? 
+                  <strong>De:</strong> {analysisResult.dateRange?.start ? 
                     new Date(analysisResult.dateRange.start).toLocaleDateString('pt-BR', {
                       timeZone: 'UTC',
                       day: '2-digit',
                       month: '2-digit',
                       year: 'numeric'
                     }) : 'N/A'}<br />
-                  <strong>Até:</strong> {analysisResult.dateRange.end ? 
+                  <strong>Até:</strong> {analysisResult.dateRange?.end ? 
                     new Date(analysisResult.dateRange.end).toLocaleDateString('pt-BR', {
                       timeZone: 'UTC',
                       day: '2-digit',
@@ -497,9 +497,9 @@ export default function AirbnbImport() {
               <div className="space-y-2">
                 <h4 className="font-semibold text-sm">Resumo:</h4>
                 <div className="text-sm bg-white p-2 rounded border space-y-1">
-                  <p><strong>{analysisResult.summary.reservationCount}</strong> reservas</p>
-                  <p><strong>{analysisResult.summary.propertyCount}</strong> propriedades</p>
-                  <p><strong>{formatCurrency(analysisResult.summary.totalRevenue)}</strong> em receitas</p>
+                  <p><strong>{analysisResult.summary?.reservationCount || 0}</strong> reservas</p>
+                  <p><strong>{analysisResult.summary?.propertyCount || 0}</strong> propriedades</p>
+                  <p><strong>{formatCurrency(analysisResult.summary?.totalRevenue || 0)}</strong> em receitas</p>
                 </div>
               </div>
             </div>
@@ -507,11 +507,11 @@ export default function AirbnbImport() {
             <div className="space-y-2">
               <h4 className="font-semibold text-sm">Propriedades Identificadas:</h4>
               <div className="flex flex-wrap gap-2">
-                {analysisResult.properties.map((property, index) => (
+                {analysisResult.properties?.map((property, index) => (
                   <Badge key={index} variant="secondary">
                     {property}
                   </Badge>
-                ))}
+                )) || []}
               </div>
             </div>
             
@@ -538,11 +538,11 @@ export default function AirbnbImport() {
             <div className="space-y-2">
               <h4 className="font-semibold text-sm">Períodos Identificados:</h4>
               <div className="flex flex-wrap gap-2">
-                {analysisResult.periods.map((period, index) => (
+                {analysisResult.periods?.map((period, index) => (
                   <Badge key={index} variant="outline">
                     {period}
                   </Badge>
-                ))}
+                )) || []}
               </div>
             </div>
 

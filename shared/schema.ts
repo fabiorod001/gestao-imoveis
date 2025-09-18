@@ -10,6 +10,7 @@ import {
   integer,
   date,
   boolean,
+  type PgTableWithColumns,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -112,7 +113,7 @@ export const properties = pgTable("properties", {
 });
 
 // Transactions table (revenues and expenses)
-export const transactions = pgTable("transactions", {
+export const transactions: PgTableWithColumns<any> = pgTable("transactions", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   propertyId: integer("property_id").references(() => properties.id),
@@ -181,7 +182,7 @@ export const cashFlowSettings = pgTable("cash_flow_settings", {
 });
 
 // Tax payments table - for PIS, COFINS, CSLL, IRPJ  
-export const taxPayments = pgTable("tax_payments", {
+export const taxPayments: PgTableWithColumns<any> = pgTable("tax_payments", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   taxType: varchar("tax_type").notNull(), // PIS, COFINS, CSLL, IRPJ
