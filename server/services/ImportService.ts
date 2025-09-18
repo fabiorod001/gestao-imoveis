@@ -236,6 +236,9 @@ export class ImportService extends BaseService {
       const propertyName = mapListingToProperty(reservation.listing);
       
       if (propertyName) {
+        // Use grossEarnings (column "Ganhos brutos") for pending reservations revenue calculation
+        const revenueValue = reservation.grossEarnings || reservation.amount;
+        
         mappedReservations.push({
           data: reservation.date,
           dataInicio: reservation.checkIn,
@@ -244,7 +247,7 @@ export class ImportService extends BaseService {
           hospede: reservation.guest,
           anuncio: reservation.listing,
           codigo: reservation.confirmationCode,
-          valor: reservation.amount,
+          valor: revenueValue,
           moeda: reservation.currency,
           propertyName: propertyName
         });
@@ -527,6 +530,9 @@ export class ImportService extends BaseService {
         const propertyId = propertyMap.get(propertyName);
         if (!propertyId) continue;
         
+        // Use grossEarnings (column "Ganhos brutos") for payout revenue calculation, fallback to amount
+        const revenueAmount = row.grossEarnings || row.amount;
+        
         newTransactions.push({
           userId,
           propertyId,
@@ -535,10 +541,10 @@ export class ImportService extends BaseService {
           description: row.type === 'adjustment' 
             ? `Ajuste Airbnb - ${row.listing || 'Crédito/Débito'}`
             : `Airbnb - ${row.guest || 'Payout'}`,
-          amount: row.amount.toString(),
+          amount: revenueAmount.toString(),
           date: format(new Date(row.date), 'yyyy-MM-dd'),
           payerName: row.guest || null,
-          notes: row.confirmationCode ? `Código: ${row.confirmationCode}` : null,
+          notes: row.confirmationCode ? `Código: ${row.confirmationCode} | Ganhos brutos: ${row.grossEarnings || 'N/A'}` : `Ganhos brutos: ${row.grossEarnings || 'N/A'}`,
           createdAt: new Date(),
           updatedAt: new Date()
         });
@@ -562,18 +568,21 @@ export class ImportService extends BaseService {
         if (csvFormat === 'historical' && reservation.paidAmount === 0) continue;
         if (csvFormat === 'pending' && checkInDate <= today) continue;
         
+        // Use grossEarnings (column "Ganhos brutos") for revenue calculation, fallback to amount
+        const revenueAmount = reservation.grossEarnings || reservation.amount;
+        
         newTransactions.push({
           userId,
           propertyId,
           type: 'revenue' as const,
           category: 'airbnb',
           description: `Reserva ${csvFormat === 'pending' ? 'Futura' : ''} - ${reservation.guest}`,
-          amount: reservation.amount.toString(),
-          date: format(checkInDate, 'yyyy-MM-dd'),
+          amount: revenueAmount.toString(),
+          date: format(new Date(reservation.date), 'yyyy-MM-dd'), // Use reservation date (Data column) as payment date for cash flow
           accommodationStartDate: format(checkInDate, 'yyyy-MM-dd'),
           accommodationEndDate: reservation.checkOut ? format(new Date(reservation.checkOut), 'yyyy-MM-dd') : null,
           payerName: reservation.guest,
-          notes: `Código: ${reservation.confirmationCode} | ${reservation.nights} noites`,
+          notes: `Código: ${reservation.confirmationCode} | ${reservation.nights} noites | Ganhos brutos: ${reservation.grossEarnings || 'N/A'}`,
           createdAt: new Date(),
           updatedAt: new Date()
         });
@@ -759,21 +768,19 @@ export class ImportService extends BaseService {
 
     // Create service details
     for (const service of services) {
+      // Get property for service
+      const serviceProperty = await this.propertyService.getOrCreateProperty(userId, service.unit);
+      
       await db.insert(cleaningServiceDetails).values({
         transactionId: mainTransaction.id,
-        date: new Date(service.date),
-        unit: service.unit,
-        guestName: service.guestName,
-        checkIn: service.checkIn ? new Date(service.checkIn) : null,
-        checkOut: service.checkOut ? new Date(service.checkOut) : null,
-        nights: service.nights,
-        cleaningType: service.cleaningType || 'standard',
+        propertyId: serviceProperty.id,
+        serviceDate: service.date,
         amount: service.amount,
-        notes: service.notes
+        notes: service.notes || `Limpeza ${service.cleaningType || 'padrão'} - Hóspede: ${service.guestName || 'N/A'}`
       });
 
-      // Create child transaction for the property
-      const property = await this.propertyService.getOrCreateProperty(userId, service.unit);
+      // Create child transaction for the property (reuse already created property)
+      const property = serviceProperty;
       
       await this.transactionService.createTransaction(userId, {
         propertyId: property.id,
