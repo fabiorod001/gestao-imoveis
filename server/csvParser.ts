@@ -127,8 +127,8 @@ export function parseAirbnbCSV(content: string): ParseResult {
     for (const record of records) {
       const type = record['Tipo'] || '';
       
-      // Skip non-reservation and non-payout rows
-      if (type !== 'Reserva' && type !== 'Payout') {
+      // Skip non-reservation, non-payout, and non-adjustment rows
+      if (type !== 'Reserva' && type !== 'Payout' && type !== 'Ajuste' && type !== 'Ajuste de Resolução') {
         continue;
       }
       
@@ -160,7 +160,7 @@ export function parseAirbnbCSV(content: string): ParseResult {
         amount: parseAmount(record['Valor'] || '0'),
         currency: record['Moeda'] || 'BRL',
         isPayout: type === 'Payout',
-        isReservation: type === 'Reserva',
+        isReservation: type === 'Reserva' || type === 'Ajuste' || type === 'Ajuste de Resolução',
         isFutureReservation: isFutureReservation,
       };
       
@@ -198,7 +198,9 @@ export const PROPERTY_MAPPINGS: Record<string, string> = {
   '1 Suíte Wonderful Einstein Morumbi': 'Sevilha 307',
   '2 Quartos + Quintal Privativo': 'Málaga M07',
   '2 quartos, maravilhoso, na Avenida Berrini': 'MaxHaus Berrini',
-  'Studio Premium - Haddock Lobo.': 'Next Haddock Lobo ap 33',
+  'Studio Premium - Haddock Lobo': 'Haddock',
+  'Studio Premium - Haddock Lobo.': 'Haddock',
+  'Studio Premium - Thera by Yoo': 'THERA',
 };
 
 export function mapListingToProperty(listing: string): string | null {
