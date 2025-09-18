@@ -287,7 +287,16 @@ export class ImportService extends BaseService {
     let maxDate: Date | null = null;
 
     // Process payouts
+    console.log(`DEBUG: Processing ${payouts.length} payouts`);
     for (const payout of payouts) {
+      console.log(`DEBUG: Payout data:`, { 
+        type: payout.type, 
+        listing: payout.listing, 
+        amount: payout.amount, 
+        paidAmount: payout.paidAmount,
+        date: payout.date
+      });
+      
       const propertyName = mapListingToProperty(payout.listing);
       if (propertyName && propertyName !== 'IGNORE') {
         propertiesFound.add(propertyName);
@@ -295,6 +304,7 @@ export class ImportService extends BaseService {
         periods.add(format(date, 'MM/yyyy'));
         // Use paidAmount (column "Pago") for historical data, amount (column "Valor") for others
         const revenueAmount = payout.paidAmount !== undefined ? payout.paidAmount : payout.amount;
+        console.log(`DEBUG: Adding revenue: ${revenueAmount} (paidAmount: ${payout.paidAmount}, amount: ${payout.amount})`);
         totalRevenue += revenueAmount;
         
         if (!minDate || date < minDate) minDate = date;
@@ -303,6 +313,7 @@ export class ImportService extends BaseService {
         unmappedListings.add(payout.listing);
       }
     }
+    console.log(`DEBUG: Final totalRevenue: ${totalRevenue}`);
 
     // Process reservations
     for (const reservation of reservations) {
