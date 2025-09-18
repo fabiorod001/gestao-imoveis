@@ -12,6 +12,7 @@ export interface AirbnbRow {
   listing: string;
   amount: number;
   paidAmount?: number;
+  grossEarnings?: number; // This is the correct revenue field!
   currency: string;
   isPayout?: boolean;
   isReservation?: boolean;
@@ -39,6 +40,7 @@ const COLUMN_MAPPINGS = {
   'Anúncio': 'listing',
   'Valor': 'amount',
   'Pago': 'paidAmount',
+  'Ganhos brutos': 'grossEarnings', // This is the correct column for revenue!
   'Moeda': 'currency',
 };
 

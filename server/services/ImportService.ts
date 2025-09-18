@@ -294,6 +294,7 @@ export class ImportService extends BaseService {
         listing: payout.listing, 
         amount: payout.amount, 
         paidAmount: payout.paidAmount,
+        grossEarnings: payout.grossEarnings,
         date: payout.date
       });
       
@@ -302,9 +303,9 @@ export class ImportService extends BaseService {
         propertiesFound.add(propertyName);
         const date = new Date(payout.date);
         periods.add(format(date, 'MM/yyyy'));
-        // Use paidAmount (column "Pago") for historical data, amount (column "Valor") for others
-        const revenueAmount = payout.paidAmount !== undefined ? payout.paidAmount : payout.amount;
-        console.log(`DEBUG: Adding revenue: ${revenueAmount} (paidAmount: ${payout.paidAmount}, amount: ${payout.amount})`);
+        // Always use grossEarnings (column "Ganhos brutos") - this is the correct revenue!
+        const revenueAmount = payout.grossEarnings || 0;
+        console.log(`DEBUG: Adding payout revenue: ${revenueAmount} (grossEarnings: ${payout.grossEarnings})`);
         totalRevenue += revenueAmount;
         
         if (!minDate || date < minDate) minDate = date;
@@ -313,23 +314,47 @@ export class ImportService extends BaseService {
         unmappedListings.add(payout.listing);
       }
     }
-    console.log(`DEBUG: Final totalRevenue: ${totalRevenue}`);
+    console.log(`DEBUG: Total from payouts: ${totalRevenue}`);
 
-    // Process reservations
+    // Process reservations (especially for pending files)
+    console.log(`DEBUG: Processing ${reservations.length} reservations`);
     for (const reservation of reservations) {
+      console.log(`DEBUG: Reservation data:`, { 
+        type: reservation.type, 
+        listing: reservation.listing, 
+        amount: reservation.amount, 
+        grossEarnings: reservation.grossEarnings,
+        date: reservation.date,
+        checkIn: reservation.checkIn
+      });
+      
       const propertyName = mapListingToProperty(reservation.listing);
       if (propertyName && propertyName !== 'IGNORE') {
         propertiesFound.add(propertyName);
+        
+        // For pending files, use reservation date (Data column) as the payment date
+        const date = new Date(reservation.date);
+        periods.add(format(date, 'MM/yyyy'));
+        
+        // Always use grossEarnings (column "Ganhos brutos") for revenue calculation
+        const revenueAmount = reservation.grossEarnings || 0;
+        console.log(`DEBUG: Adding reservation revenue: ${revenueAmount} (grossEarnings: ${reservation.grossEarnings})`);
+        totalRevenue += revenueAmount;
+        
+        if (!minDate || date < minDate) minDate = date;
+        if (!maxDate || date > maxDate) maxDate = date;
+        
+        // Also check checkIn date for date range
         if (reservation.checkIn) {
-          const date = new Date(reservation.checkIn);
-          periods.add(format(date, 'MM/yyyy'));
-          if (!minDate || date < minDate) minDate = date;
-          if (!maxDate || date > maxDate) maxDate = date;
+          const checkInDate = new Date(reservation.checkIn);
+          if (!minDate || checkInDate < minDate) minDate = checkInDate;
+          if (!maxDate || checkInDate > maxDate) maxDate = checkInDate;
         }
       } else if (reservation.listing && reservation.listing.trim()) {
         unmappedListings.add(reservation.listing);
       }
     }
+    console.log(`DEBUG: Total after reservations: ${totalRevenue}`);
 
     // Process adjustments (for dates/properties but NOT for totalRevenue calculation)
     for (const adjustment of adjustments) {
