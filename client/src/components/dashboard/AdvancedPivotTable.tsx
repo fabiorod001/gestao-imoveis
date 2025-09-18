@@ -534,9 +534,9 @@ export default function AdvancedPivotTable() {
     // Add headers
     let headers = ['Propriedade'];
     
-    if (selectedMonths.length === 1 && selectedMonths[0] === currentMonth) {
-      // Single month view for current month: show 5 columns
-      headers = ['Propriedade', 'Resultado do Mês (Real)', 'Resultado do Mês (Previsto)', 'Resultado do Mês (Total)', '% Margem'];
+    if (selectedMonths.length === 1) {
+      // Single month view: show single result column (corrected)
+      headers = ['Propriedade', 'Resultado do Mês'];
     } else {
       // Multiple months or non-current month: show normal columns
       headers = ['Propriedade', ...pivotData.monthHeaders, 'Total'];
@@ -560,16 +560,11 @@ export default function AdvancedPivotTable() {
     pivotData.rows.forEach(row => {
       let rowData: any[] = [];
       
-      if (selectedMonths.length === 1 && selectedMonths[0] === currentMonth) {
-        // Single month view for current month: show 5 columns
-        const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
+      if (selectedMonths.length === 1) {
+        // Single month view: show total from pivotData (corrected)
         rowData = [
           row.propertyName,
-          singleMonthProperty ? singleMonthProperty.realResult : 0,
-          singleMonthProperty ? singleMonthProperty.pendingResult : 0,
-          singleMonthProperty ? singleMonthProperty.totalResult : 0,
-          singleMonthProperty && singleMonthProperty.ipcaCorrectedAcquisitionCost > 0 ? 
-            `${singleMonthProperty.profitMarginIPCA.toFixed(2)}%` : '-'
+          row.total
         ];
       } else {
         // Multiple months or non-current month: show normal columns
@@ -597,31 +592,11 @@ export default function AdvancedPivotTable() {
     // Add totals row
     let totalsData: any[] = [];
     
-    if (selectedMonths.length === 1 && selectedMonths[0] === currentMonth) {
-      // Single month view for current month: show 5 columns totals
-      const totalReal = singleMonthData.reduce((sum, item) => sum + item.realResult, 0);
-      const totalPending = singleMonthData.reduce((sum, item) => sum + item.pendingResult, 0);
-      const totalResult = singleMonthData.reduce((sum, item) => sum + item.totalResult, 0);
-      
-      // Calculate weighted average margin
-      let totalIPCAValue = 0;
-      let weightedMarginSum = 0;
-      
-      singleMonthData.forEach(item => {
-        if (item.ipcaCorrectedAcquisitionCost > 0 && item.totalResult !== 0) {
-          totalIPCAValue += item.ipcaCorrectedAcquisitionCost;
-          weightedMarginSum += item.totalResult;
-        }
-      });
-      
-      const averageMargin = totalIPCAValue === 0 ? 0 : (weightedMarginSum / totalIPCAValue) * 100;
-      
+    if (selectedMonths.length === 1) {
+      // Single month view: show grand total from pivotData (corrected)
       totalsData = [
         'TOTAL',
-        totalReal,
-        totalPending,
-        totalResult,
-        totalIPCAValue === 0 ? '-' : `${averageMargin.toFixed(2)}%`
+        pivotData.grandTotal
       ];
     } else {
       // Multiple months or non-current month: show normal totals
@@ -1094,86 +1069,27 @@ export default function AdvancedPivotTable() {
                         onMouseDown={(e) => handleMouseDown('propertyName', e)}
                       />
                     </th>
-                    {selectedMonths.length === 1 && selectedMonths[0] === currentMonth ? (
-                      // Single month view: show 5 columns layout ONLY for current month
-                      <>
-                        <th 
-                          className="border border-gray-200 p-3 text-right font-semibold bg-blue-50 cursor-pointer hover:bg-blue-100 relative"
-                          style={{ width: columnWidths['realResult'] || 150 }}
-                          onClick={() => handleSort('realResult')}
-                        >
-                          <div className="flex items-center justify-end">
-                            <div>
-                              <div>Resultado do Mês</div>
-                              <div className="text-xs font-normal text-muted-foreground">
-                                (Real)
-                              </div>
+                    {selectedMonths.length === 1 ? (
+                      // Single month view: show single result column (corrected)
+                      <th 
+                        className="border border-gray-200 p-3 text-right font-semibold bg-blue-50 cursor-pointer hover:bg-blue-100 relative"
+                        style={{ width: columnWidths['total'] || 150 }}
+                        onClick={() => handleSort('total')}
+                      >
+                        <div className="flex items-center justify-end">
+                          <div>
+                            <div>Resultado do Mês</div>
+                            <div className="text-xs font-normal text-muted-foreground">
+                              {getDataTypeDescription()}
                             </div>
-                            {getSortIcon('realResult')}
                           </div>
-                          <div
-                            className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500"
-                            onMouseDown={(e) => handleMouseDown('realResult', e)}
-                          />
-                        </th>
-                        <th 
-                          className="border border-gray-200 p-3 text-right font-semibold bg-yellow-50 cursor-pointer hover:bg-yellow-100 relative"
-                          style={{ width: columnWidths['pendingResult'] || 150 }}
-                          onClick={() => handleSort('pendingResult')}
-                        >
-                          <div className="flex items-center justify-end">
-                            <div>
-                              <div>Resultado do Mês</div>
-                              <div className="text-xs font-normal text-muted-foreground">
-                                (Previsto)
-                              </div>
-                            </div>
-                            {getSortIcon('pendingResult')}
-                          </div>
-                          <div
-                            className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500"
-                            onMouseDown={(e) => handleMouseDown('pendingResult', e)}
-                          />
-                        </th>
-                        <th 
-                          className="border border-gray-200 p-3 text-right font-semibold bg-gray-100 cursor-pointer hover:bg-gray-200 relative"
-                          style={{ width: columnWidths['totalResult'] || 150 }}
-                          onClick={() => handleSort('totalResult')}
-                        >
-                          <div className="flex items-center justify-end">
-                            <div>
-                              <div>Resultado do Mês</div>
-                              <div className="text-xs font-normal text-muted-foreground">
-                                (Total)
-                              </div>
-                            </div>
-                            {getSortIcon('totalResult')}
-                          </div>
-                          <div
-                            className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500"
-                            onMouseDown={(e) => handleMouseDown('totalResult', e)}
-                          />
-                        </th>
-                        <th 
-                          className="border border-gray-200 p-3 text-right font-semibold bg-green-50 cursor-pointer hover:bg-green-100 relative"
-                          style={{ width: columnWidths['marginPercent'] || 150 }}
-                          onClick={() => handleSort('marginPercent')}
-                        >
-                          <div className="flex items-center justify-end">
-                            <div>
-                              <div>% Margem</div>
-                              <div className="text-xs font-normal text-muted-foreground">
-                                Total ÷ Valor IPCA
-                              </div>
-                            </div>
-                            {getSortIcon('marginPercent')}
-                          </div>
-                          <div
-                            className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500"
-                            onMouseDown={(e) => handleMouseDown('marginPercent', e)}
-                          />
-                        </th>
-                      </>
+                          {getSortIcon('total')}
+                        </div>
+                        <div
+                          className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500"
+                          onMouseDown={(e) => handleMouseDown('total', e)}
+                        />
+                      </th>
                     ) : (
                       // Multiple months view: show monthly columns and total
                       <>
@@ -1262,61 +1178,11 @@ export default function AdvancedPivotTable() {
                           {row.propertyName}
                         </button>
                       </td>
-                      {selectedMonths.length === 1 && selectedMonths[0] === currentMonth ? (
-                        // Single month view: show 5 columns ONLY for current month
-                        <>
-                          <td className={`border border-gray-200 p-3 text-right font-semibold bg-blue-50 ${getValueStyle((() => {
-                            const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                            const value = singleMonthProperty?.realResult ?? 0;
-                            return isNaN(value) ? 0 : value;
-                          })())}`}>
-                            {formatCurrency((() => {
-                              const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                              const value = singleMonthProperty?.realResult ?? 0;
-                              return isNaN(value) ? 0 : value;
-                            })())}
-                          </td>
-                          <td className={`border border-gray-200 p-3 text-right font-semibold bg-yellow-50 ${getValueStyle((() => {
-                            const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                            const value = singleMonthProperty?.pendingResult ?? 0;
-                            return isNaN(value) ? 0 : value;
-                          })())}`}>
-                            {formatCurrency((() => {
-                              const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                              const value = singleMonthProperty?.pendingResult ?? 0;
-                              return isNaN(value) ? 0 : value;
-                            })())}
-                          </td>
-                          <td className={`border border-gray-200 p-3 text-right font-semibold bg-gray-50 ${getValueStyle((() => {
-                            const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                            const value = singleMonthProperty?.totalResult ?? 0;
-                            return isNaN(value) ? 0 : value;
-                          })())}`}>
-                            {formatCurrency((() => {
-                              const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                              const value = singleMonthProperty?.totalResult ?? 0;
-                              return isNaN(value) ? 0 : value;
-                            })())}
-                          </td>
-                          <td className="border border-gray-200 p-3 text-right font-semibold bg-green-50">
-                            {(() => {
-                              const singleMonthProperty = singleMonthData.find(item => item.propertyName === row.propertyName);
-                              
-                              if (!singleMonthProperty || 
-                                  singleMonthProperty.ipcaCorrectedAcquisitionCost === 0 ||
-                                  isNaN(singleMonthProperty.profitMarginIPCA) ||
-                                  !isFinite(singleMonthProperty.profitMarginIPCA)) {
-                                return <span className="text-gray-400">-</span>;
-                              }
-                              
-                              return (
-                                <span className={getValueStyle(singleMonthProperty.profitMarginIPCA)}>
-                                  {singleMonthProperty.profitMarginIPCA.toFixed(2)}%
-                                </span>
-                              );
-                            })()}
-                          </td>
-                        </>
+                      {selectedMonths.length === 1 ? (
+                        // Single month view: show total from pivotData (corrected data source)
+                        <td className={`border border-gray-200 p-3 text-right font-semibold bg-blue-50 ${getValueStyle(row.total)}`}>
+                          {formatCurrency(row.total)}
+                        </td>
                       ) : (
                         // Multiple months view: show monthly columns, total, and average
                         <>
@@ -1343,71 +1209,11 @@ export default function AdvancedPivotTable() {
                     <td className="border border-gray-200 p-3">
                       TOTAL
                     </td>
-                    {selectedMonths.length === 1 && selectedMonths[0] === currentMonth ? (
-                      // Single month view: show 5 columns totals ONLY for current month
-                      <>
-                        <td className={`border border-gray-200 p-3 text-right bg-blue-100 ${getValueStyle((() => {
-                          const totalReal = singleMonthData.reduce((sum, item) => {
-                            const value = item?.realResult ?? 0;
-                            return sum + (isNaN(value) ? 0 : value);
-                          }, 0);
-                          return totalReal;
-                        })())}`}>
-                          {formatCurrency(singleMonthData.reduce((sum, item) => {
-                            const value = item?.realResult ?? 0;
-                            return sum + (isNaN(value) ? 0 : value);
-                          }, 0))}
-                        </td>
-                        <td className={`border border-gray-200 p-3 text-right bg-yellow-100 ${getValueStyle((() => {
-                          const totalPending = singleMonthData.reduce((sum, item) => {
-                            const value = item?.pendingResult ?? 0;
-                            return sum + (isNaN(value) ? 0 : value);
-                          }, 0);
-                          return totalPending;
-                        })())}`}>
-                          {formatCurrency(singleMonthData.reduce((sum, item) => {
-                            const value = item?.pendingResult ?? 0;
-                            return sum + (isNaN(value) ? 0 : value);
-                          }, 0))}
-                        </td>
-                        <td className={`border border-gray-200 p-3 text-right bg-gray-200 ${getValueStyle((() => {
-                          const totalResult = singleMonthData.reduce((sum, item) => {
-                            const value = item?.totalResult ?? 0;
-                            return sum + (isNaN(value) ? 0 : value);
-                          }, 0);
-                          return totalResult;
-                        })())}`}>
-                          {formatCurrency(singleMonthData.reduce((sum, item) => {
-                            const value = item?.totalResult ?? 0;
-                            return sum + (isNaN(value) ? 0 : value);
-                          }, 0))}
-                        </td>
-                        <td className="border border-gray-200 p-3 text-right bg-green-100 font-semibold">
-                          {(() => {
-                            // Calculate weighted average margin
-                            let totalIPCAValue = 0;
-                            let weightedMarginSum = 0;
-                            
-                            singleMonthData.forEach(item => {
-                              if (item.ipcaCorrectedAcquisitionCost > 0 && item.totalResult !== 0) {
-                                totalIPCAValue += item.ipcaCorrectedAcquisitionCost;
-                                weightedMarginSum += item.totalResult;
-                              }
-                            });
-                            
-                            if (totalIPCAValue === 0) {
-                              return <span className="text-gray-400">-</span>;
-                            }
-                            
-                            const averageMargin = (weightedMarginSum / totalIPCAValue) * 100;
-                            return (
-                              <span className={getValueStyle(averageMargin)}>
-                                {averageMargin.toFixed(2)}%
-                              </span>
-                            );
-                          })()}
-                        </td>
-                      </>
+                    {selectedMonths.length === 1 ? (
+                      // Single month view: show grand total from pivotData (corrected data source)
+                      <td className={`border border-gray-200 p-3 text-right bg-blue-100 ${getValueStyle(pivotData.grandTotal)}`}>
+                        {formatCurrency(pivotData.grandTotal)}
+                      </td>
                     ) : (
                       // Multiple months view: show monthly totals, grand total, and average
                       <>
