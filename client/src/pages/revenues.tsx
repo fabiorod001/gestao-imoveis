@@ -76,6 +76,8 @@ export default function Revenues() {
   const totalActual = actualRevenues.reduce((sum, t) => sum + Number(t.amount), 0);
   const totalPending = pendingRevenues.reduce((sum, t) => sum + Number(t.amount), 0);
   const totalMonth = totalActual + totalPending;
+  const totalRevenue = filteredRevenues.reduce((sum, t) => sum + Number(t.amount), 0);
+  const revenues = filteredRevenues; // alias para compatibilidade
 
   if (isLoading) {
     return (
