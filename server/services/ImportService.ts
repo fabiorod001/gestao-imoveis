@@ -293,7 +293,9 @@ export class ImportService extends BaseService {
         propertiesFound.add(propertyName);
         const date = new Date(payout.date);
         periods.add(format(date, 'MM/yyyy'));
-        totalRevenue += payout.amount;
+        // Use paidAmount (column "Pago") for historical data, amount (column "Valor") for others
+        const revenueAmount = payout.paidAmount !== undefined ? payout.paidAmount : payout.amount;
+        totalRevenue += revenueAmount;
         
         if (!minDate || date < minDate) minDate = date;
         if (!maxDate || date > maxDate) maxDate = date;
