@@ -277,10 +277,14 @@ export class ImportService extends BaseService {
   private analyzePayoutsAndReservations(rows: any[], propertyMapping: Record<string, string>): any {
     const payouts = rows.filter(row => row.type === 'payout');
     const reservations = rows.filter(row => row.type === 'reservation');
+    const adjustments = rows.filter(row => row.type === 'adjustment');
     
     const propertiesFound = new Set<string>();
+    const unmappedListings = new Set<string>();
     const periods = new Set<string>();
     let totalRevenue = 0;
+    let minDate: Date | null = null;
+    let maxDate: Date | null = null;
 
     // Process payouts
     for (const payout of payouts) {
@@ -290,6 +294,11 @@ export class ImportService extends BaseService {
         const date = new Date(payout.date);
         periods.add(format(date, 'MM/yyyy'));
         totalRevenue += payout.amount;
+        
+        if (!minDate || date < minDate) minDate = date;
+        if (!maxDate || date > maxDate) maxDate = date;
+      } else {
+        unmappedListings.add(payout.listing);
       }
     }
 
@@ -301,7 +310,27 @@ export class ImportService extends BaseService {
         if (reservation.checkIn) {
           const date = new Date(reservation.checkIn);
           periods.add(format(date, 'MM/yyyy'));
+          if (!minDate || date < minDate) minDate = date;
+          if (!maxDate || date > maxDate) maxDate = date;
         }
+      } else {
+        unmappedListings.add(reservation.listing);
+      }
+    }
+
+    // Process adjustments
+    for (const adjustment of adjustments) {
+      const propertyName = mapListingToProperty(adjustment.listing);
+      if (propertyName && propertyName !== 'IGNORE') {
+        propertiesFound.add(propertyName);
+        const date = new Date(adjustment.date);
+        periods.add(format(date, 'MM/yyyy'));
+        totalRevenue += adjustment.amount; // Can be negative
+        
+        if (!minDate || date < minDate) minDate = date;
+        if (!maxDate || date > maxDate) maxDate = date;
+      } else {
+        unmappedListings.add(adjustment.listing);
       }
     }
 
@@ -310,7 +339,18 @@ export class ImportService extends BaseService {
       periods: Array.from(periods).sort(),
       totalRevenue,
       payoutCount: payouts.length,
-      reservationCount: reservations.length
+      reservationCount: reservations.length,
+      adjustmentCount: adjustments.length,
+      unmappedListings: Array.from(unmappedListings),
+      dateRange: {
+        start: minDate ? format(minDate, 'yyyy-MM-dd') : null,
+        end: maxDate ? format(maxDate, 'yyyy-MM-dd') : null
+      },
+      summary: {
+        propertyCount: propertiesFound.size,
+        totalRevenue,
+        reservationCount: reservations.length
+      }
     };
   }
 

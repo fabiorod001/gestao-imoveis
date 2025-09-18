@@ -29,7 +29,24 @@ interface ImportResult {
 }
 
 interface AnalysisResult {
-  success: boolean;
+  success?: boolean;
+  properties?: string[];
+  periods?: string[];
+  totalRevenue?: number;
+  reservationCount?: number;
+  payoutCount?: number;
+  adjustmentCount?: number;
+  unmappedListings?: string[];
+  dateRange?: {
+    start: string | null;
+    end: string | null;
+  };
+  summary?: {
+    reservationCount: number;
+    totalRevenue: number;
+    propertyCount: number;
+    periodCount?: number;
+  };
   analysis?: {
     properties: string[];
     periods: string[];
@@ -72,7 +89,30 @@ export default function AirbnbImport() {
     onSuccess: (data) => {
       console.log('Analysis result:', data);
       setAnalysisResult(data);
-      setShowConfirmation(true);
+      
+      // Show unmapped listings if any
+      if (data && data.unmappedListings && data.unmappedListings.length > 0) {
+        console.warn('Propriedades não mapeadas:', data.unmappedListings);
+        toast({
+          title: "Aviso: Propriedades não mapeadas",
+          description: `${data.unmappedListings.length} propriedade(s) do Airbnb não foram reconhecidas: ${data.unmappedListings.join(', ')}`,
+          variant: "destructive",
+        });
+      }
+      
+      // Only show confirmation if we have mapped properties
+      if (data && data.properties && data.properties.length > 0) {
+        setShowConfirmation(true);
+      } else if (data && data.unmappedListings && data.unmappedListings.length > 0) {
+        // Show unmapped properties in a more visible way
+        toast({
+          title: "Nenhuma propriedade reconhecida",
+          description: `Adicione o mapeamento para: ${data.unmappedListings.join(', ')}`,
+          variant: "destructive",
+        });
+      } else {
+        setShowConfirmation(true); // Still show if there's data
+      }
     },
     onError: (error) => {
       toast({
