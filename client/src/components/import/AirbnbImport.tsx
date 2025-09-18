@@ -211,8 +211,17 @@ export default function AirbnbImport() {
   };
 
   const handleAnalyze = () => {
+    console.log('handleAnalyze chamado, selectedFile:', selectedFile);
     if (selectedFile) {
+      console.log('Iniciando análise do arquivo:', selectedFile.name);
       analyzeMutation.mutate(selectedFile);
+    } else {
+      console.log('Nenhum arquivo selecionado');
+      toast({
+        title: "Nenhum arquivo selecionado",
+        description: "Por favor, selecione um arquivo CSV primeiro.",
+        variant: "destructive",
+      });
     }
   };
 
