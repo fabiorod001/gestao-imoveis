@@ -69,7 +69,7 @@ export default function AirbnbImport() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [importType, setImportType] = useState<'historical' | 'future'>('historical'); // Padrão é histórico pois é o mais comum
+  // Removido seletor manual - sistema detecta automaticamente o tipo baseado no conteúdo
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -78,12 +78,8 @@ export default function AirbnbImport() {
       const formData = new FormData();
       formData.append('file', file);
       
-      // Use different endpoints based on import type
-      const endpoint = importType === 'future' 
-        ? '/api/import/airbnb-pending/analyze' 
-        : '/api/import/airbnb-csv/analyze';
-      
-      const response = await apiRequest(endpoint, 'POST', formData);
+      // Use unified endpoint - let server detect format automatically
+      const response = await apiRequest('/api/import/airbnb-csv/analyze', 'POST', formData);
       return await response.json() as AnalysisResult;
     },
     onSuccess: (data) => {
@@ -143,12 +139,8 @@ export default function AirbnbImport() {
       const formData = new FormData();
       formData.append('file', file);
       
-      // Use different endpoints based on import type  
-      const endpoint = importType === 'future' 
-        ? '/api/import/airbnb-pending' 
-        : '/api/import/airbnb-csv';
-      
-      const response = await apiRequest(endpoint, 'POST', formData);
+      // Use unified endpoint - let server detect format automatically
+      const response = await apiRequest('/api/import/airbnb-csv', 'POST', formData);
       return await response.json() as ImportResult;
     },
     onSuccess: (result) => {
@@ -259,11 +251,7 @@ export default function AirbnbImport() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            {importType === 'future' ? (
-              <Clock className="w-5 h-5" />
-            ) : (
-              <History className="w-5 h-5" />
-            )}
+            <Upload className="w-5 h-5" />
             Importação Unificada do Airbnb
           </CardTitle>
         </CardHeader>
@@ -271,37 +259,11 @@ export default function AirbnbImport() {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Sistema Unificado:</strong> {importType === 'future' ? 
-                'Processa reservas futuras para previsão de receitas. Remove apenas reservas futuras existentes antes de importar.' : 
-                'Analisa automaticamente payouts históricos do Airbnb. Remove apenas dados do período sendo importado.'}
+              <strong>Detecção Automática:</strong> O sistema identifica automaticamente se o CSV contém dados históricos (payouts) ou reservas futuras baseado no conteúdo do arquivo. Remove apenas dados do período sendo importado.
             </AlertDescription>
           </Alert>
 
           <div className="space-y-4">
-            <div>
-              <label htmlFor="import-type" className="block text-sm font-medium mb-2">
-                Tipo de Importação
-              </label>
-              <Select value={importType} onValueChange={(value: 'historical' | 'future') => setImportType(value)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecione o tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="historical">
-                    <div className="flex items-center gap-2">
-                      <History className="w-4 h-4" />
-                      <span>Dados Históricos (Payouts)</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="future">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4" />
-                      <span>Reservas Futuras (Previsão)</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
 
             <div>
               <label htmlFor="csv-upload" className="block text-sm font-medium mb-2">
