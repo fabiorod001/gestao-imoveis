@@ -26,10 +26,10 @@ export class TransactionService extends BaseService {
   /**
    * Get all transactions for a user with enriched property names - OPTIMIZED
    */
-  async getTransactions(userId: string, type?: string, limit?: number): Promise<any[]> {
+  async getTransactions(userId: string, type?: string, limit?: number, includeChildren?: boolean): Promise<any[]> {
     // Use a single optimized query with JOIN to avoid N+1 problem - SAFE SCHEMA APPROACH
     const t = getTableColumns(transactions);
-    const query = db
+    let query = db
       .select({
         ...t,
         propertyName: sql<string>`COALESCE(${properties.name}, 'Propriedade Desconhecida')`.as('propertyName'),
@@ -42,10 +42,53 @@ export class TransactionService extends BaseService {
           type ? eq(transactions.type, type) : sql`true`
         )
       )
-      .orderBy(desc(transactions.date))
-      .limit(limit || 50);
+      .orderBy(desc(transactions.date));
+    
+    // Apply limit only if not fetching children
+    if (!includeChildren) {
+      query = query.limit(limit || 50);
+    } else {
+      // If includeChildren is true, we need to fetch all to ensure we get all children
+      query = query.limit(limit || 1000); // Higher limit when including children
+    }
 
     const results = await query;
+    
+    // If includeChildren is true, ensure we fetch all child transactions for any parent transactions
+    if (includeChildren) {
+      // Find all parent transaction IDs in the results
+      const parentIds = results
+        .filter(t => t.isCompositeParent === true)
+        .map(t => t.id)
+        .filter((id): id is number => id !== undefined && id !== null);
+      
+      if (parentIds.length > 0) {
+        // Fetch ALL child transactions for these parents
+        const childrenQuery = db
+          .select({
+            ...t,
+            propertyName: sql<string>`COALESCE(${properties.name}, 'Propriedade Desconhecida')`.as('propertyName'),
+          })
+          .from(transactions)
+          .leftJoin(properties, eq(transactions.propertyId, properties.id))
+          .where(
+            and(
+              eq(transactions.userId, userId),
+              sql`${transactions.parentTransactionId} = ANY(ARRAY[${sql.raw(parentIds.map(id => `${id}`).join(','))}]::int[])`
+            )
+          );
+        
+        const children = await childrenQuery;
+        
+        // Merge children with existing results, avoiding duplicates
+        const existingIds = new Set(results.map(r => r.id));
+        for (const child of children) {
+          if (!existingIds.has(child.id)) {
+            results.push(child);
+          }
+        }
+      }
+    }
     
     // Enrich with formatted amounts
     return results.map(transaction => {

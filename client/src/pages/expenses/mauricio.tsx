@@ -74,9 +74,14 @@ export default function MauricioExpensesPage() {
 
   const activeProperties = properties.filter(p => p.status === 'active');
 
-  // Fetch all transactions
+  // Fetch all transactions with includeChildren flag to ensure all child transactions are included
   const { data: allTransactions = [], isLoading } = useQuery<Transaction[]>({
-    queryKey: ['/api/transactions']
+    queryKey: ['/api/transactions?includeChildren=true&limit=1000'],
+    queryFn: async () => {
+      const response = await fetch('/api/transactions?includeChildren=true&limit=1000');
+      if (!response.ok) throw new Error('Failed to fetch transactions');
+      return response.json();
+    }
   });
 
   // Process Maurício expenses
@@ -126,7 +131,7 @@ export default function MauricioExpensesPage() {
           amount: Math.abs(parseFloat(transaction.amount.toString())),
           description: transaction.description || 'Pagamento Maurício',
           propertyCount: childTransactions.length || 1,
-          notes: transaction.notes
+          notes: transaction.notes || undefined
         });
         
         totalAmount += Math.abs(parseFloat(transaction.amount.toString()));
@@ -142,7 +147,8 @@ export default function MauricioExpensesPage() {
         const parentMonthKey = `${String(parentDate.getMonth() + 1).padStart(2, '0')}/${parentDate.getFullYear()}`;
         if (!selectedMonths.includes(parentMonthKey)) return;
         
-        // Filter by selected properties if any are selected
+        // Filter by selected properties only if some properties are selected
+        // When no properties are selected, show ALL properties
         if (selectedProperties.length > 0 && !selectedProperties.includes(transaction.propertyId)) {
           return;
         }

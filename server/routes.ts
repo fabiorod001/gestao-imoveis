@@ -311,13 +311,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     validateMultiple({ 
       query: z.object({
         limit: z.coerce.number().int().positive().optional(),
-        type: z.enum(["revenue", "expense"]).optional()
+        type: z.enum(["revenue", "expense"]).optional(),
+        includeChildren: z.coerce.boolean().optional()
       })
     }),
     asyncHandler(async (req: any, res: Response) => {
       const userId = getUserId(req);
-      const { limit, type } = req.query;
-      const transactions = await transactionService.getTransactions(userId, type, limit);
+      const { limit, type, includeChildren } = req.query;
+      const transactions = await transactionService.getTransactions(userId, type, limit, includeChildren);
       res.json(transactions);
     })
   );
