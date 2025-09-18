@@ -308,7 +308,6 @@ export default function CleaningExpensesPage() {
                           onClick={() => {
                             setFile(null);
                             setParsedData(null);
-                            setSelectedEntries(new Set());
                           }}
                         >
                           <X className="h-3 w-3" />

@@ -4,6 +4,9 @@ interface CleaningEntry {
   date: string;
   unit: string;
   value: number;
+  propertyId: string | null;
+  propertyName: string;
+  matched: boolean;
 }
 
 interface ParsedPdfData {
@@ -14,6 +17,7 @@ interface ParsedPdfData {
   };
   total: number;
   errors: string[];
+  unmatchedCount: number;
 }
 
 // Mapeamento COMPLETO e CORRETO das 10 propriedades do sistema
@@ -153,7 +157,8 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<ParsedPdfData> {
     entries: [],
     period: { start: '', end: '' },
     total: 0,
-    errors: []
+    errors: [],
+    unmatchedCount: 0
   };
   
   try {
@@ -234,10 +239,16 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<ParsedPdfData> {
                         unitClean; // Se não encontrar, mantém o nome original
           }
           
+          // Determina se a propriedade foi mapeada corretamente
+          const isMatched = !!mappedUnit && mappedUnit !== unitClean;
+          
           const entry: CleaningEntry = {
             date: parseDate(dateStr),
             unit: mappedUnit || unitClean,
-            value: parseValue(valueStr)
+            value: parseValue(valueStr),
+            propertyId: isMatched ? null : null, // Will be set by the backend service
+            propertyName: mappedUnit || unitClean,
+            matched: isMatched
           };
           
           data.entries.push(entry);
@@ -251,6 +262,9 @@ export async function parseCleaningPdf(buffer: Buffer): Promise<ParsedPdfData> {
     // IMPORTANTE: Usamos o total calculado das entradas individuais
     // Ignoramos o total do PDF se houver desconto, pois queremos os valores individuais
     data.total = calculatedTotal;
+    
+    // Calcula o número de propriedades não mapeadas
+    data.unmatchedCount = data.entries.filter(entry => !entry.matched).length;
     
   } catch (error) {
     console.error('Erro ao processar PDF:', error);

@@ -944,6 +944,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Parse cleaning PDF
+  app.post('/api/cleaning/parse-pdf', 
+    isAuthenticated, 
+    uploadPDF.single('file'), 
+    async (req: any, res: Response) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        // Import the parser function
+        const { parseCleaningPdf } = await import('./cleaningPdfParser');
+        
+        // Parse the PDF
+        const parsedData = await parseCleaningPdf(req.file.buffer);
+        
+        // Get user's properties to match against
+        const userId = getUserId(req);
+        const properties = await propertyService.getProperties(userId);
+        
+        // Match entries with properties and update the propertyId field
+        const entriesWithPropertyIds = parsedData.entries.map(entry => {
+          // Find matching property by name
+          const matchingProperty = properties.find(p => 
+            p.name?.toLowerCase() === entry.propertyName.toLowerCase()
+          );
+          
+          if (matchingProperty) {
+            return {
+              ...entry,
+              propertyId: matchingProperty.id.toString(),
+              matched: true
+            };
+          }
+          
+          return entry;
+        });
+        
+        // Update parsed data with the enhanced entries
+        const responseData = {
+          ...parsedData,
+          entries: entriesWithPropertyIds
+        };
+        
+        res.json(responseData);
+      } catch (error) {
+        console.error('Error parsing PDF:', error);
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : 'Failed to parse PDF' 
+        });
+      }
+    }
+  );
+
+  // Import cleaning expenses from parsed PDF
+  app.post('/api/cleaning/import-pdf',
+    isAuthenticated,
+    async (req: any, res: Response) => {
+      try {
+        const userId = getUserId(req);
+        const { entries, supplier, paymentDate } = req.body;
+        
+        if (!entries || !Array.isArray(entries) || entries.length === 0) {
+          return res.status(400).json({ error: 'No entries to import' });
+        }
+        
+        // Filter only matched entries
+        const matchedEntries = entries.filter((e: any) => e.matched && e.propertyId);
+        
+        if (matchedEntries.length === 0) {
+          return res.status(400).json({ error: 'No matched properties to import' });
+        }
+        
+        // Create cleaning batch with the matched entries
+        const cleanings = matchedEntries.map((entry: any) => ({
+          propertyId: parseInt(entry.propertyId),
+          executionDate: entry.date,
+          amount: entry.value
+        }));
+        
+        const result = await cleaningService.importCleaningBatch(
+          userId,
+          cleanings,
+          paymentDate,
+          supplier || 'Serviço de Limpeza'
+        );
+        
+        res.json({
+          success: true,
+          message: `${matchedEntries.length} limpezas importadas com sucesso`,
+          batch: result.batch,
+          services: result.services
+        });
+      } catch (error) {
+        console.error('Error importing cleaning expenses:', error);
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : 'Failed to import cleaning expenses' 
+        });
+      }
+    }
+  );
+
   // ==================== TAX ROUTES ====================
   app.post('/api/taxes/simple', 
     isAuthenticated,
