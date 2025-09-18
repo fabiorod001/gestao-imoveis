@@ -108,7 +108,7 @@ export default function AdvancedPivotTable() {
   });
 
   // Fetch available months from database - ALL months with any transaction
-  const { data: availableMonths = [], refetch: refetchMonths } = useQuery<{ key: string; label: string }[]>({
+  const { data: availableMonths = [], refetch: refetchMonths } = useQuery<string[]>({
     queryKey: ['/api/analytics/available-months'],
     queryFn: async () => {
       const response = await fetch('/api/analytics/available-months');
@@ -130,14 +130,19 @@ export default function AdvancedPivotTable() {
     const allMonths: { key: string; label: string; type: 'past' | 'current' | 'future' }[] = [];
     
     // Add all months from database (historical data with transactions)
-    availableMonths.forEach(month => {
-      if (!uniqueMonths.has(month.key)) {
+    availableMonths.forEach(monthKey => {
+      if (!uniqueMonths.has(monthKey)) {
+        const [month, year] = monthKey.split('/');
+        const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+        const monthName = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+        
         allMonths.push({
-          ...month,
-          type: month.key === currentKey ? 'current' : 
-                (month.key < currentKey ? 'past' : 'future')
+          key: monthKey,
+          label: monthName,
+          type: monthKey === currentKey ? 'current' : 
+                (monthKey < currentKey ? 'past' : 'future')
         });
-        uniqueMonths.add(month.key);
+        uniqueMonths.add(monthKey);
       }
     });
     

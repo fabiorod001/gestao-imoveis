@@ -1,5 +1,5 @@
-# QUICK START - RentManager
-**Última atualização: 18/09/2025 - 19h30 - ✅ FUNCIONALIDADE AIRBNB CSV CORRIGIDA**
+# QUICK START - RentManager  
+**Última atualização: 18/09/2025 - 20h00 - ✅ DASHBOARD CORRIGIDO - VALORES E DROPDOWN FUNCIONAIS**
 
 ## 🎯 Estado Atual do Sistema
 Sistema **100% FUNCIONAL** - Todas as funcionalidades operacionais!
@@ -12,6 +12,7 @@ Sistema **100% FUNCIONAL** - Todas as funcionalidades operacionais!
 - **Performance Otimizada**: Dashboard 39x mais rápido (de 975ms para 25ms!)
 - **Tabelas Dinâmicas**: Todos os relatórios com filtros avançados
 - **Sistema Monetário Robusto**: Precisão total em cálculos financeiros
+- **Dashboard Corrigido**: Valores reais exibidos (Haddock: R$ 4.460,19, etc.) e dropdown com 119 meses históricos
 
 ## 📊 Detalhamento Completo das Funcionalidades
 

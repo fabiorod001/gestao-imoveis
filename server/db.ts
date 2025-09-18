@@ -1,13 +1,9 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from "@shared/schema";
 
-// Configure WebSocket constructor for Neon
-neonConfig.webSocketConstructor = ws;
-
-// Set pipelining to false to avoid connection issues
-neonConfig.pipelineConnect = false;
+// COMPLETELY INDEPENDENT PostgreSQL connection
+// Works with ANY PostgreSQL database (local, AWS RDS, Google Cloud SQL, etc.)
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
