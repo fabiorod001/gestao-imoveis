@@ -105,7 +105,7 @@ export default function AirbnbImport() {
         (data.properties && data.properties.length > 0) ||
         (data.reservationCount && data.reservationCount > 0) ||
         (data.payoutCount && data.payoutCount > 0) ||
-        (data.totalRevenue && data.totalRevenue > 0)
+        (data.totalRevenue !== undefined && data.totalRevenue !== null)
       );
       
       if (hasData) {
@@ -457,7 +457,7 @@ export default function AirbnbImport() {
       )}
 
       {/* Confirmation Dialog */}
-      {showConfirmation && analysisResult?.analysis && (
+      {showConfirmation && analysisResult && (
         <Card className="border-blue-200 bg-blue-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-blue-800">
@@ -477,15 +477,15 @@ export default function AirbnbImport() {
               <div className="space-y-2">
                 <h4 className="font-semibold text-sm">Período dos Pagamentos:</h4>
                 <p className="text-sm bg-white p-2 rounded border">
-                  <strong>De:</strong> {analysisResult.analysis.dateRange.start ? 
-                    new Date(analysisResult.analysis.dateRange.start).toLocaleDateString('pt-BR', {
+                  <strong>De:</strong> {analysisResult.dateRange.start ? 
+                    new Date(analysisResult.dateRange.start).toLocaleDateString('pt-BR', {
                       timeZone: 'UTC',
                       day: '2-digit',
                       month: '2-digit',
                       year: 'numeric'
                     }) : 'N/A'}<br />
-                  <strong>Até:</strong> {analysisResult.analysis.dateRange.end ? 
-                    new Date(analysisResult.analysis.dateRange.end).toLocaleDateString('pt-BR', {
+                  <strong>Até:</strong> {analysisResult.dateRange.end ? 
+                    new Date(analysisResult.dateRange.end).toLocaleDateString('pt-BR', {
                       timeZone: 'UTC',
                       day: '2-digit',
                       month: '2-digit',
@@ -497,9 +497,9 @@ export default function AirbnbImport() {
               <div className="space-y-2">
                 <h4 className="font-semibold text-sm">Resumo:</h4>
                 <div className="text-sm bg-white p-2 rounded border space-y-1">
-                  <p><strong>{analysisResult.analysis.summary.reservationCount}</strong> reservas</p>
-                  <p><strong>{analysisResult.analysis.summary.propertyCount}</strong> propriedades</p>
-                  <p><strong>{formatCurrency(analysisResult.analysis.summary.totalRevenue)}</strong> em receitas</p>
+                  <p><strong>{analysisResult.summary.reservationCount}</strong> reservas</p>
+                  <p><strong>{analysisResult.summary.propertyCount}</strong> propriedades</p>
+                  <p><strong>{formatCurrency(analysisResult.summary.totalRevenue)}</strong> em receitas</p>
                 </div>
               </div>
             </div>
@@ -507,7 +507,7 @@ export default function AirbnbImport() {
             <div className="space-y-2">
               <h4 className="font-semibold text-sm">Propriedades Identificadas:</h4>
               <div className="flex flex-wrap gap-2">
-                {analysisResult.analysis.properties.map((property, index) => (
+                {analysisResult.properties.map((property, index) => (
                   <Badge key={index} variant="secondary">
                     {property}
                   </Badge>
@@ -538,7 +538,7 @@ export default function AirbnbImport() {
             <div className="space-y-2">
               <h4 className="font-semibold text-sm">Períodos Identificados:</h4>
               <div className="flex flex-wrap gap-2">
-                {analysisResult.analysis.periods.map((period, index) => (
+                {analysisResult.periods.map((period, index) => (
                   <Badge key={index} variant="outline">
                     {period}
                   </Badge>
