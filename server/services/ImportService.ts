@@ -9,8 +9,8 @@ import * as XLSX from "xlsx";
 import { z } from "zod";
 import { db } from "../db";
 import { transactions, properties, cleaningServiceDetails } from "@shared/schema";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
-import { format } from "date-fns";
+import { eq, and, gte, lte, sql, inArray } from "drizzle-orm";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 
 /**
  * Service for handling various data import operations
@@ -253,11 +253,11 @@ export class ImportService extends BaseService {
       }
     }
 
-    const propertiesFound = [...new Set(mappedReservations.map(r => r.propertyName))];
-    const periods = [...new Set(mappedReservations.map(r => {
+    const propertiesFound = Array.from(new Set(mappedReservations.map(r => r.propertyName)));
+    const periods = Array.from(new Set(mappedReservations.map(r => {
       const date = new Date(r.dataInicio);
       return format(date, 'MM/yyyy');
-    }))];
+    })));
     
     const totalRevenue = mappedReservations.reduce((sum, r) => sum + r.valor, 0);
 
@@ -315,7 +315,49 @@ export class ImportService extends BaseService {
   }
 
   /**
-   * Import Airbnb CSV data
+   * Compute import window and property IDs from CSV rows
+   */
+  private computeImportWindow(rows: any[]): { start: Date, end: Date, propertyIds: Set<number> } | null {
+    let minDate: Date | null = null;
+    let maxDate: Date | null = null;
+    const propertyNames = new Set<string>();
+    
+    for (const row of rows) {
+      // Skip rows we won't import
+      if (row.type !== 'reservation' && row.type !== 'payout' && row.type !== 'adjustment') {
+        continue;
+      }
+      
+      // Collect property names
+      const propertyName = mapListingToProperty(row.listing);
+      if (propertyName && propertyName !== 'IGNORE') {
+        propertyNames.add(propertyName);
+      }
+      
+      // Collect dates (prefer checkIn, fallback to main date)
+      const dateStr = row.checkIn || row.date;
+      if (dateStr) {
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+          if (!minDate || date < minDate) minDate = date;
+          if (!maxDate || date > maxDate) maxDate = date;
+        }
+      }
+    }
+    
+    if (!minDate || !maxDate) {
+      return null;
+    }
+    
+    // Expand to full months
+    const start = startOfMonth(minDate);
+    const end = endOfMonth(maxDate);
+    
+    return { start, end, propertyIds: new Set() }; // Property IDs will be filled later
+  }
+
+  /**
+   * Import Airbnb CSV data with automatic removal of existing data
    */
   async importAirbnbCSV(userId: string, csvContent: string): Promise<any> {
     const parseResult = parseAirbnbCSV(csvContent);
@@ -324,101 +366,160 @@ export class ImportService extends BaseService {
       throw new Error(parseResult.error || 'Erro ao processar arquivo CSV');
     }
 
-    const payouts = parseResult.rows.filter(row => row.type === 'payout');
-    const reservations = parseResult.rows.filter(row => row.type === 'reservation');
+    const rows = parseResult.rows;
+    const csvFormat = parseResult.format; // 'historical' or 'pending'
     
-    let importedPayouts = 0;
-    let importedReservations = 0;
-    let skippedDuplicates = 0;
-    const errors: string[] = [];
-
-    // Import payouts
-    for (const payout of payouts) {
-      try {
-        const propertyName = mapListingToProperty(payout.listing);
-        
-        if (!propertyName || propertyName === 'IGNORE') {
-          continue;
+    // Compute import window
+    const importWindow = this.computeImportWindow(rows);
+    if (!importWindow) {
+      throw new Error('Não foi possível determinar o período de importação do CSV');
+    }
+    
+    // Collect property IDs for properties in the CSV
+    const propertyIds = new Set<number>();
+    const propertyMap = new Map<string, number>();
+    
+    for (const row of rows) {
+      const propertyName = mapListingToProperty(row.listing);
+      if (propertyName && propertyName !== 'IGNORE') {
+        if (!propertyMap.has(propertyName)) {
+          const property = await this.propertyService.getOrCreateProperty(userId, propertyName);
+          propertyMap.set(propertyName, property.id);
+          propertyIds.add(property.id);
         }
-
-        const property = await this.propertyService.getOrCreateProperty(userId, propertyName);
+      }
+    }
+    
+    // Execute in a transaction
+    return await db.transaction(async (tx) => {
+      let deletedCount = 0;
+      let importedCount = 0;
+      const errors: string[] = [];
+      
+      // Delete existing data based on format
+      if (csvFormat === 'historical') {
+        // Delete existing Airbnb transactions in the period
+        const deleteConditions: any[] = [
+          eq(transactions.userId, userId),
+          eq(transactions.category, 'airbnb'),
+          gte(transactions.date, format(importWindow.start, 'yyyy-MM-dd')),
+          lte(transactions.date, format(importWindow.end, 'yyyy-MM-dd'))
+        ];
         
-        // Check for duplicate
-        const existingTransaction = await db
-          .select()
-          .from(transactions)
+        // Only add property filter if we have properties
+        if (propertyIds.size > 0) {
+          deleteConditions.push(inArray(transactions.propertyId, Array.from(propertyIds)));
+        }
+        
+        const deleteResult = await tx
+          .delete(transactions)
+          .where(and(...deleteConditions));
+        
+        deletedCount = deleteResult?.rowCount || 0;
+        console.log(`Removed ${deletedCount} existing Airbnb transactions from ${format(importWindow.start, 'MMM yyyy')} to ${format(importWindow.end, 'MMM yyyy')}`);
+      } else {
+        // Delete all future Airbnb reservations
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const deleteResult = await tx
+          .delete(transactions)
           .where(and(
             eq(transactions.userId, userId),
-            eq(transactions.propertyId, property.id),
-            eq(transactions.date, format(new Date(payout.date), 'yyyy-MM-dd')),
-            eq(transactions.amount, payout.amount.toString()),
-            eq(transactions.category, 'airbnb')
-          ))
-          .limit(1);
-
-        if (existingTransaction.length > 0) {
-          skippedDuplicates++;
-          continue;
-        }
-
-        await this.transactionService.createTransaction(userId, {
-          propertyId: property.id,
-          type: 'revenue',
+            eq(transactions.category, 'airbnb'),
+            gte(transactions.date, format(today, 'yyyy-MM-dd'))
+          ));
+        
+        deletedCount = deleteResult?.rowCount || 0;
+        console.log(`Removed ${deletedCount} existing future Airbnb reservations`);
+      }
+      
+      // Prepare new transactions to insert
+      const newTransactions: any[] = [];
+      
+      // Process payouts and adjustments
+      const payoutsAndAdjustments = rows.filter(row => 
+        row.type === 'payout' || row.type === 'adjustment'
+      );
+      
+      for (const row of payoutsAndAdjustments) {
+        const propertyName = mapListingToProperty(row.listing);
+        if (!propertyName || propertyName === 'IGNORE') continue;
+        
+        const propertyId = propertyMap.get(propertyName);
+        if (!propertyId) continue;
+        
+        newTransactions.push({
+          userId,
+          propertyId,
+          type: 'revenue' as const,
           category: 'airbnb',
-          description: `Airbnb - ${payout.guest || 'Hóspede'}`,
-          amount: payout.amount,
-          date: payout.date,
-          payerName: payout.guest,
-          notes: payout.confirmationCode ? `Código: ${payout.confirmationCode}` : undefined
+          description: row.type === 'adjustment' 
+            ? `Ajuste Airbnb - ${row.listing || 'Crédito/Débito'}`
+            : `Airbnb - ${row.guest || 'Payout'}`,
+          amount: row.amount.toString(),
+          date: format(new Date(row.date), 'yyyy-MM-dd'),
+          payerName: row.guest || null,
+          notes: row.confirmationCode ? `Código: ${row.confirmationCode}` : null,
+          createdAt: new Date(),
+          updatedAt: new Date()
         });
-
-        importedPayouts++;
-      } catch (error) {
-        errors.push(`Erro ao importar payout: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-    }
-
-    // Import reservations
-    for (const reservation of reservations) {
-      try {
+      
+      // Process reservations
+      const reservations = rows.filter(row => row.type === 'reservation');
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      for (const reservation of reservations) {
         const propertyName = mapListingToProperty(reservation.listing);
+        if (!propertyName || propertyName === 'IGNORE') continue;
         
-        if (!propertyName || propertyName === 'IGNORE' || !reservation.paidOut) {
-          continue;
-        }
-
-        const property = await this.propertyService.getOrCreateProperty(userId, propertyName);
+        const propertyId = propertyMap.get(propertyName);
+        if (!propertyId) continue;
         
-        // Store reservation details for future reference
-        if (reservation.checkIn && reservation.checkOut) {
-          await db.insert(cleaningServiceDetails).values({
-            transactionId: null, // Will be linked later if needed
-            date: new Date(reservation.checkIn),
-            unit: property.name,
-            guestName: reservation.guest,
-            checkIn: new Date(reservation.checkIn),
-            checkOut: new Date(reservation.checkOut),
-            nights: reservation.nights,
-            cleaningType: 'standard',
-            amount: 0, // Will be filled when cleaning expense is created
-            notes: `Reserva Airbnb: ${reservation.confirmationCode || ''}`
-          });
-        }
-
-        importedReservations++;
-      } catch (error) {
-        errors.push(`Erro ao importar reserva: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        // For historical, only include paid reservations
+        // For pending, only include future reservations
+        const checkInDate = new Date(reservation.checkIn);
+        if (csvFormat === 'historical' && reservation.paidAmount === 0) continue;
+        if (csvFormat === 'pending' && checkInDate <= today) continue;
+        
+        newTransactions.push({
+          userId,
+          propertyId,
+          type: 'revenue' as const,
+          category: 'airbnb',
+          description: `Reserva ${csvFormat === 'pending' ? 'Futura' : ''} - ${reservation.guest}`,
+          amount: reservation.amount.toString(),
+          date: format(checkInDate, 'yyyy-MM-dd'),
+          accommodationStartDate: format(checkInDate, 'yyyy-MM-dd'),
+          accommodationEndDate: reservation.checkOut ? format(new Date(reservation.checkOut), 'yyyy-MM-dd') : null,
+          payerName: reservation.guest,
+          notes: `Código: ${reservation.confirmationCode} | ${reservation.nights} noites`,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
       }
-    }
-
-    return {
-      success: true,
-      importedPayouts,
-      importedReservations,
-      skippedDuplicates,
-      totalProcessed: payouts.length + reservations.length,
-      errors: errors.length > 0 ? errors : undefined
-    };
+      
+      // Insert all new transactions
+      if (newTransactions.length > 0) {
+        await tx.insert(transactions).values(newTransactions);
+        importedCount = newTransactions.length;
+      }
+      
+      return {
+        success: true,
+        format: csvFormat,
+        period: {
+          start: format(importWindow.start, 'MMM yyyy'),
+          end: format(importWindow.end, 'MMM yyyy')
+        },
+        deletedCount,
+        importedCount,
+        properties: Array.from(propertyMap.keys()),
+        errors: errors.length > 0 ? errors : undefined
+      };
+    });
   }
 
   /**
