@@ -202,6 +202,16 @@ export default function AirbnbImport() {
   };
 
   const handleConfirmImport = () => {
+    // Block import if there are unmapped listings
+    if (analysisResult && analysisResult.unmappedListings && analysisResult.unmappedListings.length > 0) {
+      toast({
+        title: "Importação bloqueada",
+        description: `Existem ${analysisResult.unmappedListings.length} propriedade(s) não mapeadas: ${analysisResult.unmappedListings.join(', ')}. Configure o mapeamento antes de importar.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (selectedFile) {
       uploadMutation.mutate(selectedFile);
       setShowConfirmation(false);
@@ -507,6 +517,22 @@ export default function AirbnbImport() {
                 ))}
               </div>
             </div>
+            
+            {/* Show unmapped listings as a warning */}
+            {analysisResult.unmappedListings && analysisResult.unmappedListings.length > 0 && (
+              <Alert className="border-red-200 bg-red-50">
+                <AlertCircle className="h-4 w-4 text-red-600" />
+                <AlertDescription className="text-red-800">
+                  <strong>⚠️ Propriedades não reconhecidas:</strong>
+                  <ul className="mt-2 ml-4 list-disc">
+                    {analysisResult.unmappedListings.map((listing, index) => (
+                      <li key={index}>{listing}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 font-semibold">A importação será bloqueada até que o mapeamento seja configurado.</p>
+                </AlertDescription>
+              </Alert>
+            )}
             
             <div className="space-y-2">
               <h4 className="font-semibold text-sm">Períodos Identificados:</h4>
