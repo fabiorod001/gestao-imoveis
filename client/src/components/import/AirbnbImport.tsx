@@ -87,11 +87,15 @@ export default function AirbnbImport() {
       setAnalysisResult(data);
       
       // Show unmapped listings if any
-      if (data && data.unmappedListings && data.unmappedListings.length > 0) {
-        console.warn('Propriedades não mapeadas:', data.unmappedListings);
+      // Filtra strings vazias das propriedades não mapeadas
+      const validUnmappedListings = data && data.unmappedListings ? 
+        data.unmappedListings.filter(listing => listing && listing.trim() !== '') : [];
+      
+      if (validUnmappedListings.length > 0) {
+        console.warn('Propriedades não mapeadas:', validUnmappedListings);
         toast({
           title: "Aviso: Propriedades não mapeadas",
-          description: `${data.unmappedListings.length} propriedade(s) do Airbnb não foram reconhecidas: ${data.unmappedListings.join(', ')}`,
+          description: `${validUnmappedListings.length} propriedade(s) do Airbnb não foram reconhecidas: ${validUnmappedListings.join(', ')}`,
           variant: "destructive",
         });
       }
@@ -108,13 +112,17 @@ export default function AirbnbImport() {
         // Only show confirmation if we have actual data
         if (data.properties && data.properties.length > 0) {
           setShowConfirmation(true);
-        } else if (data.unmappedListings && data.unmappedListings.length > 0) {
-          // Show unmapped properties warning
-          toast({
-            title: "Propriedades não reconhecidas",
-            description: `Encontradas ${data.unmappedListings.length} propriedade(s) não mapeadas: ${data.unmappedListings.join(', ')}`,
-            variant: "destructive",
-          });
+        } else if (data.unmappedListings) {
+          // Filtra strings vazias antes de mostrar propriedades não mapeadas
+          const validUnmappedListings = data.unmappedListings.filter(listing => listing && listing.trim() !== '');
+          if (validUnmappedListings.length > 0) {
+            // Show unmapped properties warning
+            toast({
+              title: "Propriedades não reconhecidas",
+              description: `Encontradas ${validUnmappedListings.length} propriedade(s) não mapeadas: ${validUnmappedListings.join(', ')}`,
+              variant: "destructive",
+            });
+          }
         }
       } else {
         // No data found in the file
@@ -218,11 +226,14 @@ export default function AirbnbImport() {
   };
 
   const handleConfirmImport = () => {
-    // Block import if there are unmapped listings
-    if (analysisResult && analysisResult.unmappedListings && analysisResult.unmappedListings.length > 0) {
+    // Block import if there are unmapped listings (filtering empty strings)
+    const validUnmappedListings = analysisResult && analysisResult.unmappedListings ? 
+      analysisResult.unmappedListings.filter(listing => listing && listing.trim() !== '') : [];
+    
+    if (validUnmappedListings.length > 0) {
       toast({
         title: "Importação bloqueada",
-        description: `Existem ${analysisResult.unmappedListings.length} propriedade(s) não mapeadas: ${analysisResult.unmappedListings.join(', ')}. Configure o mapeamento antes de importar.`,
+        description: `Existem ${validUnmappedListings.length} propriedade(s) não mapeadas: ${validUnmappedListings.join(', ')}. Configure o mapeamento antes de importar.`,
         variant: "destructive",
       });
       return;
@@ -504,14 +515,18 @@ export default function AirbnbImport() {
               </div>
             </div>
             
-            {/* Show unmapped listings as a warning */}
-            {analysisResult.unmappedListings && analysisResult.unmappedListings.length > 0 && (
+            {/* Show unmapped listings as a warning (filtering empty strings) */}
+            {(() => {
+              const validUnmappedListings = analysisResult.unmappedListings ? 
+                analysisResult.unmappedListings.filter(listing => listing && listing.trim() !== '') : [];
+              return validUnmappedListings.length > 0;
+            })() && (
               <Alert className="border-red-200 bg-red-50">
                 <AlertCircle className="h-4 w-4 text-red-600" />
                 <AlertDescription className="text-red-800">
                   <strong>⚠️ Propriedades não reconhecidas:</strong>
                   <ul className="mt-2 ml-4 list-disc">
-                    {analysisResult.unmappedListings.map((listing, index) => (
+                    {analysisResult.unmappedListings?.filter(listing => listing && listing.trim() !== '').map((listing, index) => (
                       <li key={index}>{listing}</li>
                     ))}
                   </ul>

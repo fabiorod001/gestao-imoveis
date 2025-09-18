@@ -248,7 +248,7 @@ export class ImportService extends BaseService {
           moeda: reservation.currency,
           propertyName: propertyName
         });
-      } else {
+      } else if (reservation.listing && reservation.listing.trim()) {
         unmappedListings.add(reservation.listing);
       }
     }
@@ -297,7 +297,7 @@ export class ImportService extends BaseService {
         
         if (!minDate || date < minDate) minDate = date;
         if (!maxDate || date > maxDate) maxDate = date;
-      } else {
+      } else if (payout.listing && payout.listing.trim()) {
         unmappedListings.add(payout.listing);
       }
     }
@@ -313,7 +313,7 @@ export class ImportService extends BaseService {
           if (!minDate || date < minDate) minDate = date;
           if (!maxDate || date > maxDate) maxDate = date;
         }
-      } else {
+      } else if (reservation.listing && reservation.listing.trim()) {
         unmappedListings.add(reservation.listing);
       }
     }
@@ -329,7 +329,7 @@ export class ImportService extends BaseService {
         
         if (!minDate || date < minDate) minDate = date;
         if (!maxDate || date > maxDate) maxDate = date;
-      } else {
+      } else if (adjustment.listing && adjustment.listing.trim()) {
         unmappedListings.add(adjustment.listing);
       }
     }
