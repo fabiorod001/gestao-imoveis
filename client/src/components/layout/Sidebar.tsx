@@ -22,7 +22,19 @@ const navigation = [
   { name: 'Fluxo de Caixa', href: '/', icon: DollarSign },
   { name: 'Dashboard', href: '/dashboard', icon: BarChart3 },
   { name: 'Imóveis', href: '/properties', icon: Building },
-  { name: 'Receitas', href: '/revenues', icon: TrendingUp },
+  { 
+    name: 'Receitas', 
+    href: '/revenues', 
+    icon: TrendingUp,
+    subItems: [
+      {
+        name: 'Importar Dados',
+        subItems: [
+          { name: 'Importar Dados', href: '/import', icon: Upload }
+        ]
+      }
+    ]
+  },
   { 
     name: 'Despesas', 
     href: '/expenses', 
@@ -37,7 +49,6 @@ const navigation = [
     ]
   },
   { name: 'Relatórios', href: '/reports', icon: FileText },
-  { name: 'Importar Dados', href: '/import', icon: Upload },
 ];
 
 const settings = [
