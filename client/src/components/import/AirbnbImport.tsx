@@ -100,18 +100,33 @@ export default function AirbnbImport() {
         });
       }
       
-      // Only show confirmation if we have mapped properties
-      if (data && data.properties && data.properties.length > 0) {
-        setShowConfirmation(true);
-      } else if (data && data.unmappedListings && data.unmappedListings.length > 0) {
-        // Show unmapped properties in a more visible way
+      // Check if we have any valid data
+      const hasData = data && (
+        (data.properties && data.properties.length > 0) ||
+        (data.reservationCount && data.reservationCount > 0) ||
+        (data.payoutCount && data.payoutCount > 0) ||
+        (data.totalRevenue && data.totalRevenue > 0)
+      );
+      
+      if (hasData) {
+        // Only show confirmation if we have actual data
+        if (data.properties && data.properties.length > 0) {
+          setShowConfirmation(true);
+        } else if (data.unmappedListings && data.unmappedListings.length > 0) {
+          // Show unmapped properties warning
+          toast({
+            title: "Propriedades não reconhecidas",
+            description: `Encontradas ${data.unmappedListings.length} propriedade(s) não mapeadas: ${data.unmappedListings.join(', ')}`,
+            variant: "destructive",
+          });
+        }
+      } else {
+        // No data found in the file
         toast({
-          title: "Nenhuma propriedade reconhecida",
-          description: `Adicione o mapeamento para: ${data.unmappedListings.join(', ')}`,
+          title: "Arquivo vazio ou formato incorreto",
+          description: "Não foram encontradas receitas do Airbnb no arquivo. Verifique se é um CSV de payouts válido do Airbnb.",
           variant: "destructive",
         });
-      } else {
-        setShowConfirmation(true); // Still show if there's data
       }
     },
     onError: (error) => {

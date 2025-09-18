@@ -148,9 +148,15 @@ export function parseAirbnbCSV(content: string): ParseResult {
       today.setHours(0, 0, 0, 0);
       const isFutureReservation = checkInDate && checkInDate > today;
       
+      // Normalize type for consistent processing
+      let normalizedType = 'unknown';
+      if (type === 'Payout') normalizedType = 'payout';
+      else if (type === 'Reserva') normalizedType = 'reservation';
+      else if (type === 'Ajuste' || type === 'Ajuste de Resolução') normalizedType = 'adjustment';
+      
       const row: AirbnbRow = {
         date: record['Data'] || '',
-        type: type,
+        type: normalizedType,
         confirmationCode: record['Código de Confirmação'] || '',
         checkIn: record['Data de início'] || '',
         checkOut: record['Data de término'] || '',
