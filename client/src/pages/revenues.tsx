@@ -67,10 +67,9 @@ export default function Revenues() {
     filteredRevenues = filteredRevenues.filter(t => t.propertyId === parseInt(selectedProperty));
   }
   
-  // Separar Airbnb Actual e Pending
-  const airbnbRevenues = filteredRevenues.filter(r => r.category === 'airbnb');
-  const actualRevenues = airbnbRevenues.filter(r => new Date(r.date) <= today);
-  const pendingRevenues = airbnbRevenues.filter(r => new Date(r.date) > today);
+  // Separar receitas Actual (já recebidas) e Pending (a receber)
+  const actualRevenues = filteredRevenues.filter(r => new Date(r.date) <= today);
+  const pendingRevenues = filteredRevenues.filter(r => new Date(r.date) > today);
   
   // Calcular totais
   const totalActual = actualRevenues.reduce((sum, t) => sum + Number(t.amount), 0);
