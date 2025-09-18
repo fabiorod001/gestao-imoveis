@@ -116,14 +116,32 @@ export default function AdvancedPivotTable() {
     staleTime: 60000, // Cache for 1 minute
   });
 
-  // Generate month options (all months from database + future 12 months)
+  // Generate month options (prioritize historical data, then add current + few future months)
   const generateMonthOptions = () => {
     const options = [];
     const now = new Date();
     const uniqueMonths = new Set<string>();
     
-    // Add future 12 months (newest first)
-    for (let i = 12; i >= 1; i--) {
+    // FIRST: Add all months from database (historical data with transactions)
+    // These are the most important as they contain actual data
+    availableMonths.forEach(month => {
+      if (!uniqueMonths.has(month.key)) {
+        options.push(month);
+        uniqueMonths.add(month.key);
+      }
+    });
+    
+    // SECOND: Add current month if not already included
+    const currentDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    const currentKey = `${String(currentDate.getMonth() + 1).padStart(2, '0')}/${currentDate.getFullYear()}`;
+    const currentName = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+    if (!uniqueMonths.has(currentKey)) {
+      options.push({ key: currentKey, label: currentName });
+      uniqueMonths.add(currentKey);
+    }
+    
+    // THIRD: Add only next 3 future months for planning purposes
+    for (let i = 1; i <= 3; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
       const monthKey = `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
       const monthName = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
@@ -133,27 +151,10 @@ export default function AdvancedPivotTable() {
       }
     }
     
-    // Add current month
-    const currentDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    const currentKey = `${String(currentDate.getMonth() + 1).padStart(2, '0')}/${currentDate.getFullYear()}`;
-    const currentName = currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-    if (!uniqueMonths.has(currentKey)) {
-      options.push({ key: currentKey, label: currentName });
-      uniqueMonths.add(currentKey);
-    }
+    // Debug: log detailed information about months
+    console.log(`✅ Generated ${options.length} month options: ${availableMonths.length} historical months from API + current + 3 future`);
     
-    // Add all months from database (already sorted newest first from API)
-    availableMonths.forEach(month => {
-      if (!uniqueMonths.has(month.key)) {
-        options.push(month);
-        uniqueMonths.add(month.key);
-      }
-    });
-    
-    // Debug: log how many months we have
-    console.log(`Generated ${options.length} month options: ${availableMonths.length} from API + future months`);
-    
-    // Sort options by year and month (newest first)
+    // Sort options chronologically (oldest first) - opposite of original logic
     options.sort((a, b) => {
       // Add safety checks for undefined keys
       if (!a?.key || !b?.key) return 0;
@@ -166,8 +167,16 @@ export default function AdvancedPivotTable() {
       
       const dateA = new Date(parseInt(yearA), parseInt(monthA) - 1);
       const dateB = new Date(parseInt(yearB), parseInt(monthB) - 1);
-      return dateB.getTime() - dateA.getTime();
+      
+      // Changed to oldest first (dateA - dateB instead of dateB - dateA)
+      return dateA.getTime() - dateB.getTime();
     });
+    
+    // Additional debug info about the range
+    if (options.length > 0) {
+      console.log(`   📅 Range: ${options[0].label} até ${options[options.length - 1].label}`);
+      console.log(`   🔍 Total de meses históricos disponíveis: ${availableMonths.length}`);
+    }
     
     return options;
   };
@@ -179,8 +188,8 @@ export default function AdvancedPivotTable() {
     if (availableMonths.length > 0) {
       console.log(`✅ Filtro de meses: ${monthOptions.length} meses disponíveis no total`);
       console.log(`   - ${availableMonths.length} meses com transações do banco`);
-      console.log(`   - Primeiro mês:`, monthOptions[monthOptions.length - 1]);
-      console.log(`   - Último mês:`, monthOptions[0]);
+      console.log(`   - Primeiro mês (mais antigo):`, monthOptions[0]);
+      console.log(`   - Último mês (mais recente):`, monthOptions[monthOptions.length - 1]);
     }
   }, [availableMonths, monthOptions.length]);
 
