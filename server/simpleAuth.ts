@@ -52,8 +52,8 @@ export function getUserId(req: any): string {
   // In production, this should require proper authentication
   if (process.env.NODE_ENV === 'development' && !req.session?.userId) {
     // Create a dev session for local development only
-    req.session.userId = 'dev-user-local';
-    return 'dev-user-local';
+    req.session.userId = 'dev-user';
+    return 'dev-user';
   }
   
   if (!req.session?.userId) {
@@ -66,7 +66,7 @@ export function getUserId(req: any): string {
 export const isAuthenticated: RequestHandler = (req, res, next) => {
   // In development, allow automatic dev user
   if (process.env.NODE_ENV === 'development' && !req.session?.userId) {
-    req.session.userId = 'dev-user-local';
+    req.session.userId = 'dev-user';
   }
   
   if (req.session?.userId) {
