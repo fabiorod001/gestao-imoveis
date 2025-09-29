@@ -238,4 +238,4 @@ Sistema preparado para:
 
 ---
 
-**Sistema desenvolvido com foco em independência e portabilidade - funciona em qualquer ambiente com Node.js e PostgreSQL.**
+**Sistema desenvolvido com foco em independência e portabilidade - funciona em qualquer ambiente com Node.js e PostgreSQL.** 
