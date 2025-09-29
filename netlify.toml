@@ -1,6 +1,12 @@
 [build]
+  base = "client"
+  publish = "client/dist"
   command = "npm run build"
-  publish = "dist/public"
 
-[build.environment]
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[context.production.environment]
   NODE_VERSION = "18"
