@@ -150,8 +150,8 @@ function getUserId(req: any): string {
     return req.user.claims?.sub || req.user.sub || req.user.userId;
   }
   // For simple auth
-  if (req.session?.user) {
-    return req.session.user.id;
+  if (req.session?.userId) {
+    return req.session.userId;
   }
   throw new Error("No user found in request");
 }
