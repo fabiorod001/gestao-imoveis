@@ -11,7 +11,7 @@ import {
   type TaxSettings,
   type TaxProjection
 } from "@shared/schema";
-import { eq, and, gte, lte, sql, desc, isNull, or } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc, isNull, or, inArray } from "drizzle-orm";
 import { format, addMonths, lastDayOfMonth, startOfMonth, endOfMonth, parse } from "date-fns";
 import { z } from "zod";
 import { Money, ServerMoneyUtils, MoneyUtils } from "../utils/money";
@@ -265,7 +265,7 @@ export class TaxService extends BaseService {
         eq(transactions.type, 'revenue'),
         gte(transactions.date, format(startDate, 'yyyy-MM-dd')),
         lte(transactions.date, format(endDate, 'yyyy-MM-dd')),
-        sql`${transactions.propertyId} IN (${data.selectedPropertyIds.join(',')})`
+        inArray(transactions.propertyId, data.selectedPropertyIds)
       ))
       .groupBy(transactions.propertyId, properties.name);
 

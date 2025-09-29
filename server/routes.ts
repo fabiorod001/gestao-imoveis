@@ -166,9 +166,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ==================== AUTH ROUTES ====================
   app.get('/api/auth/user', async (req: any, res: Response) => {
-    // Always return dev user in development mode for simplicity
+    // Return consistent dev user in development mode for simplicity
+    const userId = process.env.NODE_ENV === 'development' ? 'dev-user-local' : req.session?.userId;
+    
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
     return res.json({
-      id: 'dev-user',
+      id: userId,
       email: 'dev@example.com',
       name: 'Dev User',
       firstName: 'Dev',
