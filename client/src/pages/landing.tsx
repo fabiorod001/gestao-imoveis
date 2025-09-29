@@ -19,7 +19,7 @@ export default function Landing() {
           <Button 
             size="lg" 
             className="text-lg px-8 py-4"
-            onClick={() => window.location.href = '/api/login'}
+            onClick={() => window.location.href = '/dashboard'}
           >
             Começar Agora
           </Button>
