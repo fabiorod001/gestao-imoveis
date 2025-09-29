@@ -45,7 +45,7 @@ export async function setupAuth(app: Express) {
 }
 
 export function getUserId(req: any): string {
-  return req.session?.userId || 'local-user';
+  return req.session?.userId || 'dev-user';
 }
 
 export const isAuthenticated: RequestHandler = (req, res, next) => {
