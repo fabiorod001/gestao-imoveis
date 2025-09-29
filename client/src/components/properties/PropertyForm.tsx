@@ -127,7 +127,7 @@ export default function PropertyForm({ onSuccess }: PropertyFormProps) {
         bathrooms: data.bathrooms ? parseInt(data.bathrooms) : null,
       };
       
-      await apiRequest('POST', '/api/properties', payload);
+      await apiRequest('/api/properties', 'POST', payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/properties'] });
