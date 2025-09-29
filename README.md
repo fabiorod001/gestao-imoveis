@@ -1,5 +1,61 @@
 # Sistema de Gestão Imobiliária
 
+## ⚠️ **ATENÇÃO: PASSO CRÍTICO ANTES DE EXECUTAR** ⚠️
+
+### **VOCÊ DEVE EDITAR O ARQUIVO `vite.config.ts` ANTES DE RODAR O PROJETO**
+
+**Por limitações do Replit, este arquivo não pode ser editado automaticamente.**
+**Após clonar o repositório, siga estes passos OBRIGATORIAMENTE:**
+
+1. **Abra o arquivo:** `vite.config.ts`
+
+2. **REMOVA a linha 4:**
+```typescript
+import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+```
+
+3. **SUBSTITUA as linhas 7-17 por:**
+```typescript
+  plugins: [
+    react()
+  ],
+```
+
+4. **O arquivo final deve ficar assim:**
+```typescript
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import path from "path";
+
+export default defineConfig({
+  plugins: [
+    react()
+  ],
+  resolve: {
+    alias: {
+      "@": path.resolve(import.meta.dirname, "client", "src"),
+      "@shared": path.resolve(import.meta.dirname, "shared"),
+      "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+    },
+  },
+  root: path.resolve(import.meta.dirname, "client"),
+  build: {
+    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    emptyOutDir: true,
+  },
+  server: {
+    fs: {
+      strict: true,
+      deny: ["**/.*"],
+    },
+  },
+});
+```
+
+**⚡ SEM ESSAS MUDANÇAS, O PROJETO NÃO IRÁ EXECUTAR!**
+
+---
+
 Sistema completo de gestão financeira para portfólio de propriedades imobiliárias com integração Airbnb, análise de fluxo de caixa e relatórios detalhados.
 
 ## 🏗️ Arquitetura
