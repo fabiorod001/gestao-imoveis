@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAccounts, getMarcoZero, saveMarcoZero } from "@/lib/api";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar, Save } from "lucide-react";
 
 export default function Settings() {
@@ -15,25 +15,30 @@ export default function Settings() {
   const { data: accounts, isLoading: loadingAccounts } = useQuery({
     queryKey: ['accounts'],
     queryFn: getAccounts,
-    onSuccess: (data: any[]) => {
-      const balances: Record<string, number> = {};
-      data.forEach(acc => {
-        balances[acc.id] = acc.current_balance;
-      });
-      setAccountBalances(balances);
-    }
   });
 
   const { data: marcoZero } = useQuery({
     queryKey: ['marco-zero'],
     queryFn: getMarcoZero,
-    onSuccess: (data: any) => {
-      if (data) {
-        setMarcoDate(data.marco_date);
-        setAccountBalances(data.account_balances);
-      }
-    }
   });
+
+  // Atualizar quando os dados carregarem
+  useEffect(() => {
+    if (accounts && accounts.length > 0) {
+      const balances: Record<string, number> = {};
+      accounts.forEach((acc: any) => {
+        balances[acc.id] = acc.current_balance;
+      });
+      setAccountBalances(balances);
+    }
+  }, [accounts]);
+
+  useEffect(() => {
+    if (marcoZero) {
+      setMarcoDate(marcoZero.marco_date);
+      setAccountBalances(marcoZero.account_balances);
+    }
+  }, [marcoZero]);
 
   const saveMutation = useMutation({
     mutationFn: saveMarcoZero,
@@ -45,9 +50,7 @@ export default function Settings() {
   });
 
   const handleSave = () => {
-    const totalBalance = Object.values(accountBalances)
-      .filter((_, idx) => idx < 2) // Apenas Primary + Secondary
-      .reduce((sum, val) => sum + val, 0);
+    const totalBalance = (accountBalances[1] || 0) + (accountBalances[2] || 0);
 
     saveMutation.mutate({
       marco_date: marcoDate,
@@ -60,7 +63,7 @@ export default function Settings() {
     return <div className="p-8">Carregando...</div>;
   }
 
-  const fluxoCaixa = accountBalances['1'] || 0 + accountBalances['2'] || 0;
+  const fluxoCaixa = (accountBalances[1] || 0) + (accountBalances[2] || 0);
 
   return (
     <div className="p-8">
