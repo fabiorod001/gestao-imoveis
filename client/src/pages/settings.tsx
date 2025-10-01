@@ -22,7 +22,6 @@ export default function Settings() {
     queryFn: getMarcoZero,
   });
 
-  // Atualizar quando os dados carregarem
   useEffect(() => {
     if (accounts && accounts.length > 0) {
       const balances: Record<string, number> = {};
@@ -92,20 +91,30 @@ export default function Settings() {
             <div className="space-y-4">
               <h3 className="font-semibold">Saldos das Contas</h3>
               
-              {accounts?.map((account: any) => (
-                <div key={account.id} className="grid grid-cols-2 gap-4 items-center">
-                  <Label>{account.name}</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={accountBalances[account.id] || 0}
-                    onChange={(e) => setAccountBalances({
-                      ...accountBalances,
-                      [account.id]: parseFloat(e.target.value) || 0
-                    })}
-                  />
-                </div>
-              ))}
+              {accounts?.map((account: any) => {
+                const value = accountBalances[account.id] || 0;
+                const formatted = value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const isNegative = value < 0;
+                
+                return (
+                  <div key={account.id} className="grid grid-cols-2 gap-4 items-center">
+                    <Label>{account.name}</Label>
+                    <Input
+                      type="text"
+                      value={formatted}
+                      onChange={(e) => {
+                        const cleaned = e.target.value.replace(/[^\d,-]/g, '').replace(',', '.');
+                        const numValue = parseFloat(cleaned) || 0;
+                        setAccountBalances({
+                          ...accountBalances,
+                          [account.id]: numValue
+                        });
+                      }}
+                      className={isNegative ? 'text-red-600 font-semibold' : ''}
+                    />
+                  </div>
+                );
+              })}
             </div>
 
             <div className="pt-4 border-t">
