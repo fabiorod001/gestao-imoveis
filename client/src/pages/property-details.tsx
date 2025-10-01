@@ -1,106 +1,206 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
-import { Building2, Plus } from "lucide-react";
+import { useRoute, Link } from "wouter";
+import { ArrowLeft, Building2, MapPin, Calendar, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { getProperties } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { supabase } from "@/lib/supabase";
 
-export default function Properties() {
-  const { data: properties, isLoading, error } = useQuery({
-    queryKey: ['properties'],
-    queryFn: getProperties,
+export default function PropertyDetails() {
+  const [, params] = useRoute("/properties/:id");
+  const propertyId = params?.id;
+
+  const { data: property, isLoading, error } = useQuery({
+    queryKey: ['property', propertyId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('id', propertyId)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!propertyId,
   });
 
   if (isLoading) {
     return (
       <div className="p-8">
-        <div className="animate-pulse">Carregando imóveis...</div>
+        <div className="animate-pulse">Carregando detalhes do imóvel...</div>
       </div>
     );
   }
 
-  if (error) {
+  if (error || !property) {
     return (
       <div className="p-8">
-        <div className="text-red-600">Erro ao carregar imóveis: {error.message}</div>
+        <div className="text-red-600">Erro ao carregar imóvel</div>
+        <Link href="/properties">
+          <Button className="mt-4">Voltar para lista</Button>
+        </Link>
       </div>
     );
   }
+
+  const formatCurrency = (value: number | null, currency: string = 'BRL') => {
+    if (!value) return '-';
+    return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const formatDate = (date: string | null) => {
+    if (!date) return '-';
+    return new Date(date).toLocaleDateString('pt-BR');
+  };
 
   return (
     <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Imóveis</h1>
-          <p className="text-gray-600">Gerencie todos os seus imóveis</p>
-        </div>
-        <Link href="/properties/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Imóvel
+      <div className="mb-6">
+        <Link href="/properties">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Voltar
           </Button>
         </Link>
       </div>
 
-      {!properties || properties.length === 0 ? (
+      <div className="mb-8">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">{property.name}</h1>
+            {property.nickname && (
+              <p className="text-xl text-gray-600">{property.nickname}</p>
+            )}
+          </div>
+          <Building2 className="h-12 w-12 text-gray-400" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Building2 className="h-16 w-16 text-gray-400 mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Nenhum imóvel cadastrado</h3>
-            <p className="text-gray-600 mb-4">Comece adicionando seu primeiro imóvel</p>
-            <Link href="/properties/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Adicionar Imóvel
-              </Button>
-            </Link>
+          <CardHeader>
+            <CardTitle>Informações Básicas</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Tipo:</span>
+              <span className="font-medium capitalize">{property.type || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Status:</span>
+              <span className="font-medium capitalize">{property.status || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Tipo de locação:</span>
+              <span className="font-medium capitalize">{property.rental_type || '-'}</span>
+            </div>
+            {property.airbnb_name && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Nome Airbnb:</span>
+                <span className="font-medium text-sm">{property.airbnb_name}</span>
+              </div>
+            )}
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {properties.map((property: any) => (
-            <Link key={property.id} href={`/properties/${property.id}`}>
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="font-bold text-lg">{property.name}</h3>
-                      {property.nickname && (
-                        <p className="text-sm text-gray-600">{property.nickname}</p>
-                      )}
-                    </div>
-                    <Building2 className="h-6 w-6 text-gray-400" />
-                  </div>
-                  
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Status:</span>
-                      <span className="font-medium capitalize">{property.status}</span>
-                    </div>
-                    
-                    {property.purchase_price && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Valor de compra:</span>
-                        <span className="font-medium">
-                          {property.currency} {property.purchase_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {property.market_value && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Valor de mercado:</span>
-                        <span className="font-medium">
-                          R$ {property.market_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <MapPin className="mr-2 h-5 w-5" />
+              Endereço
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {property.street && <div>{property.street}, {property.number}</div>}
+            {property.unit && <div>Unidade: {property.unit}</div>}
+            {property.neighborhood && <div>{property.neighborhood}</div>}
+            {property.city && <div>{property.city} - {property.state}</div>}
+            {property.zip_code && <div>CEP: {property.zip_code}</div>}
+            {property.country && <div>{property.country}</div>}
+            {!property.street && <div className="text-gray-500">Endereço não cadastrado</div>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <DollarSign className="mr-2 h-5 w-5" />
+              Valores de Aquisição
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {property.purchase_price && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Preço de compra:</span>
+                <span className="font-medium">{formatCurrency(property.purchase_price)}</span>
+              </div>
+            )}
+            {property.purchase_date && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Data de compra:</span>
+                <span className="font-medium">{formatDate(property.purchase_date)}</span>
+              </div>
+            )}
+            {property.commission_value && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Comissão:</span>
+                <span className="font-medium">{formatCurrency(property.commission_value)}</span>
+              </div>
+            )}
+            {property.taxes_and_registration && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Impostos e registro:</span>
+                <span className="font-medium">{formatCurrency(property.taxes_and_registration)}</span>
+              </div>
+            )}
+            {property.renovation_and_decoration && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Reforma e decoração:</span>
+                <span className="font-medium">{formatCurrency(property.renovation_and_decoration)}</span>
+              </div>
+            )}
+            {!property.purchase_price && <div className="text-gray-500">Valores não cadastrados</div>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Calendar className="mr-2 h-5 w-5" />
+              Valor de Mercado
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {property.market_value && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Valor estimado:</span>
+                <span className="font-medium text-green-600">
+                  R$ {formatCurrency(property.market_value)}
+                </span>
+              </div>
+            )}
+            {property.market_value_date && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Data da avaliação:</span>
+                <span className="font-medium">{formatDate(property.market_value_date)}</span>
+              </div>
+            )}
+            {!property.market_value && (
+              <div className="text-gray-500">Valor de mercado não cadastrado</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {property.description && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Descrição</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-700">{property.description}</p>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
