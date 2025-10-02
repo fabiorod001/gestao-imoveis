@@ -38,6 +38,7 @@ app.use(cors({
     'http://localhost:5173',
     'http://localhost:5000', 
     'https://quiet-pudding-f152f9.netlify.app'
+    'https://gestao-imoveis-pi.vercel.app'
   ],
   credentials: true
 }));
