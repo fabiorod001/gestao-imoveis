@@ -145,7 +145,7 @@ const uploadImage = multer({
 // Helper function to get userId from request (TEMPORARILY FIXED FOR DEV)
 function getUserId(req: any): string {
   // TEMPORARY: Fixed user ID for development without authentication
-  return 'dev-user';
+  console.log('[DEBUG] getUserId returning: dev-user'); return 'dev-user';
 }
 
 /**
