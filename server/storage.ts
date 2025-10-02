@@ -198,6 +198,8 @@ export class DatabaseStorage implements IStorage {
 
   // Property operations
   async getProperties(userId: string): Promise<Property[]> {
+    console.log('[Storage] getProperties - userId:', userId);
+    console.log('[Storage] Executing Drizzle query: SELECT * FROM properties WHERE user_id = ', userId);
     return await db.select().from(properties).where(eq(properties.userId, userId)).orderBy(desc(properties.createdAt));
   }
 
