@@ -9,10 +9,12 @@ async function throwIfResNotOk(res: Response) {
 
 export async function apiRequest(
   url: string,
-  options: {
-    method: string;
-    body?: string | FormData;
-  } | string,
+  options:
+    | {
+        method: string;
+        body?: string | FormData;
+      }
+    | string,
   data?: unknown | undefined,
 ): Promise<Response> {
   let method: string;
@@ -20,7 +22,7 @@ export async function apiRequest(
   let body: string | FormData | undefined;
 
   // Handle both old and new API formats
-  if (typeof options === 'string') {
+  if (typeof options === "string") {
     // Old format: apiRequest(url, method, data)
     method = options;
     if (data instanceof FormData) {
@@ -38,7 +40,12 @@ export async function apiRequest(
     }
   }
 
-  const res = await fetch(url, {
+  // Add API base URL if the URL starts with /api/
+  const fullUrl = url.startsWith("/api/")
+    ? `${import.meta.env.VITE_API_URL}${url}`
+    : url;
+
+  const res = await fetch(fullUrl, {
     method,
     headers,
     body,
@@ -56,9 +63,9 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     let url = queryKey[0] as string;
-    
+
     // If queryKey[1] contains query parameters, append them to the URL
-    if (queryKey[1] && typeof queryKey[1] === 'object') {
+    if (queryKey[1] && typeof queryKey[1] === "object") {
       const params = new URLSearchParams();
       for (const [key, value] of Object.entries(queryKey[1])) {
         if (value !== undefined && value !== null) {
@@ -69,8 +76,13 @@ export const getQueryFn: <T>(options: {
         url = `${url}?${params.toString()}`;
       }
     }
-    
-    const res = await fetch(url, {
+
+    // Add API base URL if the URL starts with /api/
+    const fullUrl = url.startsWith("/api/")
+      ? `${import.meta.env.VITE_API_URL}${url}`
+      : url;
+
+    const res = await fetch(fullUrl, {
       credentials: "include",
     });
 
@@ -94,7 +106,7 @@ export const queryClient = new QueryClient({
       retry: false,
       // Avoid unnecessary refetches
       refetchOnMount: false,
-      refetchOnReconnect: 'always',
+      refetchOnReconnect: "always",
       // Enable background fetching for better UX
       refetchIntervalInBackground: false,
       structuralSharing: true, // Optimize re-renders by reusing unchanged data
@@ -151,13 +163,13 @@ export const queryOptions = {
 export async function prefetchCriticalData() {
   // Prefetch de propriedades (sempre necessárias)
   await queryClient.prefetchQuery({
-    queryKey: ['/api/properties'],
+    queryKey: ["/api/properties"],
     ...queryOptions.stable,
   });
-  
+
   // Prefetch do usuário atual
   await queryClient.prefetchQuery({
-    queryKey: ['/api/auth/user'],
+    queryKey: ["/api/auth/user"],
     ...queryOptions.stable,
   });
 }
@@ -165,8 +177,8 @@ export async function prefetchCriticalData() {
 // Helper para invalidação inteligente
 export function smartInvalidate(keys: string[]) {
   // Invalida apenas as queries específicas, não todas
-  keys.forEach(key => {
-    queryClient.invalidateQueries({ 
+  keys.forEach((key) => {
+    queryClient.invalidateQueries({
       queryKey: [key],
       exact: false,
     });
@@ -175,8 +187,8 @@ export function smartInvalidate(keys: string[]) {
 
 // Batch fetch helper for multiple queries
 export async function batchFetch(urls: string[]) {
-  const promises = urls.map(url => 
-    fetch(url, { credentials: 'include' }).then(r => r.json())
+  const promises = urls.map((url) =>
+    fetch(url, { credentials: "include" }).then((r) => r.json()),
   );
   return Promise.all(promises);
 }
@@ -184,7 +196,7 @@ export async function batchFetch(urls: string[]) {
 // Optimistic update helper
 export function optimisticUpdate<T>(
   queryKey: string[],
-  updater: (old: T) => T
+  updater: (old: T) => T,
 ) {
   queryClient.setQueryData(queryKey, updater);
 }
@@ -193,10 +205,10 @@ export function optimisticUpdate<T>(
 export function measureQueryPerformance() {
   const cache = queryClient.getQueryCache();
   const queries = cache.getAll();
-  
-  console.group('Query Cache Performance');
-  console.log('Total queries in cache:', queries.length);
-  queries.forEach(query => {
+
+  console.group("Query Cache Performance");
+  console.log("Total queries in cache:", queries.length);
+  queries.forEach((query) => {
     const state = query.state;
     console.log(query.queryKey, {
       status: state.status,
@@ -211,13 +223,13 @@ export function measureQueryPerformance() {
 // Helper para cache offline
 export function enableOfflineSupport() {
   // Detecta mudanças de conectividade
-  window.addEventListener('online', () => {
+  window.addEventListener("online", () => {
     // Refetch queries críticas ao voltar online
     queryClient.invalidateQueries();
   });
-  
-  window.addEventListener('offline', () => {
+
+  window.addEventListener("offline", () => {
     // Usa apenas cache quando offline
-    console.log('App está offline - usando cache');
+    console.log("App está offline - usando cache");
   });
 }
