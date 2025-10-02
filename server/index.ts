@@ -1,4 +1,11 @@
 import dotenv from "dotenv-safe";
+
+// Load and validate environment variables FIRST
+dotenv.config({
+  allowEmptyValues: true,
+  example: "./.env.example",
+});
+
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import { registerRoutes } from "./routes";
@@ -14,12 +21,6 @@ import {
   connectionOptimization,
   cacheMiddleware
 } from "./middleware/performance";
-
-// Load and validate environment variables
-dotenv.config({
-  allowEmptyValues: true,
-  example: "./.env.example",
-});
 
 const app = express();
 
@@ -134,11 +135,7 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
   });
 })();

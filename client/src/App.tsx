@@ -18,6 +18,7 @@ const Dashboard = lazy(() => import("@/pages/dashboard"));
 const Properties = lazy(() => import("@/pages/properties"));
 const PropertyDetails = lazy(() => import("@/pages/property-details"));
 const EditProperty = lazy(() => import("@/pages/edit-property"));
+const NewProperty = lazy(() => import("@/pages/property-new"));
 const Revenues = lazy(() => import("@/pages/revenues"));
 const Expenses = lazy(() => import("@/pages/expenses"));
 const Reports = lazy(() => import("@/pages/reports"));
@@ -77,6 +78,7 @@ function Router() {
             <Route path="/" component={CashFlow} />
             <Route path="/dashboard" component={Dashboard} />
             <Route path="/properties" component={Properties} />
+            <Route path="/properties/new" component={NewProperty} />
             <Route path="/property/:id" component={PropertyDetails} />
             <Route path="/property/:id/edit" component={EditProperty} />
             <Route path="/revenues" component={Revenues} />
