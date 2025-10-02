@@ -1,6 +1,10 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Switch, Route } from "wouter";
-import { queryClient, prefetchCriticalData, enableOfflineSupport } from "./lib/queryClient";
+import {
+  queryClient,
+  prefetchCriticalData,
+  enableOfflineSupport,
+} from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -29,14 +33,28 @@ const MauricioExpenses = lazy(() => import("@/pages/expenses/mauricio"));
 const CleaningExpenses = lazy(() => import("@/pages/expenses/cleaning"));
 const CondominiumExpenses = lazy(() => import("@/pages/expenses/condominium"));
 const OtherExpenses = lazy(() => import("@/pages/expenses/others"));
-const CategoryDetailPage = lazy(() => import("@/pages/expenses/category-detail"));
+const CategoryDetailPage = lazy(
+  () => import("@/pages/expenses/category-detail"),
+);
 const TaxesDetailPage = lazy(() => import("@/pages/expenses/taxes-detail"));
-const CondominiumDetailPage = lazy(() => import("@/pages/expenses/condominium-detail"));
-const ManagementDetailPage = lazy(() => import("@/pages/expenses/management-detail"));
-const UtilitiesDetailPage = lazy(() => import("@/pages/expenses/utilities-detail"));
-const MaintenanceDetailPage = lazy(() => import("@/pages/expenses/maintenance-detail"));
-const CleaningDetailPage = lazy(() => import("@/pages/expenses/cleaning-detail"));
-const FinancingDetailPage = lazy(() => import("@/pages/expenses/financing-detail"));
+const CondominiumDetailPage = lazy(
+  () => import("@/pages/expenses/condominium-detail"),
+);
+const ManagementDetailPage = lazy(
+  () => import("@/pages/expenses/management-detail"),
+);
+const UtilitiesDetailPage = lazy(
+  () => import("@/pages/expenses/utilities-detail"),
+);
+const MaintenanceDetailPage = lazy(
+  () => import("@/pages/expenses/maintenance-detail"),
+);
+const CleaningDetailPage = lazy(
+  () => import("@/pages/expenses/cleaning-detail"),
+);
+const FinancingDetailPage = lazy(
+  () => import("@/pages/expenses/financing-detail"),
+);
 const OtherDetailPage = lazy(() => import("@/pages/expenses/other-detail"));
 const Settings = lazy(() => import("@/pages/settings"));
 const TaxSettings = lazy(() => import("@/pages/tax-settings"));
@@ -79,8 +97,8 @@ function Router() {
             <Route path="/dashboard" component={Dashboard} />
             <Route path="/properties" component={Properties} />
             <Route path="/properties/new" component={NewProperty} />
-            <Route path="/property/:id" component={PropertyDetails} />
-            <Route path="/property/:id/edit" component={EditProperty} />
+            <Route path="/properties/:id" component={PropertyDetails} />
+            <Route path="/properties/:id/edit" component={EditProperty} />
             <Route path="/revenues" component={Revenues} />
             <Route path="/expenses" component={Expenses} />
             <Route path="/reports" component={Reports} />
@@ -89,22 +107,49 @@ function Router() {
             <Route path="/expenses/management" component={ManagementExpenses} />
             <Route path="/expenses/mauricio" component={MauricioExpenses} />
             <Route path="/expenses/cleaning" component={CleaningExpenses} />
-            <Route path="/expenses/condominium" component={CondominiumExpenses} />
+            <Route
+              path="/expenses/condominium"
+              component={CondominiumExpenses}
+            />
             <Route path="/expenses/others" component={OtherExpenses} />
-            <Route path="/expenses/category/:category" component={CategoryDetailPage} />
+            <Route
+              path="/expenses/category/:category"
+              component={CategoryDetailPage}
+            />
             <Route path="/expenses/taxes-detail" component={TaxesDetailPage} />
-            <Route path="/expenses/condominium-detail" component={CondominiumDetailPage} />
-            <Route path="/expenses/management-detail" component={ManagementDetailPage} />
-            <Route path="/expenses/utilities-detail" component={UtilitiesDetailPage} />
-            <Route path="/expenses/maintenance-detail" component={MaintenanceDetailPage} />
-            <Route path="/expenses/cleaning-detail" component={CleaningDetailPage} />
-            <Route path="/expenses/financing-detail" component={FinancingDetailPage} />
+            <Route
+              path="/expenses/condominium-detail"
+              component={CondominiumDetailPage}
+            />
+            <Route
+              path="/expenses/management-detail"
+              component={ManagementDetailPage}
+            />
+            <Route
+              path="/expenses/utilities-detail"
+              component={UtilitiesDetailPage}
+            />
+            <Route
+              path="/expenses/maintenance-detail"
+              component={MaintenanceDetailPage}
+            />
+            <Route
+              path="/expenses/cleaning-detail"
+              component={CleaningDetailPage}
+            />
+            <Route
+              path="/expenses/financing-detail"
+              component={FinancingDetailPage}
+            />
             <Route path="/expenses/other-detail" component={OtherDetailPage} />
             <Route path="/settings" component={Settings} />
             <Route path="/settings/taxes" component={TaxSettings} />
             <Route path="/marco-zero" component={MarcoZero} />
             <Route path="/cleaning/import" component={CleaningImport} />
-            <Route path="/condominium/ocr-test" component={CondominiumOcrTest} />
+            <Route
+              path="/condominium/ocr-test"
+              component={CondominiumOcrTest}
+            />
           </Suspense>
         </Layout>
       )}
