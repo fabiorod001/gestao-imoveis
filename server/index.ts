@@ -1,6 +1,5 @@
 import dotenv from "dotenv-safe";
 
-// Load and validate environment variables FIRST
 dotenv.config({
   allowEmptyValues: true,
   example: "./.env.example",
@@ -28,53 +27,6 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
-// Enable CORS for Netlify and Vercel
-app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:5000', 
-    'https://quiet-pudding-f152f9.netlify.app',
-    'https://gestao-imoveis-pi.vercel.app'
-  ],
-  credentials: true
-}));
-
-app.use(compression({
-  level: 9
-cd ~/workspace
-
-cat > server/index.ts << 'EOF'
-import dotenv from "dotenv-safe";
-
-// Load and validate environment variables FIRST
-dotenv.config({
-  allowEmptyValues: true,
-  example: "./.env.example",
-});
-
-import express, { type Request, Response, NextFunction } from "express";
-import compression from "compression";
-import cors from "cors";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
-import { 
-  errorHandler, 
-  sanitizeInput, 
-  requestTimeout,
-  validateContentType 
-} from "./middleware/errorHandler";
-import {
-  apiCacheControl,
-  connectionOptimization,
-  cacheMiddleware
-} from "./middleware/performance";
-
-const app = express();
-
-app.disable('x-powered-by');
-app.set('trust proxy', 1);
-
-// Enable CORS for Netlify and Vercel
 app.use(cors({
   origin: [
     'http://localhost:5173',
