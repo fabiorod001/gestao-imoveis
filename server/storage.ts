@@ -199,9 +199,11 @@ export class DatabaseStorage implements IStorage {
   // Property operations
   async getProperties(userId: string): Promise<Property[]> {
     console.log('[Storage] getProperties - userId:', userId);
-    const result = await db.execute(sql`SELECT * FROM properties WHERE user_id = ${userId} ORDER BY created_at DESC`);
-    console.log('[Storage] Raw SQL returned:', result.rows.length, 'rows');
-    return result.rows as Property[];
+    const result = await db.execute(
+      sql.raw(`SELECT * FROM properties WHERE user_id = '${userId}' ORDER BY created_at DESC`)
+    );
+    console.log('[Storage] Query returned:', result.rows?.length || 0, 'rows');
+    return (result.rows || []) as Property[];
   }
 
   async getProperty(id: number, userId: string): Promise<Property | undefined> {
