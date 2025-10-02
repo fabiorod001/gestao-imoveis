@@ -8,6 +8,7 @@ dotenv.config({
 
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { 
@@ -30,6 +31,16 @@ app.disable('x-powered-by');
 // Enable trust proxy for proper client IP detection when behind a proxy
 // Use 1 to trust only the first hop for better security
 app.set('trust proxy', 1);
+
+// Enable CORS for Netlify
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:5000', 
+    'https://quiet-pudding-f152f9.netlify.app'
+  ],
+  credentials: true
+}));
 
 // Enable compression for all responses with aggressive settings
 app.use(compression({
