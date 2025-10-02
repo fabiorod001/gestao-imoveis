@@ -59,7 +59,10 @@ export class PropertyService extends BaseService {
    * Get all properties for a user
    */
   async getProperties(userId: string): Promise<Property[]> {
-    return await this.storage.getProperties(userId);
+    console.log('[PropertyService] getProperties called with userId:', userId);
+    const result = await this.storage.getProperties(userId);
+    console.log('[PropertyService] getProperties returned:', result.length, 'properties');
+    return result;
   }
 
   /**
