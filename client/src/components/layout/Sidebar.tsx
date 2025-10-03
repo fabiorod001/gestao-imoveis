@@ -1,223 +1,98 @@
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
+import { X, Home, Building2, TrendingUp, TrendingDown, FileText, Settings, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
-import { 
-  Building, 
-  BarChart3, 
-  TrendingUp, 
-  TrendingDown, 
-  FileText,
-  Upload,
-  Users,
-  Settings,
-  Calculator,
-  X,
-  DollarSign,
-  SprayCanIcon,
-  ChevronDown,
-  ChevronRight
-} from "lucide-react";
-
-const navigation = [
-  { name: 'Fluxo de Caixa', href: '/', icon: DollarSign },
-  { name: 'Dashboard', href: '/dashboard', icon: BarChart3 },
-  { name: 'Imóveis', href: '/properties', icon: Building },
-  { 
-    name: 'Receitas', 
-    href: '/revenues', 
-    icon: TrendingUp,
-    subItems: [
-      {
-        name: 'Importar Dados',
-        subItems: [
-          { name: 'Importar Dados', href: '/import', icon: Upload }
-        ]
-      }
-    ]
-  },
-  { 
-    name: 'Despesas', 
-    href: '/expenses', 
-    icon: TrendingDown,
-    subItems: [
-      {
-        name: 'Limpezas',
-        subItems: [
-          { name: 'Importar Limpezas', href: '/cleaning/import', icon: SprayCanIcon }
-        ]
-      }
-    ]
-  },
-  { name: 'Relatórios', href: '/reports', icon: FileText },
-];
-
-const settings = [
-  { name: 'Usuários', href: '/users', icon: Users },
-  { name: 'Configurações', href: '/settings', icon: Settings },
-];
+import { Button } from "@/components/ui/button";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
-  const [location] = useLocation();
-  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+const menuItems = [
+  { icon: Home, label: "Fluxo de Caixa", path: "/" },
+  { icon: Building2, label: "Imóveis", path: "/properties" },
+  { icon: TrendingUp, label: "Receitas", path: "/revenues" },
+  { icon: TrendingDown, label: "Despesas", path: "/expenses" },
+  { icon: FileText, label: "Relatórios", path: "/reports" },
+  { icon: Upload, label: "Importar", path: "/import" },
+  { icon: Settings, label: "Configurações", path: "/settings" },
+];
 
-  const toggleExpand = (itemName: string) => {
-    setExpandedItems(prev => 
-      prev.includes(itemName) 
-        ? prev.filter(name => name !== itemName)
-        : [...prev, itemName]
-    );
+export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+  const [location, setLocation] = useLocation();
+  const isMobile = useMediaQuery("(max-width: 768px)");
+
+  const handleNavigation = (path: string) => {
+    setLocation(path);
+    if (isMobile) {
+      onClose();
+    }
   };
 
   return (
     <>
-      {/* Mobile overlay */}
-      <div 
-        className={cn(
-          "fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden transition-opacity",
-          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-        )}
-        onClick={onClose}
-      />
+      {/* Mobile: Overlay */}
+      {isMobile && isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40"
+          onClick={onClose}
+        />
+      )}
 
       {/* Sidebar */}
-      <div className={cn(
-        "bg-white w-64 min-h-screen shadow-lg transition-transform duration-300 ease-in-out",
-        "fixed md:static z-30",
-        isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-      )}>
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
-                <Building className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-900">RentManager</h1>
-                <p className="text-xs text-gray-500">Gestão Financeira</p>
-              </div>
+      <aside
+        className={cn(
+          "bg-white border-r border-gray-200 transition-transform duration-300",
+          // Desktop: sempre visível, width fixo
+          "md:relative md:translate-x-0 md:w-64",
+          // Mobile: drawer animado
+          "fixed inset-y-0 left-0 z-50 w-72",
+          isMobile && (isOpen ? "translate-x-0" : "-translate-x-full")
+        )}
+      >
+        <div className="flex flex-col h-full">
+          {/* Header mobile com botão fechar */}
+          {isMobile && (
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Menu</h2>
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X className="h-5 w-5" />
+              </Button>
             </div>
-            <button 
-              onClick={onClose}
-              className="md:hidden p-1 rounded-md hover:bg-gray-100"
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
-          </div>
-        </div>
-        
-        <nav className="mt-6">
-          <div className="px-4 space-y-1">
-            {navigation.map((item) => {
-              const isActive = location === item.href || 
-                (item.href !== '/' && location.startsWith(item.href));
-              const hasSubItems = item.subItems && item.subItems.length > 0;
-              const isExpanded = expandedItems.includes(item.name);
-              
-              return (
-                <div key={item.name}>
-                  {/* Main item */}
-                  <div className="flex items-center">
-                    <Link href={item.href || '#'} className="flex-1">
-                      <div className={cn(
-                        "group flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer",
+          )}
+
+          {/* Navigation */}
+          <nav className="flex-1 overflow-y-auto p-4">
+            <ul className="space-y-1">
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location === item.path || 
+                                (item.path !== "/" && location.startsWith(item.path));
+
+                return (
+                  <li key={item.path}>
+                    <button
+                      onClick={() => handleNavigation(item.path)}
+                      className={cn(
+                        "flex items-center gap-3 w-full px-3 py-2.5 rounded-lg",
+                        "text-sm font-medium transition-colors",
+                        "touch-manipulation active:scale-95",
                         isActive
-                          ? "bg-primary-50 border-r-4 border-primary-600 text-primary-700"
-                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                      )}>
-                        <item.icon className={cn(
-                          "mr-3 h-5 w-5",
-                          isActive ? "text-primary-500" : "text-gray-400"
-                        )} />
-                        {item.name}
-                      </div>
-                    </Link>
-                    {hasSubItems && (
-                      <button
-                        onClick={() => toggleExpand(item.name)}
-                        className="p-1 mr-2 hover:bg-gray-100 rounded"
-                      >
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-gray-400" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-gray-400" />
-                        )}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Sub items */}
-                  {hasSubItems && isExpanded && (
-                    <div className="ml-4 mt-1 space-y-1">
-                      {item.subItems.map((subItem) => {
-                        const hasSubSubItems = subItem.subItems && subItem.subItems.length > 0;
-                        const isSubExpanded = expandedItems.includes(`${item.name}-${subItem.name}`);
-                        
-                        return (
-                          <div key={subItem.name}>
-                            {/* Sub item */}
-                            <div className="flex items-center">
-                              <div className="flex-1 px-4 py-1.5 text-sm font-medium text-gray-700">
-                                {subItem.name}
-                              </div>
-                              {hasSubSubItems && (
-                                <button
-                                  onClick={() => toggleExpand(`${item.name}-${subItem.name}`)}
-                                  className="p-1 mr-2 hover:bg-gray-100 rounded"
-                                >
-                                  {isSubExpanded ? (
-                                    <ChevronDown className="h-3 w-3 text-gray-400" />
-                                  ) : (
-                                    <ChevronRight className="h-3 w-3 text-gray-400" />
-                                  )}
-                                </button>
-                              )}
-                            </div>
-
-                            {/* Sub-sub items */}
-                            {hasSubSubItems && isSubExpanded && (
-                              <div className="ml-6 mt-1 space-y-1">
-                                {subItem.subItems.map((subSubItem) => (
-                                  <Link key={subSubItem.name} href={subSubItem.href}>
-                                    <div className="group flex items-center px-4 py-1.5 text-sm rounded-lg transition-colors cursor-pointer text-gray-600 hover:bg-gray-50 hover:text-gray-900">
-                                      {subSubItem.icon && <subSubItem.icon className="mr-2 h-4 w-4 text-gray-400" />}
-                                      {subSubItem.name}
-                                    </div>
-                                  </Link>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          
-          <div className="mt-8 px-4">
-            <h3 className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              Configurações
-            </h3>
-            <div className="mt-2 space-y-1">
-              {settings.map((item) => (
-                <Link key={item.name} href={item.href}>
-                  <div className="text-gray-600 hover:bg-gray-50 hover:text-gray-900 group flex items-center px-4 py-2 text-sm font-medium rounded-lg cursor-pointer">
-                    <item.icon className="mr-3 h-5 w-5 text-gray-400" />
-                    {item.name}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </nav>
-      </div>
+                          ? "bg-primary/10 text-primary"
+                          : "text-gray-700 hover:bg-gray-100"
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                      <span>{item.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        </div>
+      </aside>
     </>
   );
 }

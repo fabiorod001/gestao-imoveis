@@ -1,76 +1,47 @@
-import { useAuth } from "@/hooks/useAuth";
+import { Menu, Bell, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
-
-interface User {
-  id?: string;
-  email?: string;
-  firstName?: string;
-  profileImageUrl?: string;
-}
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface HeaderProps {
   onMenuClick: () => void;
 }
 
 export default function Header({ onMenuClick }: HeaderProps) {
-  const { user } = useAuth() as { user: User | null };
-
-  const handleLogout = () => {
-    window.location.href = '/api/logout';
-  };
+  const isMobile = useMediaQuery("(max-width: 768px)");
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200">
-      <div className="flex items-center justify-between px-6 py-4">
-        <div className="flex items-center space-x-4">
+    <header className="sticky top-0 z-30 bg-white border-b border-gray-200 safe-top">
+      <div className="flex items-center justify-between h-14 md:h-16 px-4 md:px-6">
+        {/* Mobile: Hamburger */}
+        {isMobile && (
           <Button
             variant="ghost"
-            size="sm"
-            className="md:hidden"
+            size="icon"
             onClick={onMenuClick}
+            className="md:hidden"
           >
             <Menu className="h-5 w-5" />
           </Button>
-          
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Dashboard Financeiro</h2>
-            <p className="text-sm text-gray-500">
-              Atualizado em {new Date().toLocaleDateString('pt-BR', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-              })}
-            </p>
-          </div>
+        )}
+
+        {/* Logo/Title */}
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg md:text-xl font-semibold text-gray-900">
+            RentManager
+          </h1>
         </div>
-        
-        <div className="flex items-center space-x-4">
-          {/* User Profile */}
-          <div className="flex items-center space-x-3">
-            <div className="text-right">
-              <p className="text-sm font-medium text-gray-900">
-                {user?.firstName || user?.email || 'Usuário'}
-              </p>
-              <button 
-                onClick={handleLogout}
-                className="text-xs text-gray-500 hover:text-gray-700"
-              >
-                Sair
-              </button>
-            </div>
-            {user?.profileImageUrl ? (
-              <img 
-                src={user.profileImageUrl} 
-                alt="Avatar" 
-                className="w-10 h-10 rounded-full object-cover border-2 border-gray-200"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-medium">
-                {(user?.firstName?.[0] || user?.email?.[0] || 'U').toUpperCase()}
-              </div>
-            )}
-          </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="relative">
+            <Bell className="h-5 w-5" />
+            {/* Notification badge */}
+            <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" />
+          </Button>
+          
+          <Button variant="ghost" size="icon">
+            <User className="h-5 w-5" />
+          </Button>
         </div>
       </div>
     </header>
