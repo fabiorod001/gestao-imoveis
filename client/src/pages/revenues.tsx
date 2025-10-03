@@ -1,273 +1,92 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, TrendingUp, Upload, CheckCircle, Calendar } from "lucide-react";
-import TransactionForm from "@/components/transactions/TransactionForm";
-import AirbnbImport from "@/components/import/AirbnbImport";
-import type { Transaction, Property } from "@shared/schema";
-import { format, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { TrendingUp, Plus, Calendar, Building2 } from "lucide-react";
+import { useState } from "react";
 
 export default function Revenues() {
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isAirbnbOpen, setIsAirbnbOpen] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState('current');
-  const [selectedProperty, setSelectedProperty] = useState('all');
+  const [, setLocation] = useLocation();
+  const [period, setPeriod] = useState("current-month");
 
-  const { data: transactions = [], isLoading } = useQuery<Transaction[]>({
-    queryKey: ['/api/transactions', { type: 'revenue', limit: 100 }],
+  const { data: transactions = [], isLoading } = useQuery({
+    queryKey: ['/api/transactions', { type: 'revenue', period }],
+    queryFn: async () => {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/transactions?type=revenue&period=${period}`
+      );
+      return res.json();
+    },
   });
 
-  const { data: properties = [] } = useQuery<Property[]>({
-    queryKey: ['/api/properties'],
-  });
-
-  // Filtrar por período
-  const getDateRange = () => {
-    const today = new Date();
-    switch(selectedPeriod) {
-      case 'previous':
-        return { 
-          start: startOfMonth(subMonths(today, 1)), 
-          end: endOfMonth(subMonths(today, 1))
-        };
-      case 'current':
-        return { 
-          start: startOfMonth(today), 
-          end: endOfMonth(today)
-        };
-      case 'next':
-        return { 
-          start: startOfMonth(addMonths(today, 1)), 
-          end: endOfMonth(addMonths(today, 1))
-        };
-      default:
-        return { start: startOfMonth(today), end: endOfMonth(today) };
-    }
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
   };
-  
-  const { start, end } = getDateRange();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  // Filtrar transações
-  let filteredRevenues = transactions;
-  
-  // Filtrar por período
-  filteredRevenues = filteredRevenues.filter(t => {
-    const date = new Date(t.date);
-    return date >= start && date <= end;
-  });
-  
-  // Filtrar por propriedade
-  if (selectedProperty !== 'all') {
-    filteredRevenues = filteredRevenues.filter(t => t.propertyId === parseInt(selectedProperty));
-  }
-  
-  // Separar receitas Actual (já recebidas) e Pending (a receber)
-  const actualRevenues = filteredRevenues.filter(r => new Date(r.date) <= today);
-  const pendingRevenues = filteredRevenues.filter(r => new Date(r.date) > today);
-  
-  // Calcular totais
-  const totalActual = actualRevenues.reduce((sum, t) => sum + Number(t.amount), 0);
-  const totalPending = pendingRevenues.reduce((sum, t) => sum + Number(t.amount), 0);
-  const totalMonth = totalActual + totalPending;
-  const totalRevenue = filteredRevenues.reduce((sum, t) => sum + Number(t.amount), 0);
-  const revenues = filteredRevenues; // alias para compatibilidade
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: 'short',
+    });
+  };
+
+  const total = transactions.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <div className="space-y-4">{[1,2,3].map(i => <Card key={i} className="h-20 animate-pulse bg-gray-100" />)}</div>;
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Receitas</h1>
-          <p className="text-gray-500">Gerencie todas as receitas dos seus imóveis</p>
+          <h1 className="text-2xl font-bold">Receitas</h1>
+          <p className="text-lg font-semibold text-green-600">{formatCurrency(total)}</p>
         </div>
-
-        <div className="flex gap-2">
-          {/* Botão Upload CSV Airbnb */}
-          <Dialog open={isAirbnbOpen} onOpenChange={setIsAirbnbOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Upload className="w-4 h-4 mr-2" />
-                Upload CSV Airbnb
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Importar Dados do Airbnb</DialogTitle>
-              </DialogHeader>
-              <AirbnbImport />
-            </DialogContent>
-          </Dialog>
-
-          {/* Botão Nova Receita */}
-          <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Nova Receita
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Registrar Nova Receita</DialogTitle>
-              </DialogHeader>
-              <TransactionForm 
-                type="revenue" 
-                onSuccess={() => setIsFormOpen(false)} 
-              />
-            </DialogContent>
-          </Dialog>
-        </div>
+        <Button size="icon" onClick={() => setLocation('/transactions/new?type=revenue')}>
+          <Plus className="h-5 w-5" />
+        </Button>
       </div>
 
-      {/* Filtros */}
-      <div className="flex gap-4 mb-4">
-        <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Período" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="previous">Mês Anterior</SelectItem>
-            <SelectItem value="current">Mês Atual</SelectItem>
-            <SelectItem value="next">Próximo Mês</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={selectedProperty} onValueChange={setSelectedProperty}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Imóvel" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            {properties.map(p => (
-              <SelectItem key={p.id} value={p.id.toString()}>
-                {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="space-y-3">
+        {transactions.map((transaction: any) => (
+          <Card
+            key={transaction.id}
+            className="cursor-pointer hover:bg-accent transition-colors"
+            onClick={() => setLocation(`/transactions/${transaction.id}`)}
+          >
+            <div className="p-4 flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{transaction.description || 'Receita'}</p>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                  <Calendar className="h-3.5 w-3.5" />
+                  <span>{formatDate(transaction.date)}</span>
+                  {transaction.propertyName && (
+                    <>
+                      <Building2 className="h-3.5 w-3.5 ml-1" />
+                      <span className="truncate">{transaction.propertyName}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              <p className="text-lg font-semibold text-green-600 whitespace-nowrap">
+                {formatCurrency(transaction.amount)}
+              </p>
+            </div>
+          </Card>
+        ))}
       </div>
 
-      {/* Tabela Dinâmica com Actual, Pending e Total */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Resumo do Período - {format(start, 'MMMM yyyy', { locale: ptBR })}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-2">Tipo</th>
-                <th className="text-right py-2">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="py-2">Actual (recebido até hoje)</td>
-                <td className="text-right font-semibold text-blue-600">
-                  R$ {totalActual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
-              <tr>
-                <td className="py-2">Pending (a receber)</td>
-                <td className="text-right font-semibold text-amber-600">
-                  R$ {totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
-              <tr className="border-t font-bold">
-                <td className="py-2">Total do Mês</td>
-                <td className="text-right text-green-600">
-                  R$ {totalMonth.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Histórico de Receitas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {filteredRevenues.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              Nenhuma receita registrada ainda.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data Recebimento</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoria</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Imóvel</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Período Hospedagem</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredRevenues.map((revenue: any) => {
-                    const property = properties.find(p => p.id === revenue.propertyId);
-                    const categoryLabels: Record<string, string> = {
-                      'airbnb': 'Airbnb',
-                      'booking': 'Booking',
-                      'recorrente': 'Recorrente',
-                      'outros': 'Outros',
-                      // Legacy categories
-                      'rent': 'Aluguel',
-                      'deposit': 'Depósito',
-                      'late_fee': 'Taxa de Atraso',
-                      'other': 'Outros'
-                    };
-                    
-                    return (
-                      <tr key={revenue.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(revenue.date).toLocaleDateString('pt-BR')}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {categoryLabels[revenue.category] || revenue.category}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {property?.name || '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {revenue.accommodationStartDate && revenue.accommodationEndDate ? (
-                            <>
-                              {new Date(revenue.accommodationStartDate).toLocaleDateString('pt-BR')} - {' '}
-                              {new Date(revenue.accommodationEndDate).toLocaleDateString('pt-BR')}
-                            </>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {revenue.description || '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600 text-right">
-                          R$ {Number(revenue.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {transactions.length === 0 && (
+        <Card className="p-12 text-center">
+          <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="font-semibold mb-2">Nenhuma receita encontrada</h3>
+          <p className="text-sm text-muted-foreground">Adicione uma receita para começar</p>
+        </Card>
+      )}
     </div>
   );
 }
