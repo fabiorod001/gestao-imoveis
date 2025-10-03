@@ -2,347 +2,116 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ===== OTIMIZAÇÕES MOBILE ===== */
-
-/* Performance: GPU acceleration para elementos que se movem */
-.gpu-accelerated {
-  transform: translateZ(0);
-  will-change: transform;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-/* Smooth scrolling com momentum em iOS */
-.smooth-scroll {
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
-}
-
-/* Touch targets mínimos para mobile (44x44px) */
-.touch-target {
-  min-height: 44px;
-  min-width: 44px;
-}
-
-/* Previne seleção de texto acidental em mobile */
-.no-select {
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
-
-/* Feedback visual para toques */
-.tap-highlight {
-  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
-}
-
-/* Skeleton animation otimizada */
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
+@layer base {
+  :root {
+    /* Passo 17/135: Paleta de cores mobile-first */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
   }
-  100% {
-    transform: translateX(100%);
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
   }
-}
-
-.animate-shimmer {
-  animation: shimmer 2s infinite;
-}
-
-/* Safe area para iPhone X+ */
-.safe-area-inset {
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
-}
-
-:root {
-  --background: hsl(0, 0%, 100%);
-  --foreground: hsl(20, 14.3%, 4.1%);
-  --muted: hsl(60, 4.8%, 95.9%);
-  --muted-foreground: hsl(25, 5.3%, 44.7%);
-  --popover: hsl(0, 0%, 100%);
-  --popover-foreground: hsl(20, 14.3%, 4.1%);
-  --card: hsl(0, 0%, 100%);
-  --card-foreground: hsl(20, 14.3%, 4.1%);
-  --border: hsl(20, 5.9%, 90%);
-  --input: hsl(20, 5.9%, 90%);
-  --primary: hsl(207, 90%, 54%);
-  --primary-foreground: hsl(210, 40%, 98%);
-  --secondary: hsl(60, 4.8%, 95.9%);
-  --secondary-foreground: hsl(24, 9.8%, 10%);
-  --accent: hsl(60, 4.8%, 95.9%);
-  --accent-foreground: hsl(24, 9.8%, 10%);
-  --destructive: hsl(0, 84.2%, 60.2%);
-  --destructive-foreground: hsl(60, 9.1%, 97.8%);
-  --ring: hsl(207, 90%, 54%);
-  --radius: 0.5rem;
-  --chart-1: hsl(12, 76%, 61%);
-  --chart-2: hsl(173, 58%, 39%);
-  --chart-3: hsl(197, 37%, 24%);
-  --chart-4: hsl(43, 74%, 66%);
-  --chart-5: hsl(27, 87%, 67%);
-  --sidebar-background: hsl(0, 0%, 98%);
-  --sidebar-foreground: hsl(240, 5.3%, 26.1%);
-  --sidebar-primary: hsl(207, 90%, 54%);
-  --sidebar-primary-foreground: hsl(210, 40%, 98%);
-  --sidebar-accent: hsl(207, 21%, 94%);
-  --sidebar-accent-foreground: hsl(240, 5.9%, 10%);
-  --sidebar-border: hsl(220, 13%, 91%);
-  --sidebar-ring: hsl(207, 90%, 54%);
-}
-
-.dark {
-  --background: hsl(240, 10%, 3.9%);
-  --foreground: hsl(0, 0%, 98%);
-  --muted: hsl(240, 3.7%, 15.9%);
-  --muted-foreground: hsl(240, 5%, 64.9%);
-  --popover: hsl(240, 10%, 3.9%);
-  --popover-foreground: hsl(0, 0%, 98%);
-  --card: hsl(240, 10%, 3.9%);
-  --card-foreground: hsl(0, 0%, 98%);
-  --border: hsl(240, 3.7%, 15.9%);
-  --input: hsl(240, 3.7%, 15.9%);
-  --primary: hsl(207, 90%, 54%);
-  --primary-foreground: hsl(210, 40%, 98%);
-  --secondary: hsl(240, 3.7%, 15.9%);
-  --secondary-foreground: hsl(0, 0%, 98%);
-  --accent: hsl(240, 3.7%, 15.9%);
-  --accent-foreground: hsl(0, 0%, 98%);
-  --destructive: hsl(0, 62.8%, 30.6%);
-  --destructive-foreground: hsl(0, 0%, 98%);
-  --ring: hsl(207, 90%, 54%);
-  --sidebar-background: hsl(240, 5.9%, 10%);
-  --sidebar-foreground: hsl(240, 4.8%, 95.9%);
-  --sidebar-primary: hsl(207, 90%, 54%);
-  --sidebar-primary-foreground: hsl(210, 40%, 98%);
-  --sidebar-accent: hsl(240, 3.7%, 15.9%);
-  --sidebar-accent-foreground: hsl(240, 4.8%, 95.9%);
-  --sidebar-border: hsl(240, 3.7%, 15.9%);
-  --sidebar-ring: hsl(207, 90%, 54%);
 }
 
 @layer base {
   * {
     @apply border-border;
   }
-
+  
   body {
-    @apply font-sans antialiased bg-background text-foreground;
-    font-family: 'Inter', system-ui, sans-serif;
-    /* Otimizações mobile */
-    -webkit-text-size-adjust: 100%;
-    -ms-text-size-adjust: 100%;
-    text-size-adjust: 100%;
-    /* Previne zoom em inputs no iOS */
-    touch-action: manipulation;
+    @apply bg-background text-foreground;
+    /* Passo 19/135: Tipografia mobile otimizada */
+    font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Mobile: text não pode ser menor que 16px (evita zoom iOS) */
+    font-size: 16px;
+  }
+
+  /* Touch targets mobile - mínimo 44px */
+  button, 
+  a, 
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Smooth scroll em mobile */
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Safe areas para iPhone notch */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
   }
   
-  /* Previne zoom em inputs no Safari iOS */
-  input[type="text"],
-  input[type="email"],
-  input[type="number"],
-  input[type="password"],
-  input[type="tel"],
-  input[type="url"],
-  input[type="search"],
-  textarea,
-  select {
-    font-size: 16px !important;
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Passo 18/135: Sistema de espaçamento consistente */
+  /* Base: 4px, 8px, 16px, 24px, 32px */
+  /* Já definido no Tailwind como: p-1, p-2, p-4, p-6, p-8 */
+}
+
+/* Utilities mobile-first */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Hide scrollbar mas mantém funcionalidade */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
   
-  /* Otimização de scroll containers */
-  .overflow-auto,
-  .overflow-y-auto,
-  .overflow-x-auto {
-    -webkit-overflow-scrolling: touch;
-  }
-  
-  /* Botões maiores para touch em mobile */
-  @media (max-width: 768px) {
-    button,
-    .btn,
-    [role="button"] {
-      min-height: 44px;
-      padding: 0.75rem 1rem;
-    }
-    
-    /* Reduz animações em mobile para performance */
-    * {
-      animation-duration: 0.2s !important;
-      transition-duration: 0.2s !important;
-    }
-    
-    /* Remove sombras complexas em mobile */
-    .shadow-lg {
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-    
-    /* Tabelas responsivas com scroll horizontal */
-    .table-container {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold;
-  }
-
-  .property-card {
-    @apply transition-transform duration-200;
-  }
-
-  .property-card:hover {
-    @apply transform -translate-y-1;
-  }
-
-  .status-badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
-  }
-
-  .status-ativo {
-    @apply bg-green-100 text-green-800;
-  }
-
-  .status-decoracao {
-    @apply bg-yellow-100 text-yellow-800;
-  }
-
-  .status-financiamento {
-    @apply bg-blue-100 text-blue-800;
-  }
-
-  .status-inativo {
-    @apply bg-gray-100 text-gray-800;
-  }
-
-  /* Chart container for canvas elements */
-  .chart-container {
-    @apply relative h-80;
-  }
-
-  /* Custom scrollbar for better UX */
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    @apply bg-gray-100;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-gray-400 rounded-md;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-500;
-  }
-
-  /* Sidebar transitions */
-  .sidebar-transition {
-    @apply transition-transform duration-300 ease-in-out;
-  }
-
-  @media (max-width: 768px) {
-    .sidebar-hidden {
-      @apply -translate-x-full;
-    }
-  }
-
-  /* Form styling improvements */
-  .form-section {
-    @apply space-y-4 p-4 border border-gray-200 rounded-lg;
-  }
-
-  .form-section-title {
-    @apply text-sm font-medium text-gray-700 mb-2;
-  }
-
-  /* Animation utilities */
-  .fade-in {
-    @apply animate-in fade-in-0 duration-200;
-  }
-
-  .slide-up {
-    @apply animate-in slide-in-from-bottom-4 duration-300;
-  }
-
-  /* Financial color coding */
-  .revenue-text {
-    @apply text-green-600;
-  }
-
-  .expense-text {
-    @apply text-red-600;
-  }
-
-  .profit-text {
-    @apply text-blue-600;
-  }
-
-  .revenue-bg {
-    @apply bg-green-50 text-green-700 border-green-200;
-  }
-
-  .expense-bg {
-    @apply bg-red-50 text-red-700 border-red-200;
-  }
-
-  .maintenance-bg {
-    @apply bg-amber-50 text-amber-700 border-amber-200;
-  }
-
-  /* Dashboard specific styles */
-  .metric-card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200;
-  }
-
-  .metric-icon {
-    @apply w-12 h-12 rounded-lg flex items-center justify-center;
-  }
-
-  /* Loading states */
-  .skeleton {
-    @apply animate-pulse bg-gray-200 rounded;
-  }
-
-  /* Table improvements */
-  .data-table {
-    @apply min-w-full divide-y divide-gray-200;
-  }
-
-  .data-table th {
-    @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50;
-  }
-
-  .data-table td {
-    @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
-  }
-
-  .data-table tbody {
-    @apply bg-white divide-y divide-gray-200;
-  }
-
-  /* Badge improvements */
-  .badge-success {
-    @apply bg-green-100 text-green-800 border-green-200;
-  }
-
-  .badge-warning {
-    @apply bg-yellow-100 text-yellow-800 border-yellow-200;
-  }
-
-  .badge-info {
-    @apply bg-blue-100 text-blue-800 border-blue-200;
-  }
-
-  .badge-neutral {
-    @apply bg-gray-100 text-gray-800 border-gray-200;
+  /* Gesture support mobile */
+  .touch-manipulation {
+    touch-action: manipulation;
   }
 }
