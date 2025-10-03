@@ -1,106 +1,144 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
-import { Building2, Plus } from "lucide-react";
+import { useLocation } from "wouter";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { getProperties } from "@/lib/api";
+import { Building2, Plus, MapPin, DollarSign } from "lucide-react";
+
+interface Property {
+  id: number;
+  name: string;
+  nickname: string;
+  type: string;
+  status: string;
+  city: string;
+  state: string;
+  marketValue: string;
+}
 
 export default function Properties() {
-  const { data: properties, isLoading, error } = useQuery({
-    queryKey: ['properties'],
-    queryFn: getProperties,
+  const [, setLocation] = useLocation();
+
+  const { data: properties = [], isLoading } = useQuery({
+    queryKey: ['/api/properties'],
+    queryFn: async () => {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/properties`);
+      return res.json();
+    },
   });
+
+  const formatCurrency = (value: string | number) => {
+    if (!value) return '-';
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(Number(value));
+  };
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      active: 'bg-green-100 text-green-800',
+      financing: 'bg-blue-100 text-blue-800',
+      decoration: 'bg-yellow-100 text-yellow-800',
+      inactive: 'bg-gray-100 text-gray-800',
+    };
+    return colors[status] || colors.inactive;
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      active: 'Ativo',
+      financing: 'Financiamento',
+      decoration: 'Reforma',
+      inactive: 'Inativo',
+    };
+    return labels[status] || status;
+  };
 
   if (isLoading) {
     return (
-      <div className="p-8">
-        <div className="animate-pulse">Carregando imóveis...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-8">
-        <div className="text-red-600">Erro ao carregar imóveis: {error.message}</div>
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <Card key={i} className="h-32 animate-pulse bg-gray-100" />
+        ))}
       </div>
     );
   }
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="space-y-4">
+      {/* Header com botão adicionar */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Imóveis</h1>
-          <p className="text-gray-600">Gerencie todos os seus imóveis</p>
+          <h1 className="text-2xl font-bold">Imóveis</h1>
+          <p className="text-sm text-muted-foreground">
+            {properties.length} {properties.length === 1 ? 'imóvel' : 'imóveis'}
+          </p>
         </div>
-        <Link href="/properties/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Imóvel
-          </Button>
-        </Link>
+        <Button onClick={() => setLocation('/properties/new')}>
+          <Plus className="h-4 w-4 mr-2" />
+          Adicionar
+        </Button>
       </div>
 
-      {!properties || properties.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Building2 className="h-16 w-16 text-gray-400 mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Nenhum imóvel cadastrado</h3>
-            <p className="text-gray-600 mb-4">Comece adicionando seu primeiro imóvel</p>
-            <Link href="/properties/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Adicionar Imóvel
-              </Button>
-            </Link>
-          </CardContent>
+      {/* Lista de imóveis como cards */}
+      <div className="space-y-3">
+        {properties.map((property: Property) => (
+          <Card
+            key={property.id}
+            className="cursor-pointer hover:bg-accent transition-colors active:scale-[0.98]"
+            onClick={() => setLocation(`/properties/${property.id}`)}
+          >
+            <div className="p-4 space-y-3">
+              {/* Título e status */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-base truncate">
+                    {property.name}
+                  </h3>
+                  {property.nickname && property.nickname !== property.name && (
+                    <p className="text-sm text-muted-foreground truncate">
+                      {property.nickname}
+                    </p>
+                  )}
+                </div>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(property.status)}`}>
+                  {getStatusLabel(property.status)}
+                </span>
+              </div>
+
+              {/* Localização */}
+              {(property.city || property.state) && (
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <MapPin className="h-4 w-4" />
+                  <span>{property.city}{property.city && property.state && ', '}{property.state}</span>
+                </div>
+              )}
+
+              {/* Valor */}
+              {property.marketValue && (
+                <div className="flex items-center gap-1.5 text-sm">
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">{formatCurrency(property.marketValue)}</span>
+                </div>
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Empty state */}
+      {properties.length === 0 && (
+        <Card className="p-12 text-center">
+          <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="font-semibold mb-2">Nenhum imóvel cadastrado</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Adicione seu primeiro imóvel para começar
+          </p>
+          <Button onClick={() => setLocation('/properties/new')}>
+            <Plus className="h-4 w-4 mr-2" />
+            Adicionar Imóvel
+          </Button>
         </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {properties.map((property: any) => (
-            <Link key={property.id} href={`/properties/${property.id}`}>
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="font-bold text-lg">{property.name}</h3>
-                      {property.nickname && (
-                        <p className="text-sm text-gray-600">{property.nickname}</p>
-                      )}
-                    </div>
-                    <Building2 className="h-6 w-6 text-gray-400" />
-                  </div>
-                  
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Status:</span>
-                      <span className="font-medium capitalize">{property.status}</span>
-                    </div>
-                    
-                    {property.purchase_price && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Valor de compra:</span>
-                        <span className="font-medium">
-                          {property.currency} {property.purchase_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {property.market_value && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Valor de mercado:</span>
-                        <span className="font-medium">
-                          R$ {property.market_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
       )}
     </div>
   );
