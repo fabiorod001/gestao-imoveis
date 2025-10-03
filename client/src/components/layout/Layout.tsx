@@ -1,6 +1,8 @@
 import { useState } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
+import MobileBottomNav from "./MobileBottomNav";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,17 +10,33 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 768px)");
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      {/* Desktop: Sidebar sempre visível */}
+      {!isMobile && <Sidebar isOpen={true} onClose={() => {}} />}
+      
+      {/* Mobile: Sidebar como drawer */}
+      {isMobile && (
+        <Sidebar 
+          isOpen={sidebarOpen} 
+          onClose={() => setSidebarOpen(false)} 
+        />
+      )}
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header onMenuClick={() => setSidebarOpen(true)} />
         
-        <main className="flex-1 overflow-y-auto">
-          {children}
+        {/* Main content com padding para bottom nav mobile */}
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+          <div className="container mx-auto p-4 md:p-6">
+            {children}
+          </div>
         </main>
+
+        {/* Mobile: Bottom Navigation */}
+        {isMobile && <MobileBottomNav />}
       </div>
     </div>
   );
