@@ -9,7 +9,6 @@ const Card = React.forwardRef
     ref={ref}
     className={cn(
       "rounded-lg border bg-card text-card-foreground shadow-sm",
-      // Mobile: padding menor, mais compacto
       "p-4 sm:p-6",
       className
     )}
@@ -38,7 +37,6 @@ const CardTitle = React.forwardRef
     ref={ref}
     className={cn(
       "text-xl font-semibold leading-none tracking-tight",
-      // Mobile: título menor
       "sm:text-2xl",
       className
     )}
