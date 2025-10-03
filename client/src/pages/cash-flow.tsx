@@ -1,499 +1,196 @@
-import React, { useState, useMemo, useCallback, memo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { queryOptions } from '@/lib/queryClient';
-import { TableSkeleton, LoadingSpinner } from '@/components/ui/skeleton-screens';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, DollarSign, Calendar, Filter, RefreshCw, Eye, EyeOff, ChevronRight } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useQuery } from "@tanstack/react-query";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { RefreshCw, TrendingUp, TrendingDown, ChevronRight } from "lucide-react";
+import { useLocation } from "wouter";
 
-interface CashFlowData {
+interface DayForecast {
   date: string;
   displayDate: string;
   revenue: number;
   expenses: number;
-  netFlow: number;
   balance: number;
   isToday: boolean;
 }
 
-interface CashFlowStats {
+interface AccountBalance {
+  id: number;
+  name: string;
   currentBalance: number;
-  projectedBalance7Days: number;
-  totalRevenue7Days: number;
-  totalExpenses7Days: number;
 }
 
-const CashFlowPage = memo(function CashFlowPage() {
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('3d');
-  const [showEntradas, setShowEntradas] = useState(true);
-  const [showSaidas, setShowSaidas] = useState(true);
-  const [showFilters, setShowFilters] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showAccountBreakdown, setShowAccountBreakdown] = useState(false);
-  const [showInvestments, setShowInvestments] = useState(false);
+export default function CashFlow() {
+  const [, setLocation] = useLocation();
 
-  // Fetch cash flow data com cache otimizado
-  const { data: cashFlowData = [], isLoading: isLoadingCashFlow, refetch: refetchCashFlow } = useQuery({
-    queryKey: ['/api/analytics/cash-flow', selectedPeriod],
+  // Buscar saldo consolidado + próximos 3 dias
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['/api/cash-flow/summary'],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        period: selectedPeriod
-      });
-      const response = await fetch(`/api/analytics/cash-flow?${params}`);
-      const data = await response.json();
-      // API now returns an object with dailyFlow array
-      if (data && data.dailyFlow && Array.isArray(data.dailyFlow)) {
-        // Add isToday flag for today's date
-        const today = new Date().toISOString().split('T')[0];
-        return data.dailyFlow.map((item: any) => ({
-          ...item,
-          isToday: item.date === today
-        }));
-      }
-      return Array.isArray(data) ? data : [];
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/cash-flow/summary`);
+      return res.json();
     },
-    ...queryOptions.realtime, // Cache em tempo real para fluxo de caixa
   });
 
-  // Fetch cash flow statistics
-  const { data: cashFlowStats, isLoading: isLoadingStats, refetch: refetchStats } = useQuery({
-    queryKey: ['/api/analytics/cash-flow-stats', selectedPeriod],
+  // Buscar contas principais (top 2)
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['/api/accounts/main'],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        period: selectedPeriod
-      });
-      const response = await fetch(`/api/analytics/cash-flow-stats?${params}`);
-      return response.json();
-    }
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/accounts?main=true&limit=2`);
+      return res.json();
+    },
   });
 
   const formatCurrency = (value: number) => {
-    if (isNaN(value) || value === null || value === undefined) {
-      return 'R$ 0,00';
-    }
-    
-    const isNegative = value < 0;
-    const absValue = Math.abs(value);
-    
-    const formatted = new Intl.NumberFormat('pt-BR', {
+    return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
-      minimumFractionDigits: 2
-    }).format(absValue);
-    
-    // For negative values, place the minus sign between R$ and the number
-    if (isNegative) {
-      return formatted.replace('R$', 'R$ -');
-    }
-    return formatted;
+    }).format(value);
   };
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const today = new Date();
     const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (date.toDateString() === today.toDateString()) return "Hoje";
+    if (date.toDateString() === tomorrow.toDateString()) return "Amanhã";
     
-    if (date.toDateString() === today.toDateString()) {
-      return 'Hoje';
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Amanhã';
-    } else {
-      return date.toLocaleDateString('pt-BR', { 
-        weekday: 'short', 
-        day: '2-digit', 
-        month: '2-digit' 
-      });
-    }
+    return new Intl.DateTimeFormat('pt-BR', { 
+      day: '2-digit', 
+      month: 'short' 
+    }).format(date);
   };
 
-  const chartData = useMemo(() => {
-    // Define number of days to show based on period - same logic as table
-    let daysToShow = 5; // Default
-    if (selectedPeriod === '1d') daysToShow = 1;
-    if (selectedPeriod === '2d') daysToShow = 2;
-    if (selectedPeriod === '3d') daysToShow = 3;
-    if (selectedPeriod === '4d') daysToShow = 4;
-    if (selectedPeriod === '5d') daysToShow = 5;
-    if (selectedPeriod === '1m') daysToShow = 30;
-    if (selectedPeriod === '2m') daysToShow = 60;
-    
-    // Find today and make sure it's always the first day shown
-    const todayIndex = cashFlowData.findIndex((d: CashFlowData) => d.isToday);
-    const startIndex = todayIndex >= 0 ? todayIndex : 0;
-    const displayData = cashFlowData.slice(startIndex, startIndex + daysToShow);
-    
-    return displayData.map((item: CashFlowData) => ({
-      ...item,
-      shortDate: formatDate(item.date)
-    }));
-  }, [cashFlowData, selectedPeriod]);
-
-  const todayData = useMemo(() => {
-    return cashFlowData.find((item: CashFlowData) => item.isToday);
-  }, [cashFlowData]);
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      await Promise.all([
-        refetchCashFlow(),
-        refetchStats()
-      ]);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  if (isLoadingCashFlow || isLoadingStats) {
+  if (isLoading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-32 bg-gray-200 rounded"></div>
-          <div className="h-64 bg-gray-200 rounded"></div>
-        </div>
+      <div className="flex items-center justify-center h-full">
+        <RefreshCw className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
+  const today = data?.forecast?.[0];
+  const nextDays = data?.forecast?.slice(1, 4) || [];
+  const totalBalance = data?.totalBalance || 0;
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-start">
+    <div className="space-y-6">
+      {/* Header com atualização */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Fluxo de Caixa</h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-1">
-            Acompanhe seu saldo diário e projeções financeiras
+          <h1 className="text-2xl font-bold">Caixa</h1>
+          <p className="text-sm text-muted-foreground">
+            Saldo consolidado
           </p>
         </div>
-        <Button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-2"
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={() => refetch()}
         >
-          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          {isRefreshing ? 'Atualizando...' : 'Atualizar'}
+          <RefreshCw className="h-5 w-5" />
         </Button>
       </div>
 
-      {/* Today's Balance - Highlighted */}
-      {todayData && (
-        <Card className="border-0 shadow-xl bg-gradient-to-r from-blue-600 to-blue-700 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center space-x-2 mb-2">
-                  <DollarSign className="w-6 h-6" />
-                  <span className="text-lg font-medium opacity-90">Saldo Hoje</span>
-                  {/* Botões discretos para expandir detalhes */}
-                  <button
-                    onClick={() => setShowAccountBreakdown(!showAccountBreakdown)}
-                    className="ml-2 p-1 rounded hover:bg-white/10 transition-colors"
-                    title="Ver quebra por conta"
-                  >
-                    <ChevronRight className={`w-4 h-4 transition-transform ${showAccountBreakdown ? 'rotate-90' : ''}`} />
-                  </button>
-                  <button
-                    onClick={() => setShowInvestments(!showInvestments)}
-                    className="p-1 rounded hover:bg-white/10 transition-colors"
-                    title="Ver investimentos"
-                  >
-                    {showInvestments ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <div className={`text-3xl font-bold ${todayData.balance < 0 ? 'text-red-300' : ''}`}>
-                  {formatCurrency(todayData.balance)}
-                </div>
-                
-                {/* Quebra por conta - expansível */}
-                {showAccountBreakdown && (
-                  <div className="mt-3 pt-3 border-t border-white/20 space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="opacity-75">Conta Principal:</span>
-                      <span className="font-semibold">{formatCurrency(todayData.balance * 0.9)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="opacity-75">Conta Secundária:</span>
-                      <span className="font-semibold">{formatCurrency(todayData.balance * 0.1)}</span>
-                    </div>
-                    {showInvestments && (
-                      <div className="flex justify-between text-sm pt-2 border-t border-white/10">
-                        <span className="opacity-75">Investimentos:</span>
-                        <span className="font-semibold text-yellow-200">{formatCurrency(0)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+      {/* Saldo HOJE - Destaque principal */}
+      <Card className="bg-primary text-primary-foreground">
+        <div className="p-6 space-y-2">
+          <p className="text-sm opacity-90">Saldo Hoje</p>
+          <p className="text-4xl font-bold">
+            {formatCurrency(totalBalance)}
+          </p>
+          {today && (
+            <div className="flex items-center gap-4 text-sm pt-2">
+              <div className="flex items-center gap-1">
+                <TrendingUp className="h-4 w-4" />
+                <span>{formatCurrency(today.revenue)}</span>
               </div>
-              <div className="text-right">
-                <div className="text-sm opacity-75 mb-1">Movimentação do Dia</div>
-                <div className="flex items-center space-x-4">
-                  <div className="text-center">
-                    <div className="text-green-200 text-sm">Entradas</div>
-                    <div className="font-semibold">{formatCurrency(todayData.revenue)}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-red-200 text-sm">Saídas</div>
-                    <div className="font-semibold">{formatCurrency(Math.abs(todayData.expenses))}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-yellow-200 text-sm">Resultado</div>
-                    <div className={`font-semibold ${todayData.netFlow >= 0 ? 'text-green-200' : 'text-red-200'}`}>
-                      {formatCurrency(todayData.revenue - Math.abs(todayData.expenses))}
-                    </div>
-                  </div>
-                </div>
+              <div className="flex items-center gap-1">
+                <TrendingDown className="h-4 w-4" />
+                <span>{formatCurrency(today.expenses)}</span>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Filter Buttons */}
-      <div className="flex justify-center items-center space-x-4 mb-6">
-        {/* Data Type Filter - Additive System */}
-        <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-          <button
-            onClick={() => setShowEntradas(!showEntradas)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              showEntradas
-                ? 'bg-green-500 text-white shadow-sm'
-                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            Entradas
-          </button>
-          <button
-            onClick={() => setShowSaidas(!showSaidas)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              showSaidas
-                ? 'bg-red-500 text-white shadow-sm'
-                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            Saídas
-          </button>
+          )}
         </div>
+      </Card>
 
-        {/* Period Selection Dropdown */}
-        <div className="flex items-center space-x-2">
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Período:</span>
-          <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1d">1 dia</SelectItem>
-              <SelectItem value="2d">2 dias</SelectItem>
-              <SelectItem value="3d">3 dias</SelectItem>
-              <SelectItem value="4d">4 dias</SelectItem>
-              <SelectItem value="5d">5 dias</SelectItem>
-              <SelectItem value="1m">1 mês</SelectItem>
-              <SelectItem value="2m">2 meses</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Próximos 3 dias */}
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold">Próximos Dias</h2>
+        {nextDays.map((day: DayForecast) => (
+          <Card 
+            key={day.date}
+            className="cursor-pointer hover:bg-accent transition-colors"
+            onClick={() => setLocation('/cash-flow-detail?date=' + day.date)}
+          >
+            <div className="p-4 flex items-center justify-between">
+              <div className="space-y-1 flex-1">
+                <p className="font-medium">{formatDate(day.date)}</p>
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <span className="text-green-600">
+                    +{formatCurrency(day.revenue)}
+                  </span>
+                  <span className="text-red-600">
+                    -{formatCurrency(day.expenses)}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-right">
+                  <p className="text-lg font-semibold">
+                    {formatCurrency(day.balance)}
+                  </p>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </div>
+          </Card>
+        ))}
       </div>
 
-      {/* Cash Flow Table - Horizontal Format */}
-      <Card className="border-0 shadow-lg">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-xl">Evolução do Saldo Diário</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-4 font-semibold w-24">Período</th>
-                  {(() => {
-                    // Define number of days to show based on period
-                    let daysToShow = 5; // Default
-                    if (selectedPeriod === '1d') daysToShow = 1;
-                    if (selectedPeriod === '2d') daysToShow = 2;
-                    if (selectedPeriod === '3d') daysToShow = 3;
-                    if (selectedPeriod === '4d') daysToShow = 4;
-                    if (selectedPeriod === '5d') daysToShow = 5;
-                    if (selectedPeriod === '1m') daysToShow = 30;
-                    if (selectedPeriod === '2m') daysToShow = 60;
-                    
-                    // Find today and make sure it's always the first day shown
-                    const todayIndex = cashFlowData.findIndex((d: CashFlowData) => d.isToday);
-                    const startIndex = todayIndex >= 0 ? todayIndex : 0;
-                    const displayData = cashFlowData.slice(startIndex, startIndex + daysToShow);
-                    
-                    return displayData.map((item: CashFlowData, index: number) => {
-                      // Format date as "28 Jul"
-                      const date = new Date(item.date);
-                      const formattedDate = date.toLocaleDateString('pt-BR', { 
-                        day: 'numeric', 
-                        month: 'short' 
-                      });
-                      
-                      return (
-                        <th 
-                          key={item.date} 
-                          className={`text-center font-semibold ${
-                            item.isToday ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : ''
-                          } ${selectedPeriod === '1m' || selectedPeriod === '2m' ? 'py-2 px-2 text-xs' : 'py-3 px-4'}`}
-                        >
-                          <div className={`font-bold ${selectedPeriod === '1m' || selectedPeriod === '2m' ? 'text-xs' : 'text-sm'}`}>
-                            {item.isToday ? 'HOJE' : formattedDate}
-                          </div>
-                        </th>
-                      );
-                    });
-                  })()}
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  // Define number of days to show based on period
-                  let daysToShow = 5; // Default
-                  if (selectedPeriod === '1d') daysToShow = 1;
-                  if (selectedPeriod === '2d') daysToShow = 2;
-                  if (selectedPeriod === '3d') daysToShow = 3;
-                  if (selectedPeriod === '4d') daysToShow = 4;
-                  if (selectedPeriod === '5d') daysToShow = 5;
-                  if (selectedPeriod === '1m') daysToShow = 30;
-                  if (selectedPeriod === '2m') daysToShow = 60;
-                  
-                  // Find today and make sure it's always the first day shown
-                  const todayIndex = cashFlowData.findIndex((d: CashFlowData) => d.isToday);
-                  const startIndex = todayIndex >= 0 ? todayIndex : 0;
-                  const displayData = cashFlowData.slice(startIndex, startIndex + daysToShow);
-                  
-                  // Additive system: always show saldo, add others if selected
-                  const rowsToShow = [];
-                  
-                  // Always show entradas if button is active
-                  if (showEntradas) {
-                    rowsToShow.push(
-                      <tr key="entradas" className="border-b">
-                        <td className={`font-semibold text-green-600 ${selectedPeriod === '1m' || selectedPeriod === '2m' ? 'py-2 px-2 text-sm' : 'py-3 px-4'}`}>Entradas</td>
-                        {displayData.map((item: CashFlowData) => (
-                          <td 
-                            key={`revenue-${item.date}`} 
-                            className={`text-center text-green-600 font-medium ${
-                              item.isToday ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                            } ${selectedPeriod === '1m' || selectedPeriod === '2m' ? 'py-2 px-1 text-xs' : 'py-3 px-4'}`}
-                          >
-                            {selectedPeriod === '1m' || selectedPeriod === '2m' ? 
-                              `R$ ${(item.revenue / 1000).toFixed(0)}k` : 
-                              formatCurrency(item.revenue)
-                            }
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  }
-                  
-                  // Always show saidas if button is active
-                  if (showSaidas) {
-                    rowsToShow.push(
-                      <tr key="saidas" className="border-b">
-                        <td className={`font-semibold text-red-600 ${selectedPeriod === '1m' || selectedPeriod === '2m' ? 'py-2 px-2 text-sm' : 'py-3 px-4'}`}>Saídas</td>
-                        {displayData.map((item: CashFlowData) => (
-                          <td 
-                            key={`expenses-${item.date}`} 
-                            className={`text-center text-red-600 font-medium ${
-                              item.isToday ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                            } ${selectedPeriod === '1m' || selectedPeriod === '2m' ? 'py-2 px-1 text-xs' : 'py-3 px-4'}`}
-                          >
-                            {selectedPeriod === '1m' || selectedPeriod === '2m' ? 
-                              `R$ ${(Math.abs(item.expenses) / 1000).toFixed(0)}k` : 
-                              formatCurrency(Math.abs(item.expenses))
-                            }
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  }
-                  
-                  // Always show saldo as the main row
-                  rowsToShow.push(
-                    <tr key="saldo" className="bg-gray-50 dark:bg-gray-800">
-                      <td className={`font-bold text-gray-900 dark:text-gray-100 ${selectedPeriod === '1m' || selectedPeriod === '2m' ? 'py-2 px-2 text-base' : 'py-4 px-4 text-lg'}`}>Saldo</td>
-                      {displayData.map((item: CashFlowData) => {
-                        const isNegative = item.balance < 0;
-                        return (
-                          <td 
-                            key={`balance-${item.date}`} 
-                            className={`text-center font-bold ${
-                              item.isToday 
-                                ? isNegative 
-                                  ? 'bg-red-100 dark:bg-red-900/30 text-red-700' 
-                                  : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700'
-                                : isNegative
-                                  ? 'text-red-600 dark:text-red-400'
-                                  : 'text-gray-900 dark:text-gray-100'
-                            } ${selectedPeriod === '1m' || selectedPeriod === '2m' ? 'py-2 px-1 text-sm' : 'py-4 px-4 text-lg'}`}
-                          >
-                            {selectedPeriod === '1m' || selectedPeriod === '2m' ? 
-                              `R$ ${isNegative ? '-' : ''}${(Math.abs(item.balance) / 1000).toFixed(0)}k` : 
-                              formatCurrency(item.balance)
-                            }
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                  
-                  return rowsToShow;
-                })()}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Contas Principais */}
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold">Contas Principais</h2>
+        {accounts.map((account: AccountBalance) => (
+          <Card 
+            key={account.id}
+            className="cursor-pointer hover:bg-accent transition-colors"
+            onClick={() => setLocation('/accounts/' + account.id)}
+          >
+            <div className="p-4 flex items-center justify-between">
+              <p className="font-medium">{account.name}</p>
+              <p className="text-lg font-semibold">
+                {formatCurrency(account.currentBalance)}
+              </p>
+            </div>
+          </Card>
+        ))}
+      </div>
 
-      {/* Cash Flow Chart */}
-      <Card className="border-0 shadow-lg">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-xl">Gráfico de Evolução do Saldo</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="shortDate" 
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis 
-                  tick={{ fontSize: 12 }}
-                  tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
-                />
-                <Tooltip 
-                  formatter={(value: number) => [formatCurrency(value), 'Saldo']}
-                  labelFormatter={(label) => `Data: ${label}`}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="balance" 
-                  stroke="#2563eb" 
-                  strokeWidth={3}
-                  dot={(props) => {
-                    const value = props.payload.balance;
-                    const fill = value < 0 ? '#dc2626' : '#2563eb';
-                    return <circle cx={props.cx} cy={props.cy} r={4} fill={fill} strokeWidth={2} stroke={fill} />;
-                  }}
-                  activeDot={{ r: 6, strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+      {/* Ações rápidas */}
+      <div className="grid grid-cols-2 gap-3 pt-4">
+        <Button 
+          variant="outline" 
+          className="h-auto py-4"
+          onClick={() => setLocation('/revenues')}
+        >
+          <div className="flex flex-col items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            <span className="text-sm">Ver Receitas</span>
           </div>
-        </CardContent>
-      </Card>
+        </Button>
+        <Button 
+          variant="outline" 
+          className="h-auto py-4"
+          onClick={() => setLocation('/expenses')}
+        >
+          <div className="flex flex-col items-center gap-2">
+            <TrendingDown className="h-5 w-5" />
+            <span className="text-sm">Ver Despesas</span>
+          </div>
+        </Button>
+      </div>
     </div>
   );
-});
-
-export default CashFlowPage;
+}
