@@ -648,6 +648,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error in single-month-detailed:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
+
+  // PASSO 38/135: Cash Flow Summary - Saldo hoje + próximos 3 dias
+  app.get('/api/cash-flow/summary', async (req: any, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const today = new Date();
+      
+      // Buscar saldo consolidado de todas as contas
+      const accounts = await storage.getAccounts(userId);
+      const totalBalance = accounts.reduce((sum: number, acc: any) => sum + Number(acc.currentBalance || 0), 0);
+      
+      // Próximos 4 dias (hoje + 3)
+      const forecast = [];
+      for (let i = 0; i < 4; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() + i);
+        const dateStr = date.toISOString().split('T')[0];
+        
+        // Buscar transações do dia
+        const transactions = await storage.getTransactionsByDateRange(
+          userId, 
+          dateStr, 
+          dateStr
+        );
+        
+        const revenue = transactions
+          .filter((t: any) => t.type === 'revenue')
+          .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+          
+        const expenses = transactions
+          .filter((t: any) => t.type === 'expense')
+          .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+        
+        forecast.push({
+          date: dateStr,
+          displayDate: date.toLocaleDateString('pt-BR'),
+          revenue,
+          expenses,
+          balance: totalBalance + revenue - expenses,
+          isToday: i === 0
+        });
+      }
+      
+      res.json({
+        totalBalance,
+        forecast
+      });
+    } catch (error) {
+      console.error('Error in cash-flow/summary:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // PASSO 38/135: Accounts endpoint com filtros
+  app.get('/api/accounts', async (req: any, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const { main, limit } = req.query;
+      
+      let accounts = await storage.getAccounts(userId);
+      
+      // Filtrar apenas contas principais (checking type)
+      if (main === 'true') {
+        accounts = accounts.filter((a: any) => a.type === 'checking' && a.isActive);
+      }
+      
+      // Ordenar por saldo (maior primeiro)
+      accounts.sort((a: any, b: any) => Number(b.currentBalance || 0) - Number(a.currentBalance || 0));
+      
+      // Limitar quantidade
+      if (limit) {
+        accounts = accounts.slice(0, parseInt(limit as string));
+      }
+      
+      res.json(accounts);
+    } catch (error) {
+      console.error('Error in /api/accounts:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   });
 
   // IPCA calculation
