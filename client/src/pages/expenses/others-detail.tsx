@@ -1,16 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Briefcase } from "lucide-react";
+import { Plus, MoreHorizontal } from "lucide-react";
 import { useLocation } from "wouter";
 
-export default function ManagementDetail() {
+export default function OthersDetail() {
   const [, setLocation] = useLocation();
 
   const { data: items = [] } = useQuery({
-    queryKey: ['/api/expenses/management'],
+    queryKey: ['/api/expenses/others'],
     queryFn: async () => {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/transactions?category=management&limit=50`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/transactions?category=others&limit=50`);
       return res.json();
     },
   });
@@ -25,10 +25,10 @@ export default function ManagementDetail() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Administração</h1>
+          <h1 className="text-2xl font-bold">Outras Despesas</h1>
           <p className="text-lg font-semibold text-red-600">{formatCurrency(total)}</p>
         </div>
-        <Button size="icon" onClick={() => setLocation('/expenses/management/new')}>
+        <Button size="icon" onClick={() => setLocation('/expenses/others/new')}>
           <Plus className="h-5 w-5" />
         </Button>
       </div>
@@ -36,12 +36,9 @@ export default function ManagementDetail() {
         {items.map((item: any) => (
           <Card key={item.id} className="p-4">
             <div className="flex justify-between">
-              <div className="flex items-center gap-3">
-                <Briefcase className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">{item.description}</p>
-                  <p className="text-sm text-muted-foreground">{item.propertyName}</p>
-                </div>
+              <div>
+                <p className="font-medium">{item.description}</p>
+                <p className="text-sm text-muted-foreground">{item.propertyName}</p>
               </div>
               <p className="text-lg font-semibold text-red-600">{formatCurrency(item.amount)}</p>
             </div>
