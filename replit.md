@@ -78,5 +78,35 @@ The application features a monorepo structure separating client and server code.
     - `js-pdf` & `jspdf-autotable`: PDF generation
     - `csv-parse`: Robust CSV parsing library
 - **Development Tools**:
-    - `@replit/vite-plugin-cartographer`: Replit-specific Vite plugin
+    - `@replit/vite-plugin-cartographer`: Replit-specific Vite plugin (temporarily removed due to top-level await compatibility issues)
     - `@replit/vite-plugin-runtime-error-modal`: Replit-specific Vite plugin
+
+## Deployment Status & Known Issues
+
+### Production Deployment (Render) ✅ 
+- **Status**: WORKING PERFECTLY
+- **Build Command**: `npm run build` (uses esbuild with external flags to exclude Vite from backend bundle)
+- **Start Command**: `node dist/index.js`
+- **Port Configuration**: Uses `process.env.PORT || 5000` for Render compatibility
+- **Last Verified**: October 7, 2025
+
+### Development Environment ⚠️
+- **Status**: KNOWN COMPATIBILITY ISSUE
+- **Problem**: tsx transpiler cannot import Vite's ESM API correctly
+- **Error**: `SyntaxError: The requested module 'vite' does not provide an export named 'defineConfig'`
+- **Root Cause**: tsx/esbuild converts modules to CommonJS, but Vite only exports ESM, creating an incompatibility
+- **Impact**: `npm run dev` fails to start
+- **Workaround Options**:
+  1. Switch dev script to ESM-capable runner (`node --loader tsx` or similar)
+  2. Run Vite separately (`vite dev`) and point Express API to it
+  3. Use production build for local testing (`npm run build && node dist/index.js`)
+
+### Build Configuration
+- **Frontend Build**: Vite (configured in vite.config.ts)
+- **Backend Build**: esbuild with the following external flags:
+  ```bash
+  --external:../vite.config.ts --external:./vite.config.ts 
+  --external:../client/* --external:./client/* 
+  --external:vite --external:@vitejs/plugin-react
+  ```
+- **Reason**: Prevents Vite dev dependencies from being bundled into production backend
