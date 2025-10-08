@@ -59,10 +59,11 @@ export default function MarcoZeroPage() {
     adjustmentDate: new Date().toISOString().split('T')[0],
     amount: '',
     type: 'bank_fee',
+    customType: '',
     description: '',
-    bankReference: '',
-    accountId: 1,
+    accountId: undefined as number | undefined,
   });
+  const [showCustomType, setShowCustomType] = useState(false);
 
   // Queries
   const { data: activeMarco, isLoading: loadingMarco } = useQuery<MarcoZero | null>({
@@ -127,10 +128,11 @@ export default function MarcoZeroPage() {
         adjustmentDate: new Date().toISOString().split('T')[0],
         amount: '',
         type: 'bank_fee',
+        customType: '',
         description: '',
-        bankReference: '',
-        accountId: 1,
+        accountId: undefined,
       });
+      setShowCustomType(false);
     },
     onError: (error: any) => {
       toast({
@@ -238,6 +240,7 @@ export default function MarcoZeroPage() {
   };
 
   const handleCreateReconciliation = () => {
+    // Validações
     if (!reconciliationData.amount || !reconciliationData.description) {
       toast({
         title: 'Erro',
@@ -247,10 +250,37 @@ export default function MarcoZeroPage() {
       return;
     }
 
+    if (reconciliationData.description.length < 10) {
+      toast({
+        title: 'Erro',
+        description: 'A descrição deve ter no mínimo 10 caracteres',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Data não pode ser futura
+    if (new Date(reconciliationData.adjustmentDate) > new Date()) {
+      toast({
+        title: 'Erro',
+        description: 'A data do ajuste não pode ser futura',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Determinar tipo final (customizado ou selecionado)
+    const finalType = showCustomType && reconciliationData.customType 
+      ? reconciliationData.customType 
+      : reconciliationData.type;
+
     const data = {
-      ...reconciliationData,
-      marcoZeroId: activeMarco?.id,
+      adjustmentDate: reconciliationData.adjustmentDate,
       amount: reconciliationData.amount.replace(/\./g, '').replace(',', '.'),
+      type: finalType,
+      description: reconciliationData.description,
+      accountId: reconciliationData.accountId || null,
+      marcoZeroId: null, // Ajustes independentes
     };
 
     createReconciliationMutation.mutate(data);
@@ -394,59 +424,144 @@ export default function MarcoZeroPage() {
         <TabsContent value="reconciliation" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Ajustes de Reconciliação</CardTitle>
-              <CardDescription>
-                Corrija diferenças entre o sistema e extratos bancários
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Ajustes de Reconciliação</CardTitle>
+                  <CardDescription>
+                    Correções manuais para ajustar saldos
+                  </CardDescription>
+                </div>
+                <Button onClick={() => setShowReconciliationDialog(true)} data-testid="button-new-adjustment">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Novo Ajuste
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button onClick={() => setShowReconciliationDialog(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Criar Ajuste
-              </Button>
+              {/* Help text */}
+              <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg text-sm text-blue-900 dark:text-blue-100">
+                <p className="font-medium mb-1">Exemplos de quando usar ajustes:</p>
+                <ul className="list-disc list-inside space-y-0.5 text-xs">
+                  <li>Taxas bancárias não registradas</li>
+                  <li>Transferências entre contas próprias</li>
+                  <li>Correções de erros de lançamento</li>
+                  <li>Ajustes de saldo inicial</li>
+                </ul>
+              </div>
 
               {reconciliations && reconciliations.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Valor</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead>Referência</TableHead>
-                      <TableHead>Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reconciliations.map((adj: ReconciliationAdjustment) => (
-                      <TableRow key={adj.id}>
-                        <TableCell>
-                          {format(new Date(adj.adjustmentDate), 'dd/MM/yyyy')}
-                        </TableCell>
-                        <TableCell className="capitalize">{adj.type}</TableCell>
-                        <TableCell>
-                          {new Intl.NumberFormat('pt-BR', {
-                            style: 'currency',
-                            currency: 'BRL',
-                          }).format(parseFloat(adj.amount))}
-                        </TableCell>
-                        <TableCell>{adj.description}</TableCell>
-                        <TableCell>{adj.bankReference || '-'}</TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteReconciliationMutation.mutate(adj.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <>
+                  {/* Desktop table */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Conta</TableHead>
+                          <TableHead>Valor</TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Descrição</TableHead>
+                          <TableHead className="w-20">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reconciliations.map((adj: any) => {
+                          const amount = parseFloat(adj.amount);
+                          const isPositive = amount >= 0;
+                          
+                          return (
+                            <TableRow key={adj.id}>
+                              <TableCell data-testid={`text-adjustment-date-${adj.id}`}>
+                                {format(new Date(adj.adjustmentDate), 'dd/MM/yyyy')}
+                              </TableCell>
+                              <TableCell data-testid={`text-adjustment-account-${adj.id}`}>
+                                {adj.accountName || '-'}
+                              </TableCell>
+                              <TableCell>
+                                <span className={isPositive ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'} data-testid={`text-adjustment-amount-${adj.id}`}>
+                                  {isPositive ? '+' : ''}{new Intl.NumberFormat('pt-BR', {
+                                    style: 'currency',
+                                    currency: 'BRL',
+                                  }).format(amount)}
+                                </span>
+                              </TableCell>
+                              <TableCell className="capitalize" data-testid={`text-adjustment-type-${adj.id}`}>
+                                {adj.type}
+                              </TableCell>
+                              <TableCell data-testid={`text-adjustment-description-${adj.id}`}>
+                                {adj.description}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (confirm('Tem certeza que deseja excluir este ajuste?')) {
+                                      deleteReconciliationMutation.mutate(adj.id);
+                                    }
+                                  }}
+                                  data-testid={`button-delete-${adj.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Mobile cards */}
+                  <div className="md:hidden space-y-3">
+                    {reconciliations.map((adj: any) => {
+                      const amount = parseFloat(adj.amount);
+                      const isPositive = amount >= 0;
+                      
+                      return (
+                        <Card key={adj.id} data-testid={`card-adjustment-${adj.id}`}>
+                          <CardContent className="pt-4 space-y-2">
+                            <div className="flex justify-between items-start">
+                              <div className="space-y-1">
+                                <div className="text-sm text-gray-500">
+                                  {format(new Date(adj.adjustmentDate), 'dd/MM/yyyy')}
+                                </div>
+                                <div className={`text-lg font-bold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                  {isPositive ? '+' : ''}{new Intl.NumberFormat('pt-BR', {
+                                    style: 'currency',
+                                    currency: 'BRL',
+                                  }).format(amount)}
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm('Tem certeza que deseja excluir este ajuste?')) {
+                                    deleteReconciliationMutation.mutate(adj.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <div className="text-sm">
+                              <span className="text-gray-500">Conta:</span> {adj.accountName || '-'}
+                            </div>
+                            <div className="text-sm">
+                              <span className="text-gray-500">Tipo:</span> <span className="capitalize">{adj.type}</span>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              {adj.description}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-8 text-muted-foreground" data-testid="text-no-adjustments">
                   Nenhum ajuste de reconciliação cadastrado
                 </div>
               )}
@@ -571,105 +686,67 @@ export default function MarcoZeroPage() {
 
       {/* Dialog de Reconciliação */}
       <Dialog open={showReconciliationDialog} onOpenChange={setShowReconciliationDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Criar Ajuste de Reconciliação</DialogTitle>
+            <DialogTitle>Novo Ajuste de Reconciliação</DialogTitle>
             <DialogDescription>
               Adicione um ajuste para corrigir diferenças entre o sistema e extratos bancários
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Data do Ajuste</Label>
-              <Input
-                type="date"
-                value={reconciliationData.adjustmentDate}
-                onChange={(e) => setReconciliationData({
-                  ...reconciliationData,
-                  adjustmentDate: e.target.value,
-                })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Tipo de Ajuste</Label>
-              <Select
-                value={reconciliationData.type}
-                onValueChange={(value) => setReconciliationData({
-                  ...reconciliationData,
-                  type: value,
-                })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="bank_fee">Taxa Bancária</SelectItem>
-                  <SelectItem value="interest">Juros</SelectItem>
-                  <SelectItem value="correction">Correção de Lançamento</SelectItem>
-                  <SelectItem value="other">Outro</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Valor (use - para valores negativos)</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                  R$
-                </span>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="adjustmentDate">Data do Ajuste *</Label>
                 <Input
-                  type="text"
-                  value={reconciliationData.amount}
+                  id="adjustmentDate"
+                  type="date"
+                  value={reconciliationData.adjustmentDate}
                   onChange={(e) => setReconciliationData({
                     ...reconciliationData,
-                    amount: formatCurrency(e.target.value),
+                    adjustmentDate: e.target.value,
                   })}
-                  placeholder="0,00"
-                  className="pl-10"
+                  data-testid="input-adjustment-date"
                 />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label>Descrição</Label>
-              <Input
-                value={reconciliationData.description}
-                onChange={(e) => setReconciliationData({
-                  ...reconciliationData,
-                  description: e.target.value,
-                })}
-                placeholder="Ex: Taxa de manutenção de conta"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Referência Bancária (opcional)</Label>
-              <Input
-                value={reconciliationData.bankReference}
-                onChange={(e) => setReconciliationData({
-                  ...reconciliationData,
-                  bankReference: e.target.value,
-                })}
-                placeholder="Ex: DOC 123456"
-              />
+              <div className="space-y-2">
+                <Label htmlFor="amount">Valor * <span className="text-xs text-gray-500">(use - para negativo)</span></Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                    R$
+                  </span>
+                  <Input
+                    id="amount"
+                    type="text"
+                    value={reconciliationData.amount}
+                    onChange={(e) => setReconciliationData({
+                      ...reconciliationData,
+                      amount: formatCurrency(e.target.value),
+                    })}
+                    placeholder="0,00"
+                    className="pl-10"
+                    data-testid="input-amount"
+                  />
+                </div>
+              </div>
             </div>
 
             {accounts && accounts.length > 0 && (
               <div className="space-y-2">
-                <Label>Conta</Label>
+                <Label>Conta (opcional)</Label>
                 <Select
-                  value={reconciliationData.accountId.toString()}
+                  value={reconciliationData.accountId?.toString() || "none"}
                   onValueChange={(value) => setReconciliationData({
                     ...reconciliationData,
-                    accountId: parseInt(value),
+                    accountId: value === "none" ? undefined : parseInt(value),
                   })}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
+                  <SelectTrigger data-testid="select-account">
+                    <SelectValue placeholder="Selecione uma conta" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Nenhuma conta específica</SelectItem>
                     {accounts.map((acc: any) => (
                       <SelectItem key={acc.id} value={acc.id.toString()}>
                         {acc.name}
@@ -679,14 +756,87 @@ export default function MarcoZeroPage() {
                 </Select>
               </div>
             )}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Tipo de Ajuste *</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCustomType(!showCustomType)}
+                  className="text-xs"
+                  data-testid="button-toggle-custom-type"
+                >
+                  {showCustomType ? 'Usar predefinido' : 'Criar novo tipo'}
+                </Button>
+              </div>
+              
+              {showCustomType ? (
+                <Input
+                  value={reconciliationData.customType}
+                  onChange={(e) => setReconciliationData({
+                    ...reconciliationData,
+                    customType: e.target.value,
+                  })}
+                  placeholder="Digite um novo tipo de ajuste"
+                  data-testid="input-custom-type"
+                />
+              ) : (
+                <Select
+                  value={reconciliationData.type}
+                  onValueChange={(value) => setReconciliationData({
+                    ...reconciliationData,
+                    type: value,
+                  })}
+                >
+                  <SelectTrigger data-testid="select-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bank_fee">Taxa Bancária</SelectItem>
+                    <SelectItem value="interest">Juros</SelectItem>
+                    <SelectItem value="correction">Correção de Lançamento</SelectItem>
+                    <SelectItem value="transfer">Transferência Entre Contas</SelectItem>
+                    <SelectItem value="balance_adjustment">Ajuste de Saldo</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Descrição * <span className="text-xs text-gray-500">(mínimo 10 caracteres)</span></Label>
+              <Textarea
+                id="description"
+                value={reconciliationData.description}
+                onChange={(e) => setReconciliationData({
+                  ...reconciliationData,
+                  description: e.target.value,
+                })}
+                placeholder="Ex: Ajuste de taxa de manutenção não registrada do mês 09/2025"
+                rows={3}
+                data-testid="textarea-description"
+              />
+            </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowReconciliationDialog(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowReconciliationDialog(false);
+                setShowCustomType(false);
+              }}
+              data-testid="button-cancel"
+            >
               Cancelar
             </Button>
-            <Button onClick={handleCreateReconciliation}>
-              Criar Ajuste
+            <Button 
+              onClick={handleCreateReconciliation}
+              disabled={createReconciliationMutation.isPending}
+              data-testid="button-submit"
+            >
+              {createReconciliationMutation.isPending ? 'Criando...' : 'Criar Ajuste'}
             </Button>
           </DialogFooter>
         </DialogContent>
