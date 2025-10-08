@@ -142,7 +142,8 @@ export default function CleaningExpensesPage() {
       // Invalidate expenses queries
       queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/analytics'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/cleaning'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cleaning/batches'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cleaning/property'] });
     },
     onError: (error) => {
       toast({
@@ -163,7 +164,9 @@ export default function CleaningExpensesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cleaning'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cleaning/batches'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cleaning/property'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cleaning/batch'] });
       queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/analytics'] });
       toast({
