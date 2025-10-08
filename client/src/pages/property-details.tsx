@@ -1,12 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Pen } from "lucide-react";
+import { ArrowLeft, Pen, TrendingUp, TrendingDown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { useState } from "react";
+import { format, subMonths } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 export default function PropertyDetails() {
   const [, params] = useRoute("/properties/:id");
   const [, setLocation] = useLocation();
   const propertyId = params?.id;
+  
+  // Month selector for return rate
+  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
 
   const {
     data: property,
@@ -17,12 +26,26 @@ export default function PropertyDetails() {
     queryFn: async () => {
       if (!propertyId) return null;
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/properties/${propertyId}`,
+        `${import.meta.env.VITE_API_URL || ""}/api/properties/${propertyId}`,
       );
       if (!response.ok) throw new Error("Falha ao carregar imóvel");
       return response.json();
     },
     enabled: !!propertyId,
+  });
+
+  // Return rate query
+  const { data: returnRate, isLoading: isLoadingReturnRate } = useQuery({
+    queryKey: ['/api/properties', propertyId, 'return-rate', selectedMonth],
+    queryFn: async () => {
+      const [year, month] = selectedMonth.split('-');
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || ""}/api/properties/${propertyId}/return-rate/${month}/${year}`
+      );
+      if (!res.ok) throw new Error('Failed to fetch return rate');
+      return res.json();
+    },
+    enabled: !!propertyId && !!selectedMonth,
   });
 
   if (isLoading) return <div className="p-8">Carregando...</div>;
@@ -40,6 +63,26 @@ export default function PropertyDetails() {
   const formatDate = (date: string | null) => {
     if (!date) return "-";
     return new Date(date).toLocaleDateString("pt-BR");
+  };
+
+  // Generate last 12 months for selector
+  const getLast12Months = () => {
+    const months = [];
+    for (let i = 0; i < 12; i++) {
+      const date = subMonths(new Date(), i);
+      months.push({
+        value: format(date, 'yyyy-MM'),
+        label: format(date, 'MMMM yyyy', { locale: ptBR })
+      });
+    }
+    return months;
+  };
+
+  // Return rate color coding
+  const getReturnRateColor = (rate: number) => {
+    if (rate > 0.5) return { color: 'text-green-600', bg: 'bg-green-100', label: 'Excelente', progress: 'bg-green-500' };
+    if (rate >= 0.1) return { color: 'text-yellow-600', bg: 'bg-yellow-100', label: 'Bom', progress: 'bg-yellow-500' };
+    return { color: 'text-red-600', bg: 'bg-red-100', label: 'Atenção', progress: 'bg-red-500' };
   };
 
   return (
@@ -254,6 +297,91 @@ export default function PropertyDetails() {
                 </p>
               </div>
             </div>
+          </section>
+
+          {/* Taxa de Retorno */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xl font-semibold text-gray-700">
+                Taxa de Retorno
+              </h2>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-[200px]" data-testid="select-month-return-rate">
+                  <SelectValue placeholder="Selecione o mês" />
+                </SelectTrigger>
+                <SelectContent>
+                  {getLast12Months().map((month) => (
+                    <SelectItem key={month.value} value={month.value}>
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {isLoadingReturnRate ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center text-gray-500">Carregando...</div>
+                </CardContent>
+              </Card>
+            ) : returnRate && returnRate.returnRate !== null ? (
+              <Card className={getReturnRateColor(returnRate.returnRate).bg}>
+                <CardHeader>
+                  <CardTitle className="text-center">
+                    <div className={`text-4xl font-bold ${getReturnRateColor(returnRate.returnRate).color}`} data-testid="text-return-rate-value">
+                      {returnRate.returnRate.toFixed(2)}% ao mês
+                    </div>
+                    <div className="text-sm text-gray-600 mt-2" data-testid="text-return-rate-formula">
+                      ({formatCurrency(returnRate.netProfit)} / {formatCurrency(returnRate.propertyValue)})
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Performance:</span>
+                      <span className={`text-sm font-semibold ${getReturnRateColor(returnRate.returnRate).color}`} data-testid="text-return-rate-label">
+                        {getReturnRateColor(returnRate.returnRate).label}
+                      </span>
+                    </div>
+                    <Progress 
+                      value={Math.min(returnRate.returnRate * 20, 100)} 
+                      className="h-2"
+                      data-testid="progress-return-rate"
+                    />
+                    <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                      <div>
+                        <div className="text-xs text-gray-500">Receita</div>
+                        <div className="text-sm font-semibold text-green-600" data-testid="text-monthly-revenue">
+                          {formatCurrency(returnRate.monthlyRevenue)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">Despesas</div>
+                        <div className="text-sm font-semibold text-red-600" data-testid="text-monthly-expenses">
+                          {formatCurrency(returnRate.monthlyExpenses)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500">Lucro Líquido</div>
+                        <div className="text-sm font-semibold text-blue-600" data-testid="text-net-profit">
+                          {formatCurrency(returnRate.netProfit)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center text-gray-500" data-testid="text-no-data">
+                    Sem dados para este mês
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </section>
 
           {/* Descrição */}
