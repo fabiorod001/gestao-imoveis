@@ -107,6 +107,7 @@ The application features a monorepo structure separating client and server code.
 2. **Environment Variable Handling**: Fixed VITE_API_URL undefined handling - Added `|| ""` fallback in all fetch calls to prevent "undefined/api/..." URLs when env var is not set
 3. **Import Missing Schema**: Added `accounts` table import to server/storage.ts to fix ReferenceError
 4. **Development Seed Data**: Created seed scripts (`npm run seed:dev`, `npm run clean:dev`) for local testing with 5 properties, 26 transactions, and 2 accounts
+5. **TransactionService Validation Chain Fix** (50min debug): Fixed Zod validation errors in transaction creation. Root cause: TransactionService.createTransaction was converting `amount` to number (`.toDecimal()`) and `date` to Date object BEFORE Zod validation, but `insertTransactionSchema` (auto-generated from Drizzle) expects strings. Solution: Use `amount.toDecimalString()` to keep as string, pass dates as ISO strings (`yyyy-MM-dd`), and add `userId` AFTER validation (since schema omits it with `.omit({ userId: true })`). This pattern applies to ALL services using Drizzle-generated Zod schemas.
 
 ### Build Configuration
 - **Frontend Build**: Vite (configured in vite.config.ts)
