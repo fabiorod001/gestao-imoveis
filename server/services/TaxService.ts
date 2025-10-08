@@ -2,6 +2,7 @@ import { BaseService } from "./BaseService";
 import type { IStorage } from "../storage";
 import { TransactionService } from "./TransactionService";
 import { db } from "../db";
+import { BadRequestError } from "../middleware/errorHandler";
 import { 
   transactions, 
   properties, 
@@ -1960,7 +1961,7 @@ export class TaxService extends BaseService {
     }
 
     if (projection.status === 'confirmed') {
-      throw new Error('Cannot delete confirmed projections');
+      throw new BadRequestError('Não é possível excluir projeções confirmadas');
     }
 
     await db.delete(taxProjections)
