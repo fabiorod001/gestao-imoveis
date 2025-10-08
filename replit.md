@@ -110,6 +110,7 @@ The application features a monorepo structure separating client and server code.
 3. **Import Missing Schema**: Added `accounts` table import to server/storage.ts to fix ReferenceError
 4. **Development Seed Data**: Created seed scripts (`npm run seed:dev`, `npm run clean:dev`) for local testing with 5 properties, 26 transactions, and 2 accounts
 5. **TransactionService Validation Chain Fix** (50min debug): Fixed Zod validation errors in transaction creation. Root cause: TransactionService.createTransaction was converting `amount` to number (`.toDecimal()`) and `date` to Date object BEFORE Zod validation, but `insertTransactionSchema` (auto-generated from Drizzle) expects strings. Solution: Use `amount.toDecimalString()` to keep as string, pass dates as ISO strings (`yyyy-MM-dd`), and add `userId` AFTER validation (since schema omits it with `.omit({ userId: true })`). This pattern applies to ALL services using Drizzle-generated Zod schemas.
+6. **Code Cleanup - Phase 7** (October 8, 2025): Removed 3 obsolete backup files with `-OLD` suffix (`properties-OLD.tsx`, `dashboard-OLD.tsx`, `cash-flow-OLD.tsx`). All files verified to have no imports/references and working replacements. Build verified successful after cleanup.
 
 ### Build Configuration
 - **Frontend Build**: Vite (configured in vite.config.ts)
