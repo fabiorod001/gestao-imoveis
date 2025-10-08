@@ -60,8 +60,9 @@ interface MonthDetail {
 export default function Analytics() {
   const { toast } = useToast();
   const currentYear = new Date().getFullYear();
+  const currentMonthNum = new Date().getMonth() + 1;
   const [selectedYear, setSelectedYear] = useState(currentYear.toString());
-  const [selectedMonth, setSelectedMonth] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(`${currentMonthNum.toString().padStart(2, '0')}/${currentYear}`);
   
   // Buscar imóveis para filtros
   const { data: properties = [] } = useQuery<any[]>({
@@ -75,10 +76,13 @@ export default function Analytics() {
 
   // Tab 1: Pivot Table (needs month and year params)
   const currentMonth = new Date().getMonth() + 1;
+  const [pivotMonth, setPivotMonth] = useState(currentMonth);
+  const [pivotYear, setPivotYear] = useState(currentYear);
+  
   const { data: pivotData, isLoading: pivotLoading } = useQuery<PivotTableData[]>({
-    queryKey: ['/api/analytics/pivot-table', currentMonth, currentYear],
+    queryKey: ['/api/analytics/pivot-table', pivotMonth, pivotYear],
     queryFn: async () => {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/analytics/pivot-table?month=${currentMonth}&year=${currentYear}`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/analytics/pivot-table?month=${pivotMonth}&year=${pivotYear}`);
       return res.json();
     },
   });
@@ -191,20 +195,52 @@ export default function Analytics() {
         {/* Tab 1: Pivot Table */}
         <TabsContent value="pivot" className="space-y-4 mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle data-testid="text-pivot-title">Tabela Pivot</CardTitle>
-                <CardDescription>Análise cruzada de receitas e despesas por mês e imóvel</CardDescription>
+            <CardHeader>
+              <div className="flex flex-row items-center justify-between mb-4">
+                <div>
+                  <CardTitle data-testid="text-pivot-title">Tabela Pivot</CardTitle>
+                  <CardDescription>Análise cruzada de receitas e despesas por mês e imóvel</CardDescription>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleExport(pivotData || [], 'pivot-table.csv')}
+                  data-testid="button-export-pivot"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar
+                </Button>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => handleExport(pivotData || [], 'pivot-table.csv')}
-                data-testid="button-export-pivot"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
+              <div className="flex flex-wrap gap-4 items-center">
+                <div className="flex gap-2 items-center">
+                  <label className="text-sm font-medium">Mês:</label>
+                  <select 
+                    value={pivotMonth}
+                    onChange={(e) => setPivotMonth(Number(e.target.value))}
+                    className="border rounded px-3 py-1 text-sm bg-background"
+                    data-testid="select-pivot-month"
+                  >
+                    {Array.from({length: 12}, (_, i) => i + 1).map(m => (
+                      <option key={m} value={m}>
+                        {new Date(2025, m - 1).toLocaleDateString('pt-BR', {month: 'long'})}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <label className="text-sm font-medium">Ano:</label>
+                  <select 
+                    value={pivotYear}
+                    onChange={(e) => setPivotYear(Number(e.target.value))}
+                    className="border rounded px-3 py-1 text-sm bg-background"
+                    data-testid="select-pivot-year"
+                  >
+                    {Array.from({length: 5}, (_, i) => currentYear - 2 + i).map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {pivotLoading ? (
@@ -231,7 +267,7 @@ export default function Analytics() {
                     <TableBody>
                       {pivotData.map((row, idx) => (
                         <TableRow key={idx} data-testid={`row-pivot-${idx}`}>
-                          <TableCell>Out/2025</TableCell>
+                          <TableCell>{new Date(pivotYear, pivotMonth - 1).toLocaleDateString('pt-BR', {month: 'short', year: 'numeric'})}</TableCell>
                           <TableCell>{row.propertyName}</TableCell>
                           <TableCell className="text-right text-green-600">
                             {formatCurrency(row.revenue)}
