@@ -90,16 +90,16 @@ The application features a monorepo structure separating client and server code.
 - **Port Configuration**: Uses `process.env.PORT || 5000` for Render compatibility
 - **Last Verified**: October 7, 2025
 
-### Development Environment ⚠️
-- **Status**: KNOWN COMPATIBILITY ISSUE
-- **Problem**: tsx transpiler cannot import Vite's ESM API correctly
-- **Error**: `SyntaxError: The requested module 'vite' does not provide an export named 'defineConfig'`
-- **Root Cause**: tsx/esbuild converts modules to CommonJS, but Vite only exports ESM, creating an incompatibility
-- **Impact**: `npm run dev` fails to start
-- **Workaround Options**:
-  1. Switch dev script to ESM-capable runner (`node --loader tsx` or similar)
-  2. Run Vite separately (`vite dev`) and point Express API to it
-  3. Use production build for local testing (`npm run build && node dist/index.js`)
+### Development Environment ✅ (Production Mode)
+- **Status**: RESOLVED - Using production build for development
+- **Problem Identified**: tsx transpiler fundamentally incompatible with Vite's pure ESM exports
+- **Root Cause**: tsx/esbuild transpiles to CommonJS, but Vite only exports ESM modules, creating an irreconcilable incompatibility
+- **Solution Implemented**: Development uses production build workflow
+  - **Current Workflow**: `npm start` (runs pre-built production bundle)
+  - **Development Workflow**: Run `npm run build` when code changes, then server auto-restarts
+  - **Alternative Script**: `npm run dev:prod` (builds and starts in one command)
+- **Impact**: No live HMR in development, but provides stable, production-identical environment
+- **Last Updated**: October 8, 2025
 
 ### Build Configuration
 - **Frontend Build**: Vite (configured in vite.config.ts)
