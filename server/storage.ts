@@ -1,6 +1,7 @@
 import {
   users,
   properties,
+  accounts,
   transactions,
   expenseComponents,
   taxSettings,
@@ -235,6 +236,59 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount ?? 0) > 0;
   }
 
+  // Account operations
+  async getAccounts(userId: string): Promise<any[]> {
+    const result = await db
+      .select()
+      .from(accounts)
+      .where(eq(accounts.userId, userId))
+      .orderBy(accounts.displayOrder);
+    return result;
+  }
+
+  async getAccount(id: number, userId: string): Promise<any | undefined> {
+    const [account] = await db
+      .select()
+      .from(accounts)
+      .where(and(eq(accounts.id, id), eq(accounts.userId, userId)));
+    return account;
+  }
+
+  async createAccount(account: any): Promise<any> {
+    const [newAccount] = await db.insert(accounts).values(account).returning();
+    return newAccount;
+  }
+
+  async updateAccount(id: number, account: any, userId: string): Promise<any | undefined> {
+    const [updatedAccount] = await db
+      .update(accounts)
+      .set({ ...account, updatedAt: new Date() })
+      .where(and(eq(accounts.id, id), eq(accounts.userId, userId)))
+      .returning();
+    return updatedAccount;
+  }
+
+  async deleteAccount(id: number, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(accounts)
+      .where(and(eq(accounts.id, id), eq(accounts.userId, userId)));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getAccountsForCashFlow(userId: string, limit?: number): Promise<any[]> {
+    let query = db
+      .select()
+      .from(accounts)
+      .where(and(eq(accounts.userId, userId), eq(accounts.isActive, true)))
+      .orderBy(accounts.displayOrder);
+    
+    if (limit) {
+      query = query.limit(limit) as any;
+    }
+    
+    return await query;
+  }
+
   // Transaction operations
   async getTransactions(userId: string, limit = 1000): Promise<Transaction[]> {
     return await db
@@ -243,6 +297,46 @@ export class DatabaseStorage implements IStorage {
       .where(eq(transactions.userId, userId))
       .orderBy(desc(transactions.date))
       .limit(limit);
+  }
+
+  async getTransactionsByDateRange(
+    userId: string,
+    startDate: string,
+    endDate: string,
+    options?: { type?: string; limit?: number }
+  ): Promise<Transaction[]> {
+    let query = db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          gte(transactions.date, startDate),
+          lte(transactions.date, endDate)
+        )
+      )
+      .orderBy(desc(transactions.date));
+
+    if (options?.type) {
+      query = db
+        .select()
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            eq(transactions.type, options.type),
+            gte(transactions.date, startDate),
+            lte(transactions.date, endDate)
+          )
+        )
+        .orderBy(desc(transactions.date)) as any;
+    }
+
+    if (options?.limit) {
+      query = query.limit(options.limit) as any;
+    }
+
+    return await query;
   }
 
   async getTransactionsByType(userId: string, type: string, limit = 1000): Promise<Transaction[]> {

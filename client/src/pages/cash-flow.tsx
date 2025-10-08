@@ -26,7 +26,7 @@ export default function CashFlow() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['/api/cash-flow/summary'],
     queryFn: async () => {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/cash-flow/summary`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/cash-flow/summary`);
       return res.json();
     },
   });
@@ -35,7 +35,7 @@ export default function CashFlow() {
   const { data: accounts = [] } = useQuery({
     queryKey: ['/api/accounts/main'],
     queryFn: async () => {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/accounts?main=true&limit=2`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/accounts?main=true&limit=2`);
       return res.json();
     },
   });

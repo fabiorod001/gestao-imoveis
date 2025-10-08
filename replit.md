@@ -101,6 +101,12 @@ The application features a monorepo structure separating client and server code.
 - **Impact**: No live HMR in development, but provides stable, production-identical environment
 - **Last Updated**: October 8, 2025
 
+### Critical Fixes Applied (October 8, 2025)
+1. **Missing Storage Methods**: Implemented missing database storage methods for accounts (`getAccounts`, `getAccount`, `createAccount`, `updateAccount`, `deleteAccount`, `getAccountsForCashFlow`) and transactions (`getTransactionsByDateRange`)
+2. **Environment Variable Handling**: Fixed VITE_API_URL undefined handling - Added `|| ""` fallback in all fetch calls to prevent "undefined/api/..." URLs when env var is not set
+3. **Import Missing Schema**: Added `accounts` table import to server/storage.ts to fix ReferenceError
+4. **Development Seed Data**: Created seed scripts (`npm run seed:dev`, `npm run clean:dev`) for local testing with 5 properties, 26 transactions, and 2 accounts
+
 ### Build Configuration
 - **Frontend Build**: Vite (configured in vite.config.ts)
 - **Backend Build**: esbuild with the following external flags:

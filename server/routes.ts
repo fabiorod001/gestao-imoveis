@@ -648,6 +648,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error in single-month-detailed:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
+  });
 
   // PASSO 38/135: Cash Flow Summary - Saldo hoje + próximos 3 dias
   app.get('/api/cash-flow/summary', async (req: any, res: Response) => {
@@ -727,8 +728,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error in /api/accounts:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
-  });
-
   });
 
   // IPCA calculation

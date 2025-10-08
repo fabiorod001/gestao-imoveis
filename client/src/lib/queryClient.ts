@@ -42,7 +42,7 @@ export async function apiRequest(
 
   // Add API base URL if the URL starts with /api/
   const fullUrl = url.startsWith("/api/")
-    ? `${import.meta.env.VITE_API_URL}${url}`
+    ? `${import.meta.env.VITE_API_URL || ""}${url}`
     : url;
 
   const res = await fetch(fullUrl, {
@@ -79,7 +79,7 @@ export const getQueryFn: <T>(options: {
 
     // Add API base URL if the URL starts with /api/
     const fullUrl = url.startsWith("/api/")
-      ? `${import.meta.env.VITE_API_URL}${url}`
+      ? `${import.meta.env.VITE_API_URL || ""}${url}`
       : url;
 
     const res = await fetch(fullUrl, {

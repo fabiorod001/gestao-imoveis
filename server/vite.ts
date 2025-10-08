@@ -103,7 +103,11 @@ export function serveStatic(app: Express) {
     );
   }
   app.use(express.static(distPath));
-  app.use("*", (_req, res) => {
+  // Only serve index.html for non-API routes
+  app.use("*", (req, res, next) => {
+    if (req.originalUrl.startsWith('/api/')) {
+      return next(); // Let API routes through
+    }
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
