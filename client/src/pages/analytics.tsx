@@ -10,28 +10,23 @@ import { Download, BarChart3, TrendingUp, Building2, Calendar, FileText, Percent
 import { useToast } from "@/hooks/use-toast";
 
 interface PivotTableData {
-  month: string;
-  property: string;
-  revenues: number;
+  propertyName: string;
+  revenue: number;
   expenses: number;
-  net: number;
+  netResult: number;
+  profitPercentage: number;
+  purchasePrice: number;
 }
 
 interface MonthlyData {
-  month: string;
-  totalRevenue: number;
-  totalExpenses: number;
-  netIncome: number;
-  properties: number;
+  month: number;
+  revenue: number;
+  expenses: number;
 }
 
 interface PropertyDistribution {
-  propertyId: number;
-  propertyName: string;
-  totalRevenue: number;
-  totalExpenses: number;
-  netIncome: number;
-  percentage: number;
+  status: string;
+  count: string | number;
 }
 
 interface IPCAData {
@@ -43,11 +38,14 @@ interface IPCAData {
 }
 
 interface PeriodComparison {
-  period: string;
-  revenues: number;
-  expenses: number;
-  net: number;
-  growth: number;
+  propertyId: number;
+  propertyName: string;
+  month: string;
+  year: string;
+  type: string;
+  category: string;
+  amount: string;
+  description: string;
 }
 
 interface MonthDetail {
@@ -75,14 +73,23 @@ export default function Analytics() {
     queryKey: ['/api/analytics/available-months'],
   });
 
-  // Tab 1: Pivot Table
+  // Tab 1: Pivot Table (needs month and year params)
+  const currentMonth = new Date().getMonth() + 1;
   const { data: pivotData, isLoading: pivotLoading } = useQuery<PivotTableData[]>({
-    queryKey: ['/api/analytics/pivot-table'],
+    queryKey: ['/api/analytics/pivot-table', currentMonth, currentYear],
+    queryFn: async () => {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/analytics/pivot-table?month=${currentMonth}&year=${currentYear}`);
+      return res.json();
+    },
   });
 
   // Tab 2: Monthly Analysis
   const { data: monthlyData, isLoading: monthlyLoading } = useQuery<MonthlyData[]>({
-    queryKey: ['/api/analytics', 'monthly', selectedYear],
+    queryKey: ['/api/analytics/monthly', selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/analytics/monthly/${selectedYear}`);
+      return res.json();
+    },
     enabled: !!selectedYear,
   });
 
@@ -103,7 +110,11 @@ export default function Analytics() {
 
   // Tab 6: Month Detail
   const { data: monthDetailData, isLoading: monthDetailLoading } = useQuery<MonthDetail[]>({
-    queryKey: ['/api/analytics/single-month-detailed'],
+    queryKey: ['/api/analytics/single-month-detailed', selectedMonth],
+    queryFn: async () => {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/analytics/single-month-detailed?month=${selectedMonth}`);
+      return res.json();
+    },
     enabled: !!selectedMonth,
   });
 
@@ -220,16 +231,16 @@ export default function Analytics() {
                     <TableBody>
                       {pivotData.map((row, idx) => (
                         <TableRow key={idx} data-testid={`row-pivot-${idx}`}>
-                          <TableCell>{row.month}</TableCell>
-                          <TableCell>{row.property}</TableCell>
+                          <TableCell>Out/2025</TableCell>
+                          <TableCell>{row.propertyName}</TableCell>
                           <TableCell className="text-right text-green-600">
-                            {formatCurrency(row.revenues)}
+                            {formatCurrency(row.revenue)}
                           </TableCell>
                           <TableCell className="text-right text-red-600">
                             {formatCurrency(row.expenses)}
                           </TableCell>
                           <TableCell className="text-right font-medium">
-                            {formatCurrency(row.net)}
+                            {formatCurrency(row.netResult)}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -300,17 +311,17 @@ export default function Analytics() {
                     <TableBody>
                       {monthlyData.map((row, idx) => (
                         <TableRow key={idx} data-testid={`row-monthly-${idx}`}>
-                          <TableCell>{row.month}</TableCell>
+                          <TableCell>{new Date(2025, row.month - 1).toLocaleDateString('pt-BR', {month: 'short'})}</TableCell>
                           <TableCell className="text-right text-green-600">
-                            {formatCurrency(row.totalRevenue)}
+                            {formatCurrency(row.revenue)}
                           </TableCell>
                           <TableCell className="text-right text-red-600">
-                            {formatCurrency(row.totalExpenses)}
+                            {formatCurrency(row.expenses)}
                           </TableCell>
                           <TableCell className="text-right font-medium">
-                            {formatCurrency(row.netIncome)}
+                            {formatCurrency(row.revenue - row.expenses)}
                           </TableCell>
-                          <TableCell className="text-right">{row.properties}</TableCell>
+                          <TableCell className="text-right">-</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -426,17 +437,8 @@ export default function Analytics() {
                     <TableBody>
                       {distributionData.map((row, idx) => (
                         <TableRow key={idx} data-testid={`row-distribution-${idx}`}>
-                          <TableCell className="font-medium">{row.propertyName}</TableCell>
-                          <TableCell className="text-right text-green-600">
-                            {formatCurrency(row.totalRevenue)}
-                          </TableCell>
-                          <TableCell className="text-right text-red-600">
-                            {formatCurrency(row.totalExpenses)}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency(row.netIncome)}
-                          </TableCell>
-                          <TableCell className="text-right">{row.percentage.toFixed(1)}%</TableCell>
+                          <TableCell className="font-medium">{row.status}</TableCell>
+                          <TableCell className="text-right" colSpan={4}>{row.count} imóveis</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -481,27 +483,23 @@ export default function Analytics() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Período</TableHead>
-                        <TableHead className="text-right">Receitas</TableHead>
-                        <TableHead className="text-right">Despesas</TableHead>
-                        <TableHead className="text-right">Líquido</TableHead>
-                        <TableHead className="text-right">Crescimento</TableHead>
+                        <TableHead>Imóvel</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead className="text-right">Valor</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {periodData.map((row, idx) => (
+                      {periodData.slice(0, 10).map((row, idx) => (
                         <TableRow key={idx} data-testid={`row-period-${idx}`}>
-                          <TableCell className="font-medium">{row.period}</TableCell>
-                          <TableCell className="text-right text-green-600">
-                            {formatCurrency(row.revenues)}
-                          </TableCell>
-                          <TableCell className="text-right text-red-600">
-                            {formatCurrency(row.expenses)}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency(row.net)}
-                          </TableCell>
-                          <TableCell className={`text-right ${row.growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {row.growth >= 0 ? '+' : ''}{row.growth.toFixed(1)}%
+                          <TableCell className="font-medium">{row.month}/{row.year}</TableCell>
+                          <TableCell>{row.propertyName}</TableCell>
+                          <TableCell className="text-xs truncate max-w-[200px]">{row.description}</TableCell>
+                          <TableCell className="text-right">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              row.type === 'revenue' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {formatCurrency(parseFloat(row.amount))}
+                            </span>
                           </TableCell>
                         </TableRow>
                       ))}

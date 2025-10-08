@@ -404,8 +404,8 @@ export const monthlyAnalyticsSchema = z.object({
 });
 
 export const pivotTableQuerySchema = z.object({
-  month: z.number().int().min(1).max(12),
-  year: z.number().int().min(2020).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+  year: z.coerce.number().int().min(2020).max(2100),
   propertyIds: z.array(idSchema).optional(),
   showDetails: z.boolean().default(false),
 });
