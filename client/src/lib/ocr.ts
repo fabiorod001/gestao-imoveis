@@ -8,10 +8,10 @@ export class OCRService {
     if (this.isInitialized) return;
     
     try {
-      this.worker = await createWorker('por', 1, {
-        logger: (m) => console.log('OCR Progress:', m),
-      });
+      // tesseract.js v6 API - criar worker sem parâmetros
+      this.worker = await createWorker();
       
+      // Carregar e inicializar idioma português
       await this.worker.load();
       await this.worker.loadLanguage('por');
       await this.worker.initialize('por');

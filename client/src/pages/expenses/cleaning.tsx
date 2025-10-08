@@ -3,12 +3,13 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Sparkles, ArrowLeft, Calendar, Edit2, Plus, FileText, List, Upload, AlertCircle, CheckCircle, X, FileSpreadsheet, Trash2, Eye } from 'lucide-react';
+import { Sparkles, ArrowLeft, Calendar, Edit2, Plus, FileText, List, Upload, AlertCircle, CheckCircle, X, FileSpreadsheet, Trash2, Eye, ScanLine } from 'lucide-react';
 import { Link } from 'wouter';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DistributedExpenseForm from '@/components/expenses/DistributedExpenseForm';
 import { DetailedCleaningForm } from '@/components/expenses/DetailedCleaningForm';
+import CleaningOCRUpload from '@/components/expenses/CleaningOCRUpload';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
@@ -39,7 +40,7 @@ interface ParsedPdfData {
 
 export default function CleaningExpensesPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'new' | 'import' | 'list'>('new');
+  const [activeTab, setActiveTab] = useState<'new' | 'import' | 'ocr' | 'list'>('new');
   const [newExpenseMode, setNewExpenseMode] = useState<'simple' | 'detailed'>('simple');
   
   // PDF Import State
@@ -260,11 +261,10 @@ export default function CleaningExpensesPage() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="bg-white rounded-lg shadow-sm p-1 inline-flex">
+        <div className="bg-white rounded-lg shadow-sm p-1 inline-flex flex-wrap gap-1">
           <Button
             variant={activeTab === 'new' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('new')}
-            className="mr-1"
           >
             <Plus className="h-4 w-4 mr-2" />
             Nova Despesa de Limpeza
@@ -272,10 +272,16 @@ export default function CleaningExpensesPage() {
           <Button
             variant={activeTab === 'import' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('import')}
-            className="mr-1"
           >
             <FileSpreadsheet className="h-4 w-4 mr-2" />
             Importação de Tabela
+          </Button>
+          <Button
+            variant={activeTab === 'ocr' ? 'default' : 'ghost'}
+            onClick={() => setActiveTab('ocr')}
+          >
+            <ScanLine className="h-4 w-4 mr-2" />
+            Upload OCR
           </Button>
           <Button
             variant={activeTab === 'list' ? 'default' : 'ghost'}
@@ -512,6 +518,21 @@ export default function CleaningExpensesPage() {
                 </>
               )}
             </div>
+          </TabsContent>
+
+          {/* OCR Upload Tab */}
+          <TabsContent value="ocr">
+            <Card>
+              <CardHeader>
+                <CardTitle>📸 Upload OCR - Processamento de Imagens</CardTitle>
+                <CardDescription>
+                  Faça upload de um screenshot da tabela de fechamento de limpeza (JPG ou PNG)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CleaningOCRUpload />
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* List Tab - Advanced Features */}

@@ -48,6 +48,7 @@ The application features a monorepo structure separating client and server code.
 - **Data Import Systems**: Robust parsers for Excel (.xlsx) historical data and Airbnb CSV reports (both historical payouts and future reservations) with intelligent data cleaning and proportional distribution.
 - **Tax Management System**: Comprehensive tax calculation and proportional distribution based on gross revenue, including PIS, COFINS, CSLL, IRPJ.
 - **Cash Flow System**: Optimized cash flow chart and table with configurable periods (D-1 to D+5, 2 weeks, current month, 2 months), daily balance table, and "Today" highlighting.
+- **OCR Upload for Cleaning Expenses** (October 8, 2025): Mobile-first OCR processing using tesseract.js v6 to extract cleaning expense data from screenshot images (JPG/PNG). Automatically identifies dates, property names, and values from closure tables. Features intelligent property name mapping, dual-date system (executionDate for property management, paymentDate for cash flow), and validation of all required fields before batch creation. Supports Portuguese language recognition. Limitation: Unmatched properties are displayed but require manual cancellation/retry (no in-app correction workflow yet).
 - **Platform Portability**: Designed for 100% independence from proprietary Replit services, supporting any PostgreSQL instance and standard Node.js environments.
 
 ## External Dependencies
@@ -78,6 +79,7 @@ The application features a monorepo structure separating client and server code.
     - `xlsx`: Library for reading and writing Excel files
     - `js-pdf` & `jspdf-autotable`: PDF generation
     - `csv-parse`: Robust CSV parsing library
+    - `tesseract.js`: OCR (Optical Character Recognition) for image text extraction
 - **Development Tools**:
     - `@replit/vite-plugin-cartographer`: Replit-specific Vite plugin (temporarily removed due to top-level await compatibility issues)
     - `@replit/vite-plugin-runtime-error-modal`: Replit-specific Vite plugin
