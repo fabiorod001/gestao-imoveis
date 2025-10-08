@@ -534,7 +534,7 @@ export default function CleaningExpensesPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos os Imóveis</SelectItem>
-                        {properties.map((property: any) => (
+                        {(properties as any[]).map((property: any) => (
                           <SelectItem key={property.id} value={property.id.toString()}>
                             {property.name}
                           </SelectItem>
@@ -570,10 +570,14 @@ export default function CleaningExpensesPage() {
                         <TableBody>
                           {cleaningData.map((cleaning: any) => (
                             <TableRow key={cleaning.id}>
-                              <TableCell>{format(new Date(cleaning.date), "dd/MM/yyyy")}</TableCell>
-                              <TableCell>{cleaning.propertyName}</TableCell>
+                              <TableCell>
+                                {cleaning.executionDate 
+                                  ? format(new Date(cleaning.executionDate), "dd/MM/yyyy")
+                                  : '-'}
+                              </TableCell>
+                              <TableCell>{cleaning.propertyName || `Imóvel #${cleaning.propertyId}`}</TableCell>
                               <TableCell className="text-right font-medium">
-                                {formatCurrency(cleaning.amount)}
+                                {formatCurrency(Number(cleaning.amount) || 0)}
                               </TableCell>
                               <TableCell>
                                 {cleaning.batchId && (
@@ -601,12 +605,14 @@ export default function CleaningExpensesPage() {
                           <div className="space-y-2">
                             <div className="flex justify-between items-start">
                               <div>
-                                <p className="font-medium">{cleaning.propertyName}</p>
+                                <p className="font-medium">{cleaning.propertyName || `Imóvel #${cleaning.propertyId}`}</p>
                                 <p className="text-sm text-muted-foreground">
-                                  {format(new Date(cleaning.date), "dd/MM/yyyy")}
+                                  {cleaning.executionDate 
+                                    ? format(new Date(cleaning.executionDate), "dd/MM/yyyy")
+                                    : '-'}
                                 </p>
                               </div>
-                              <p className="font-semibold">{formatCurrency(cleaning.amount)}</p>
+                              <p className="font-semibold">{formatCurrency(Number(cleaning.amount) || 0)}</p>
                             </div>
                             {cleaning.batchId && (
                               <Button
@@ -650,13 +656,15 @@ export default function CleaningExpensesPage() {
                             >
                               <TableCell className="font-medium">Lote #{batch.id}</TableCell>
                               <TableCell>
-                                {batch.importDate 
-                                  ? format(new Date(batch.importDate), "dd/MM/yyyy 'às' HH:mm")
+                                {batch.createdAt 
+                                  ? format(new Date(batch.createdAt), "dd/MM/yyyy 'às' HH:mm")
+                                  : batch.paymentDate
+                                  ? format(new Date(batch.paymentDate), "dd/MM/yyyy")
                                   : '-'}
                               </TableCell>
-                              <TableCell>{batch.cleaningCount || 0} limpezas</TableCell>
+                              <TableCell>-</TableCell>
                               <TableCell className="text-right font-semibold">
-                                {formatCurrency(batch.totalAmount || 0)}
+                                {formatCurrency(Number(batch.totalAmount) || 0)}
                               </TableCell>
                               <TableCell>
                                 <Button
@@ -691,8 +699,10 @@ export default function CleaningExpensesPage() {
                               <div>
                                 <p className="font-semibold">Lote #{batch.id}</p>
                                 <p className="text-sm text-muted-foreground">
-                                  {batch.importDate 
-                                    ? format(new Date(batch.importDate), "dd/MM/yyyy HH:mm")
+                                  {batch.createdAt 
+                                    ? format(new Date(batch.createdAt), "dd/MM/yyyy HH:mm")
+                                    : batch.paymentDate
+                                    ? format(new Date(batch.paymentDate), "dd/MM/yyyy")
                                     : '-'}
                                 </p>
                               </div>
@@ -700,10 +710,10 @@ export default function CleaningExpensesPage() {
                             </div>
                             <div className="flex justify-between items-center text-sm">
                               <span className="text-muted-foreground">
-                                {batch.cleaningCount || 0} limpezas
+                                {batch.description || 'Lote de limpezas'}
                               </span>
                               <span className="font-semibold">
-                                {formatCurrency(batch.totalAmount || 0)}
+                                {formatCurrency(Number(batch.totalAmount) || 0)}
                               </span>
                             </div>
                           </div>
@@ -734,8 +744,10 @@ export default function CleaningExpensesPage() {
                   <div>
                     <p className="text-sm text-muted-foreground">Data de Importação</p>
                     <p className="font-semibold">
-                      {batchDetails.batch?.importDate 
-                        ? format(new Date(batchDetails.batch.importDate), "dd/MM/yyyy 'às' HH:mm")
+                      {batchDetails.batch?.createdAt 
+                        ? format(new Date(batchDetails.batch.createdAt), "dd/MM/yyyy 'às' HH:mm")
+                        : batchDetails.batch?.paymentDate
+                        ? format(new Date(batchDetails.batch.paymentDate), "dd/MM/yyyy")
                         : '-'}
                     </p>
                   </div>
@@ -770,12 +782,12 @@ export default function CleaningExpensesPage() {
                       <TableBody>
                         {batchDetails.services?.map((service: any) => (
                           <TableRow key={service.id}>
-                            <TableCell>{service.propertyName || '-'}</TableCell>
+                            <TableCell>{service.propertyName || `Imóvel #${service.propertyId}`}</TableCell>
                             <TableCell>
-                              {service.date ? format(new Date(service.date), "dd/MM/yyyy") : '-'}
+                              {service.executionDate ? format(new Date(service.executionDate), "dd/MM/yyyy") : '-'}
                             </TableCell>
                             <TableCell className="text-right font-medium">
-                              {formatCurrency(service.amount || 0)}
+                              {formatCurrency(Number(service.amount) || 0)}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -789,12 +801,12 @@ export default function CleaningExpensesPage() {
                       <Card key={service.id} className="p-3">
                         <div className="flex justify-between items-center">
                           <div>
-                            <p className="font-medium text-sm">{service.propertyName || '-'}</p>
+                            <p className="font-medium text-sm">{service.propertyName || `Imóvel #${service.propertyId}`}</p>
                             <p className="text-xs text-muted-foreground">
-                              {service.date ? format(new Date(service.date), "dd/MM/yyyy") : '-'}
+                              {service.executionDate ? format(new Date(service.executionDate), "dd/MM/yyyy") : '-'}
                             </p>
                           </div>
-                          <p className="font-semibold">{formatCurrency(service.amount || 0)}</p>
+                          <p className="font-semibold">{formatCurrency(Number(service.amount) || 0)}</p>
                         </div>
                       </Card>
                     ))}
