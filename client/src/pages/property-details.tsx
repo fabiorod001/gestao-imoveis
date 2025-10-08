@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { useRoute, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Pen, TrendingUp, TrendingDown, Copy } from "lucide-react";
@@ -77,11 +78,15 @@ export default function PropertyDetails() {
       if (!res.ok) throw new Error('Failed to copy template');
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast({
         title: "Configuração copiada",
         description: "Configuração de despesas copiada com sucesso",
       });
+      // Invalidate target property expense configuration
+      queryClient.invalidateQueries({ queryKey: ['property', variables.targetId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/properties', variables.targetId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/properties'] });
       setShowCopyDialog(false);
       setTargetPropertyId("");
       setReplaceConfig(false);

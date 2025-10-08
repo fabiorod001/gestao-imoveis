@@ -4,16 +4,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Calculator, TrendingUp } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Calculator, TrendingUp, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
 
 export default function IpcaCalculator() {
+  const { toast } = useToast();
   const [initialValue, setInitialValue] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [calculate, setCalculate] = useState(false);
 
-  const { data: result, isLoading, refetch } = useQuery({
+  const { data: result, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/ipca/calculate', initialValue, startDate, endDate],
     queryFn: async () => {
       const res = await fetch(
@@ -23,6 +25,13 @@ export default function IpcaCalculator() {
       return res.json();
     },
     enabled: calculate && !!initialValue && !!startDate && !!endDate,
+    onError: (err) => {
+      toast({
+        title: "Erro ao calcular IPCA",
+        description: err instanceof Error ? err.message : "Erro desconhecido ao calcular correção",
+        variant: "destructive",
+      });
+    },
   });
 
   const handleCalculate = () => {
@@ -109,6 +118,16 @@ export default function IpcaCalculator() {
               <TrendingUp className="h-4 w-4 mr-2" />
               {isLoading ? "Calculando..." : "Calcular Correção"}
             </Button>
+
+            {/* Error Display */}
+            {error && calculate && (
+              <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+                <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                <p className="text-sm">
+                  {error instanceof Error ? error.message : "Erro ao calcular IPCA. Verifique os dados e tente novamente."}
+                </p>
+              </div>
+            )}
 
             {/* Results */}
             {result && calculate && (
