@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { X, Home, Building2, TrendingUp, TrendingDown, FileText, Settings, Upload } from "lucide-react";
+import { X, Home, Building2, TrendingUp, TrendingDown, FileText, Settings, Upload, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -15,6 +15,7 @@ const menuItems = [
   { icon: TrendingUp, label: "Receitas", path: "/revenues" },
   { icon: TrendingDown, label: "Despesas", path: "/expenses" },
   { icon: FileText, label: "Relatórios", path: "/reports" },
+  { icon: BarChart3, label: "Analytics", path: "/analytics" },
   { icon: Upload, label: "Importar", path: "/import" },
   { icon: Settings, label: "Configurações", path: "/settings" },
 ];
