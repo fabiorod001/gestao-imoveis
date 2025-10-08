@@ -325,7 +325,7 @@ export default function PropertyDetails() {
                   <div className="text-center text-gray-500">Carregando...</div>
                 </CardContent>
               </Card>
-            ) : returnRate && returnRate.returnRate !== null ? (
+            ) : returnRate && returnRate.returnRate !== null && returnRate.acquisitionCost > 0 ? (
               <Card className={getReturnRateColor(returnRate.returnRate).bg}>
                 <CardHeader>
                   <CardTitle className="text-center">
@@ -333,7 +333,7 @@ export default function PropertyDetails() {
                       {returnRate.returnRate.toFixed(2)}% ao mês
                     </div>
                     <div className="text-sm text-gray-600 mt-2" data-testid="text-return-rate-formula">
-                      ({formatCurrency(returnRate.netProfit)} / {formatCurrency(returnRate.propertyValue)})
+                      ({formatCurrency(returnRate.netResult)} / {formatCurrency(returnRate.acquisitionCost)})
                     </div>
                   </CardTitle>
                 </CardHeader>
@@ -354,19 +354,19 @@ export default function PropertyDetails() {
                       <div>
                         <div className="text-xs text-gray-500">Receita</div>
                         <div className="text-sm font-semibold text-green-600" data-testid="text-monthly-revenue">
-                          {formatCurrency(returnRate.monthlyRevenue)}
+                          {formatCurrency(returnRate.revenue)}
                         </div>
                       </div>
                       <div>
                         <div className="text-xs text-gray-500">Despesas</div>
                         <div className="text-sm font-semibold text-red-600" data-testid="text-monthly-expenses">
-                          {formatCurrency(returnRate.monthlyExpenses)}
+                          {formatCurrency(returnRate.expenses)}
                         </div>
                       </div>
                       <div>
                         <div className="text-xs text-gray-500">Lucro Líquido</div>
                         <div className="text-sm font-semibold text-blue-600" data-testid="text-net-profit">
-                          {formatCurrency(returnRate.netProfit)}
+                          {formatCurrency(returnRate.netResult)}
                         </div>
                       </div>
                     </div>
