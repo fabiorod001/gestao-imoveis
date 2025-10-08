@@ -345,11 +345,17 @@ export default function PropertyDetails() {
                         {getReturnRateColor(returnRate.returnRate).label}
                       </span>
                     </div>
-                    <Progress 
-                      value={Math.min(returnRate.returnRate * 20, 100)} 
-                      className="h-2"
-                      data-testid="progress-return-rate"
-                    />
+                    <div className="relative">
+                      <Progress 
+                        value={Math.min(returnRate.returnRate * 20, 100)} 
+                        className="h-2"
+                        data-testid="progress-return-rate"
+                      />
+                      <div 
+                        className={`absolute top-0 left-0 h-2 rounded-full ${getReturnRateColor(returnRate.returnRate).progress}`}
+                        style={{ width: `${Math.min(returnRate.returnRate * 20, 100)}%` }}
+                      />
+                    </div>
                     <div className="grid grid-cols-3 gap-4 pt-4 border-t">
                       <div>
                         <div className="text-xs text-gray-500">Receita</div>
