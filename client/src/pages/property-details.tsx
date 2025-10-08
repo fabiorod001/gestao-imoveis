@@ -1,10 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Pen, TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowLeft, Pen, TrendingUp, TrendingDown, Copy } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -13,9 +17,20 @@ export default function PropertyDetails() {
   const [, params] = useRoute("/properties/:id");
   const [, setLocation] = useLocation();
   const propertyId = params?.id;
+  const { toast } = useToast();
   
   // Month selector for return rate
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  
+  // Copy template dialog state
+  const [showCopyDialog, setShowCopyDialog] = useState(false);
+  const [targetPropertyId, setTargetPropertyId] = useState<string>("");
+  const [replaceConfig, setReplaceConfig] = useState(false);
+
+  // Fetch all properties for copy dropdown
+  const { data: allProperties = [] } = useQuery({
+    queryKey: ['/api/properties'],
+  });
 
   const {
     data: property,
@@ -47,6 +62,47 @@ export default function PropertyDetails() {
     },
     enabled: !!propertyId && !!selectedMonth,
   });
+
+  // Copy expense template mutation
+  const copyTemplateMutation = useMutation({
+    mutationFn: async ({ sourceId, targetId, replace }: any) => {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || ""}/api/properties/${targetId}/copy-expense-template`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sourcePropertyId: sourceId, replace }),
+        }
+      );
+      if (!res.ok) throw new Error('Failed to copy template');
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Configuração copiada",
+        description: "Configuração de despesas copiada com sucesso",
+      });
+      setShowCopyDialog(false);
+      setTargetPropertyId("");
+      setReplaceConfig(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao copiar configuração",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCopyTemplate = () => {
+    if (!targetPropertyId) return;
+    copyTemplateMutation.mutate({
+      sourceId: propertyId,
+      targetId: targetPropertyId,
+      replace: replaceConfig,
+    });
+  };
 
   if (isLoading) return <div className="p-8">Carregando...</div>;
   if (error) return <div className="p-8">Erro ao carregar imóvel</div>;
@@ -94,10 +150,20 @@ export default function PropertyDetails() {
             Voltar
           </Button>
 
-          <Button onClick={() => setLocation(`/properties/${propertyId}/edit`)}>
-            <Pen className="h-4 w-4 mr-2" />
-            Editar Propriedade
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowCopyDialog(true)}
+              data-testid="button-copy-template"
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              Copiar Configuração
+            </Button>
+            <Button onClick={() => setLocation(`/properties/${propertyId}/edit`)}>
+              <Pen className="h-4 w-4 mr-2" />
+              Editar Propriedade
+            </Button>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6 space-y-6">
@@ -400,6 +466,74 @@ export default function PropertyDetails() {
             </section>
           )}
         </div>
+
+        {/* Copy Template Dialog */}
+        <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Copiar Configuração de Despesas</DialogTitle>
+              <DialogDescription>
+                Copie a configuração de despesas desta propriedade para outra
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Propriedade de Origem</Label>
+                <div className="px-3 py-2 bg-muted rounded-md">
+                  {property.name}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="target-property">Propriedade de Destino</Label>
+                <Select value={targetPropertyId} onValueChange={setTargetPropertyId}>
+                  <SelectTrigger id="target-property" data-testid="select-target-property">
+                    <SelectValue placeholder="Selecione uma propriedade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(allProperties as any[])
+                      .filter((p: any) => p.id.toString() !== propertyId)
+                      .map((p: any) => (
+                        <SelectItem key={p.id} value={p.id.toString()}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="replace-config"
+                  checked={replaceConfig}
+                  onCheckedChange={(checked) => setReplaceConfig(checked as boolean)}
+                  data-testid="checkbox-replace-config"
+                />
+                <Label htmlFor="replace-config" className="cursor-pointer">
+                  Substituir configuração existente
+                </Label>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowCopyDialog(false)}
+                data-testid="button-cancel-copy"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleCopyTemplate}
+                disabled={!targetPropertyId || copyTemplateMutation.isPending}
+                data-testid="button-confirm-copy"
+              >
+                {copyTemplateMutation.isPending ? "Copiando..." : "Copiar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

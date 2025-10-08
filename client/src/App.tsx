@@ -14,6 +14,7 @@ import { LoadingSpinner } from "@/components/ui/skeleton-screens";
 // Layout sempre carregado (crítico)
 import Layout from "@/components/layout/Layout";
 import Landing from "@/pages/landing";
+import IpcaCalculator from "@/pages/utilities/ipca-calculator";
 
 // Lazy loading para páginas não críticas (otimização mobile)
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -148,6 +149,7 @@ function Router() {
             <Route path="/settings/taxes" component={TaxSettings} />
             <Route path="/marco-zero" component={MarcoZero} />
             <Route path="/cleaning/import" component={CleaningImport} />
+            <Route path="/utilities/ipca" component={IpcaCalculator} />
             <Route
               path="/condominium/ocr-test"
               component={CondominiumOcrTest}

@@ -1,16 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { getAccounts, getMarcoZero, saveMarcoZero } from "@/lib/api";
 import { useState, useEffect } from "react";
-import { Calendar, Save } from "lucide-react";
+import { Calendar, Save, AlertTriangle, Calculator } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
 export default function Settings() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [marcoDate, setMarcoDate] = useState("2025-10-01");
   const [accountBalances, setAccountBalances] = useState<Record<string, number>>({});
+  const [showCleanupDialog, setShowCleanupDialog] = useState(false);
 
   const { data: accounts, isLoading: loadingAccounts } = useQuery({
     queryKey: ['accounts'],
@@ -46,6 +51,34 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       alert('Marco Zero salvo com sucesso!');
     }
+  });
+
+  // Transaction cleanup mutation
+  const cleanupMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || ""}/api/cleanup/transactions`,
+        { method: 'DELETE' }
+      );
+      if (!res.ok) throw new Error('Failed to cleanup transactions');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Limpeza concluída",
+        description: `${data.removed || 0} transações duplicadas removidas`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/analytics'] });
+      setShowCleanupDialog(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro na limpeza",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    },
   });
 
   const handleSave = () => {
@@ -136,6 +169,75 @@ export default function Settings() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Administrative Tools */}
+      <Card className="border-yellow-200">
+        <CardHeader>
+          <CardTitle className="flex items-center text-yellow-700">
+            <AlertTriangle className="mr-2 h-5 w-5" />
+            Ferramentas Administrativas
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h3 className="font-semibold mb-2">Limpar Transações Duplicadas</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Remove transações duplicadas do banco de dados
+            </p>
+            <Button
+              variant="destructive"
+              onClick={() => setShowCleanupDialog(true)}
+              data-testid="button-cleanup-transactions"
+            >
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              Executar Limpeza
+            </Button>
+          </div>
+
+          <div className="border-t pt-4">
+            <h3 className="font-semibold mb-2">Calculadora IPCA</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Calcule correção monetária pelo IPCA
+            </p>
+            <Link href="/utilities/ipca">
+              <Button variant="outline" data-testid="button-ipca-calculator">
+                <Calculator className="h-4 w-4 mr-2" />
+                Abrir Calculadora
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Cleanup Confirmation Dialog */}
+      <AlertDialog open={showCleanupDialog} onOpenChange={setShowCleanupDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center text-yellow-700">
+              <AlertTriangle className="h-5 w-5 mr-2" />
+              Atenção: Esta ação não pode ser desfeita
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Transações duplicadas serão permanentemente removidas do banco de dados.
+              <br />
+              <br />
+              Tem certeza que deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-cleanup">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => cleanupMutation.mutate()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-cleanup"
+            >
+              {cleanupMutation.isPending ? "Limpando..." : "Confirmar Limpeza"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
