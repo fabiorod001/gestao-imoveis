@@ -20,18 +20,11 @@ export default function TaxesPage() {
 
   // Query to fetch tax expenses
   const { data: taxExpenses = [] } = useQuery({
-    queryKey: ['/api/transactions', 'taxes'],
-    queryFn: async () => {
-      const response = await fetch('/api/transactions');
-      if (!response.ok) throw new Error('Failed to fetch');
-      const data = await response.json();
-      // Filter only tax expenses
-      return data.filter((t: any) => t.type === 'expense' && t.category === 'taxes');
-    }
+    queryKey: ['/api/transactions', { type: 'expense', category: 'taxes' }],
   });
 
   // Group tax expenses by date
-  const groupedTaxes = taxExpenses.reduce((acc: any, transaction: any) => {
+  const groupedTaxes = Array.isArray(taxExpenses) ? taxExpenses.reduce((acc: any, transaction: any) => {
     const dateKey = transaction.date;
     if (!acc[dateKey]) {
       acc[dateKey] = {
@@ -52,7 +45,7 @@ export default function TaxesPage() {
     if (description.includes('IRPJ')) acc[dateKey].types.add('IRPJ');
     
     return acc;
-  }, {});
+  }, {}) : {};
 
   const taxGroups = Object.values(groupedTaxes).sort((a: any, b: any) => 
     new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -272,17 +265,20 @@ function ProjectionsTab() {
   const [referenceMonth, setReferenceMonth] = useState(currentMonth);
 
   // Query for projections
-  const { data: projections = [], isLoading } = useQuery<any[]>({
+  const { data: projectionsData, isLoading } = useQuery({
     queryKey: ['/api/taxes/projections'],
   });
+  
+  const projections = Array.isArray(projectionsData) ? projectionsData : [];
 
   // Calculate projections mutation
   const calculateMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('/api/taxes/calculate', {
+      const res = await apiRequest('/api/taxes/calculate', {
         method: 'POST',
         body: JSON.stringify({ referenceMonth }),
       });
+      return res.json();
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/taxes/projections'] });
@@ -303,10 +299,11 @@ function ProjectionsTab() {
   // Recalculate all projections
   const recalculateMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('/api/taxes/recalculate', {
+      const res = await apiRequest('/api/taxes/recalculate', {
         method: 'POST',
         body: JSON.stringify({}),
       });
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/taxes/projections'] });
@@ -327,10 +324,11 @@ function ProjectionsTab() {
   // Confirm projection mutation
   const confirmMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest(`/api/taxes/projections/${id}/confirm`, {
+      const res = await apiRequest(`/api/taxes/projections/${id}/confirm`, {
         method: 'POST',
         body: JSON.stringify({}),
       });
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/taxes/projections'] });
@@ -351,10 +349,11 @@ function ProjectionsTab() {
   // Delete projection (using PATCH to mark as cancelled)
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest(`/api/taxes/projections/${id}`, {
+      const res = await apiRequest(`/api/taxes/projections/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: 'cancelled' }),
       });
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/taxes/projections'] });

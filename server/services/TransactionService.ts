@@ -145,19 +145,18 @@ export class TransactionService extends BaseService {
       // Parse amount using Money for precision
       const amount = ServerMoneyUtils.parseUserInput(data.amount);
       
-      // Parse and validate the data
+      // Parse and validate the data (userId is omitted from schema, add it after validation)
       const transactionData = {
         ...data,
-        userId,
-        amount: amount.toDecimal(), // Store as decimal
-        date: data.date ? new Date(data.date) : new Date(),
-        accommodationStartDate: data.accommodationStartDate ? new Date(data.accommodationStartDate) : undefined,
-        accommodationEndDate: data.accommodationEndDate ? new Date(data.accommodationEndDate) : undefined,
-        recurringEndDate: data.recurringEndDate ? new Date(data.recurringEndDate) : undefined,
+        amount: amount.toDecimalString(), // Keep as string for Zod validation
+        date: data.date || format(new Date(), 'yyyy-MM-dd'), // Keep as string
+        accommodationStartDate: data.accommodationStartDate || undefined,
+        accommodationEndDate: data.accommodationEndDate || undefined,
+        recurringEndDate: data.recurringEndDate || undefined,
       };
       
       const validatedData = insertTransactionSchema.parse(transactionData);
-      const created = await this.storage.createTransaction(validatedData);
+      const created = await this.storage.createTransaction({ ...validatedData, userId });
       
       // If it's a revenue transaction, recalculate tax projections
       if (created.type === 'revenue' && this.taxService && !created.isHistorical) {

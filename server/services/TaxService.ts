@@ -1512,8 +1512,8 @@ export class TaxService extends BaseService {
       type: 'expense',
       category: 'taxes',
       description: `${projection.taxType} - Ref: ${format(new Date(projection.referenceMonth), 'MM/yyyy')}`,
-      amount: projection.totalAmount,
-      date: projection.dueDate,
+      amount: projection.totalAmount.toString(),
+      date: format(new Date(projection.dueDate), 'yyyy-MM-dd'),
       supplier: 'Receita Federal',
       notes: projection.notes || `Imposto ${projection.taxType} confirmado`
     });
