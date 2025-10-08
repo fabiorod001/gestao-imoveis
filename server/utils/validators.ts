@@ -247,6 +247,22 @@ export const moneySchema = z
   .refine((val) => val <= 999999999.99, "Valor muito alto");
 
 /**
+ * Schema para valor monetário de reconciliação (aceita valores negativos)
+ */
+export const reconciliationAmountSchema = z
+  .union([z.string(), z.number()])
+  .transform((val) => {
+    if (typeof val === "string") {
+      // Remove R$, espaços e troca vírgula por ponto
+      const clean = val.replace(/[R$\s]/g, "").replace(",", ".");
+      return parseFloat(clean);
+    }
+    return val;
+  })
+  .refine((val) => !isNaN(val), "Valor monetário inválido")
+  .refine((val) => Math.abs(val) <= 999999999.99, "Valor muito alto");
+
+/**
  * Schema para porcentagem (0-100)
  */
 export const percentageSchema = z

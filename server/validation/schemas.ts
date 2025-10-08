@@ -6,6 +6,7 @@ import {
   pixKeySchema,
   dateSchema,
   moneySchema,
+  reconciliationAmountSchema,
   idSchema,
   idsArraySchema,
   propertyStatusSchema,
@@ -37,12 +38,12 @@ export const setMarcoZeroSchema = z.object({
 });
 
 export const createReconciliationAdjustmentSchema = z.object({
-  marcoZeroId: idSchema.optional(),
-  accountId: idSchema.optional(),
+  marcoZeroId: idSchema.optional().nullable(),
+  accountId: idSchema.optional().nullable(),
   adjustmentDate: dateSchema,
-  amount: moneySchema,
+  amount: reconciliationAmountSchema,
   type: z.string().min(1, "Tipo é obrigatório"),
-  description: z.string().min(1, "Descrição é obrigatória").max(500),
+  description: z.string().min(10, "Descrição deve ter no mínimo 10 caracteres").max(500),
   bankReference: z.string().max(100).optional(),
 });
 

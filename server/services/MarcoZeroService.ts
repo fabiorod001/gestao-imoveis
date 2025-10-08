@@ -158,7 +158,7 @@ export class MarcoZeroService extends BaseService {
   /**
    * Get reconciliation adjustments for a user
    */
-  async getReconciliationAdjustments(userId: string, marcoZeroId?: number): Promise<ReconciliationAdjustment[]> {
+  async getReconciliationAdjustments(userId: string, marcoZeroId?: number): Promise<any[]> {
     try {
       let conditions = [eq(reconciliationAdjustments.userId, userId)];
 
@@ -167,10 +167,25 @@ export class MarcoZeroService extends BaseService {
       }
 
       const adjustments = await db
-        .select()
+        .select({
+          id: reconciliationAdjustments.id,
+          userId: reconciliationAdjustments.userId,
+          marcoZeroId: reconciliationAdjustments.marcoZeroId,
+          accountId: reconciliationAdjustments.accountId,
+          adjustmentDate: reconciliationAdjustments.adjustmentDate,
+          amount: reconciliationAdjustments.amount,
+          type: reconciliationAdjustments.type,
+          description: reconciliationAdjustments.description,
+          bankReference: reconciliationAdjustments.bankReference,
+          createdAt: reconciliationAdjustments.createdAt,
+          updatedAt: reconciliationAdjustments.updatedAt,
+          accountName: accounts.name,
+        })
         .from(reconciliationAdjustments)
+        .leftJoin(accounts, eq(reconciliationAdjustments.accountId, accounts.id))
         .where(and(...conditions))
         .orderBy(desc(reconciliationAdjustments.adjustmentDate));
+      
       return adjustments;
     } catch (error) {
       console.error("Error getting reconciliation adjustments:", error);
