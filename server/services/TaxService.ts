@@ -1943,4 +1943,32 @@ export class TaxService extends BaseService {
     // Default to current month
     return format(new Date(), 'MM/yyyy');
   }
+
+  /**
+   * Delete a tax projection
+   */
+  async deleteTaxProjection(projectionId: number, userId: string) {
+    const projection = await db.query.taxProjections.findFirst({
+      where: and(
+        eq(taxProjections.id, projectionId),
+        eq(taxProjections.userId, userId)
+      )
+    });
+
+    if (!projection) {
+      throw new Error('Projection not found');
+    }
+
+    if (projection.status === 'confirmed') {
+      throw new Error('Cannot delete confirmed projections');
+    }
+
+    await db.delete(taxProjections)
+      .where(and(
+        eq(taxProjections.id, projectionId),
+        eq(taxProjections.userId, userId)
+      ));
+
+    return { success: true, message: 'Projeção excluída com sucesso' };
+  }
 }

@@ -1316,6 +1316,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
   );
 
+  // Delete tax projection
+  app.delete('/api/taxes/projections/:id', 
+    validateMultiple({
+      params: z.object({ id: idSchema })
+    }),
+    asyncHandler(async (req: any, res: Response) => {
+      const userId = getUserId(req);
+      const projectionId = req.params.id;
+      const result = await taxService.deleteTaxProjection(projectionId, userId);
+      res.json(result);
+    })
+  );
+
   // Recalculate projections for a month
   app.post('/api/taxes/recalculate', 
     validate(z.object({
