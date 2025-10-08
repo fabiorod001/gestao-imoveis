@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Sparkles, ArrowLeft, Calendar, Edit2, Plus, FileText, List, Upload, AlertCircle, CheckCircle, X, FileSpreadsheet } from 'lucide-react';
+import { Sparkles, ArrowLeft, Calendar, Edit2, Plus, FileText, List, Upload, AlertCircle, CheckCircle, X, FileSpreadsheet, Trash2, Eye } from 'lucide-react';
 import { Link } from 'wouter';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -15,6 +15,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface CleaningEntry {
   date: string;
@@ -45,16 +48,38 @@ export default function CleaningExpensesPage() {
   const [supplier, setSupplier] = useState("Serviço de Limpeza");
   const [paymentDate, setPaymentDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
-  // Query to fetch cleaning expenses
-  const { data: cleaningExpenses = [] } = useQuery({
-    queryKey: ['/api/transactions', 'cleaning'],
+  // Advanced Features State
+  const [selectedProperty, setSelectedProperty] = useState<string | null>(null);
+  const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
+  const [batchToDelete, setBatchToDelete] = useState<number | null>(null);
+
+  // Query to fetch properties
+  const { data: properties = [] } = useQuery({
+    queryKey: ['/api/properties'],
+  });
+
+  // Query to fetch cleaning batches or property cleanings
+  const { data: cleaningData = [], isLoading: isLoadingCleanings } = useQuery({
+    queryKey: selectedProperty ? ['/api/cleaning/property', selectedProperty] : ['/api/cleaning/batches'],
     queryFn: async () => {
-      const response = await fetch('/api/transactions');
-      if (!response.ok) throw new Error('Failed to fetch');
-      const data = await response.json();
-      // Filter only cleaning category expenses
-      return data.filter((t: any) => t.type === 'expense' && t.category === 'cleaning');
-    }
+      const url = selectedProperty 
+        ? `${import.meta.env.VITE_API_URL || ""}/api/cleaning/property/${selectedProperty}`
+        : `${import.meta.env.VITE_API_URL || ""}/api/cleaning/batches`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to fetch cleanings');
+      return res.json();
+    },
+  });
+
+  // Query to fetch batch details
+  const { data: batchDetails } = useQuery({
+    queryKey: ['/api/cleaning/batch', selectedBatchId],
+    queryFn: async () => {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/cleaning/batch/${selectedBatchId}`);
+      if (!res.ok) throw new Error('Failed to fetch batch details');
+      return res.json();
+    },
+    enabled: !!selectedBatchId,
   });
 
   // Parse PDF mutation
@@ -117,6 +142,7 @@ export default function CleaningExpensesPage() {
       // Invalidate expenses queries
       queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/analytics'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cleaning'] });
     },
     onError: (error) => {
       toast({
@@ -127,15 +153,42 @@ export default function CleaningExpensesPage() {
     },
   });
 
-  // Group expenses by property and month
-  const groupedExpenses = cleaningExpenses.reduce((acc: any, expense: any) => {
-    const propertyName = expense.property?.name || 'Sem propriedade';
-    if (!acc[propertyName]) {
-      acc[propertyName] = [];
-    }
-    acc[propertyName].push(expense);
-    return acc;
-  }, {});
+  // Delete batch mutation
+  const deleteBatchMutation = useMutation({
+    mutationFn: async (batchId: number) => {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/cleaning/batch/${batchId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete batch');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cleaning'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/analytics'] });
+      toast({
+        title: "Lote deletado",
+        description: "Lote de limpezas removido com sucesso",
+      });
+      setBatchToDelete(null);
+      setSelectedBatchId(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao deletar lote",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Format currency helper
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value);
+  };
 
   // PDF Import handlers
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,13 +232,6 @@ export default function CleaningExpensesPage() {
       supplier,
       paymentDate,
     });
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value);
   };
 
   return (
@@ -233,7 +279,7 @@ export default function CleaningExpensesPage() {
             onClick={() => setActiveTab('list')}
           >
             <List className="h-4 w-4 mr-2" />
-            Limpezas Cadastradas ({cleaningExpenses.length})
+            Histórico de Limpezas
           </Button>
         </div>
 
@@ -465,67 +511,361 @@ export default function CleaningExpensesPage() {
             </div>
           </TabsContent>
 
-          {/* List Tab */}
+          {/* List Tab - Advanced Features */}
           <TabsContent value="list">
             <Card>
               <CardHeader>
-                <CardTitle>Limpezas Cadastradas</CardTitle>
-                <CardDescription>
-                  Visualize e edite os serviços de limpeza já cadastrados
-                </CardDescription>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <CardTitle>Histórico de Limpezas</CardTitle>
+                    <CardDescription>
+                      Visualize lotes de importação e filtre por propriedade
+                    </CardDescription>
+                  </div>
+                  
+                  {/* Property Filter Dropdown */}
+                  <div className="w-full sm:w-64">
+                    <Select
+                      value={selectedProperty || "all"}
+                      onValueChange={(value) => setSelectedProperty(value === "all" ? null : value)}
+                    >
+                      <SelectTrigger data-testid="select-property-filter">
+                        <SelectValue placeholder="Filtrar por imóvel" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os Imóveis</SelectItem>
+                        {properties.map((property: any) => (
+                          <SelectItem key={property.id} value={property.id.toString()}>
+                            {property.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                {cleaningExpenses.length === 0 ? (
+                {isLoadingCleanings ? (
                   <div className="text-center py-8 text-gray-500">
-                    Nenhuma limpeza cadastrada ainda.
+                    Carregando...
+                  </div>
+                ) : cleaningData.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    Nenhuma limpeza encontrada.
+                  </div>
+                ) : selectedProperty ? (
+                  // Property-specific view (individual cleanings)
+                  <div className="space-y-3">
+                    {/* Desktop Table */}
+                    <div className="hidden md:block">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Data</TableHead>
+                            <TableHead>Propriedade</TableHead>
+                            <TableHead className="text-right">Valor</TableHead>
+                            <TableHead>Lote</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {cleaningData.map((cleaning: any) => (
+                            <TableRow key={cleaning.id}>
+                              <TableCell>{format(new Date(cleaning.date), "dd/MM/yyyy")}</TableCell>
+                              <TableCell>{cleaning.propertyName}</TableCell>
+                              <TableCell className="text-right font-medium">
+                                {formatCurrency(cleaning.amount)}
+                              </TableCell>
+                              <TableCell>
+                                {cleaning.batchId && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setSelectedBatchId(cleaning.batchId)}
+                                    data-testid={`button-view-batch-${cleaning.batchId}`}
+                                  >
+                                    <Eye className="h-4 w-4 mr-1" />
+                                    Lote #{cleaning.batchId}
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile Cards */}
+                    <div className="md:hidden space-y-3">
+                      {cleaningData.map((cleaning: any) => (
+                        <Card key={cleaning.id} className="p-4">
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="font-medium">{cleaning.propertyName}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {format(new Date(cleaning.date), "dd/MM/yyyy")}
+                                </p>
+                              </div>
+                              <p className="font-semibold">{formatCurrency(cleaning.amount)}</p>
+                            </div>
+                            {cleaning.batchId && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => setSelectedBatchId(cleaning.batchId)}
+                                data-testid={`button-view-batch-${cleaning.batchId}`}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                Ver Lote #{cleaning.batchId}
+                              </Button>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
                 ) : (
-                  <div className="space-y-6">
-                    {Object.entries(groupedExpenses).map(([propertyName, expenses]: [string, any]) => (
-                      <div key={propertyName}>
-                        <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                          <Sparkles className="h-5 w-5 text-indigo-500" />
-                          {propertyName}
-                        </h3>
-                        <div className="space-y-2">
-                          {expenses.sort((a: any, b: any) => 
-                            new Date(b.date).getTime() - new Date(a.date).getTime()
-                          ).map((expense: any) => (
-                            <div key={expense.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <h4 className="font-medium">{expense.description}</h4>
-                                  <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
-                                    <span className="flex items-center gap-1">
-                                      <Calendar className="h-3 w-3" />
-                                      {format(new Date(expense.date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                                    </span>
-                                    {expense.supplier && <span>• {expense.supplier}</span>}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-red-600">
-                                    R$ {Math.abs(expense.amount).toLocaleString('pt-BR', { 
-                                      minimumFractionDigits: 2, 
-                                      maximumFractionDigits: 2 
-                                    })}
-                                  </span>
-                                  <Button variant="ghost" size="sm">
-                                    <Edit2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
+                  // Batch view (all batches)
+                  <div className="space-y-3">
+                    {/* Desktop Table */}
+                    <div className="hidden md:block">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Lote</TableHead>
+                            <TableHead>Data de Importação</TableHead>
+                            <TableHead>Limpezas</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="w-20">Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {cleaningData.map((batch: any) => (
+                            <TableRow 
+                              key={batch.id}
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => setSelectedBatchId(batch.id)}
+                              data-testid={`row-batch-${batch.id}`}
+                            >
+                              <TableCell className="font-medium">Lote #{batch.id}</TableCell>
+                              <TableCell>
+                                {batch.importDate 
+                                  ? format(new Date(batch.importDate), "dd/MM/yyyy 'às' HH:mm")
+                                  : '-'}
+                              </TableCell>
+                              <TableCell>{batch.cleaningCount || 0} limpezas</TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {formatCurrency(batch.totalAmount || 0)}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedBatchId(batch.id);
+                                  }}
+                                  data-testid={`button-view-batch-${batch.id}`}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
                           ))}
-                        </div>
-                      </div>
-                    ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile Cards */}
+                    <div className="md:hidden space-y-3">
+                      {cleaningData.map((batch: any) => (
+                        <Card 
+                          key={batch.id} 
+                          className="p-4 cursor-pointer hover:bg-muted/50"
+                          onClick={() => setSelectedBatchId(batch.id)}
+                          data-testid={`card-batch-${batch.id}`}
+                        >
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="font-semibold">Lote #{batch.id}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {batch.importDate 
+                                    ? format(new Date(batch.importDate), "dd/MM/yyyy HH:mm")
+                                    : '-'}
+                                </p>
+                              </div>
+                              <Eye className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-muted-foreground">
+                                {batch.cleaningCount || 0} limpezas
+                              </span>
+                              <span className="font-semibold">
+                                {formatCurrency(batch.totalAmount || 0)}
+                              </span>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Batch Detail Modal */}
+        <Dialog open={!!selectedBatchId} onOpenChange={(open) => !open && setSelectedBatchId(null)}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Detalhes do Lote #{selectedBatchId}</DialogTitle>
+              <DialogDescription>
+                Informações sobre o lote de importação e limpezas incluídas
+              </DialogDescription>
+            </DialogHeader>
+
+            {batchDetails ? (
+              <div className="space-y-6">
+                {/* Batch Summary */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Data de Importação</p>
+                    <p className="font-semibold">
+                      {batchDetails.batch?.importDate 
+                        ? format(new Date(batchDetails.batch.importDate), "dd/MM/yyyy 'às' HH:mm")
+                        : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total de Limpezas</p>
+                    <p className="font-semibold">{batchDetails.services?.length || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Valor Total</p>
+                    <p className="font-semibold">
+                      {formatCurrency(
+                        batchDetails.services?.reduce((sum: number, s: any) => sum + Number(s.amount || 0), 0) || 0
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Cleanings List */}
+                <div>
+                  <h4 className="font-semibold mb-3">Limpezas do Lote</h4>
+                  
+                  {/* Desktop Table */}
+                  <div className="hidden md:block border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Propriedade</TableHead>
+                          <TableHead>Data</TableHead>
+                          <TableHead className="text-right">Valor</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {batchDetails.services?.map((service: any) => (
+                          <TableRow key={service.id}>
+                            <TableCell>{service.propertyName || '-'}</TableCell>
+                            <TableCell>
+                              {service.date ? format(new Date(service.date), "dd/MM/yyyy") : '-'}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatCurrency(service.amount || 0)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Mobile Cards */}
+                  <div className="md:hidden space-y-2">
+                    {batchDetails.services?.map((service: any) => (
+                      <Card key={service.id} className="p-3">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium text-sm">{service.propertyName || '-'}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {service.date ? format(new Date(service.date), "dd/MM/yyyy") : '-'}
+                            </p>
+                          </div>
+                          <p className="font-semibold">{formatCurrency(service.amount || 0)}</p>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                Carregando detalhes...
+              </div>
+            )}
+
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (selectedBatchId) {
+                    setBatchToDelete(selectedBatchId);
+                  }
+                }}
+                disabled={deleteBatchMutation.isPending}
+                data-testid="button-delete-batch"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Deletar Lote
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setSelectedBatchId(null)}
+                data-testid="button-close-batch-modal"
+              >
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!batchToDelete} onOpenChange={(open) => !open && setBatchToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja deletar o lote #{batchToDelete}? 
+                {batchDetails?.services && (
+                  <span className="font-semibold">
+                    {" "}Isso removerá {batchDetails.services.length} limpeza(s).
+                  </span>
+                )}
+                <br />
+                Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="button-cancel-delete">
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (batchToDelete) {
+                    deleteBatchMutation.mutate(batchToDelete);
+                  }
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                data-testid="button-confirm-delete"
+              >
+                {deleteBatchMutation.isPending ? "Deletando..." : "Deletar"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
