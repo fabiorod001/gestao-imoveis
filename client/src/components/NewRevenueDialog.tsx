@@ -1,10 +1,15 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,11 +27,11 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ArrowLeft, TrendingUp } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
-const transactionSchema = z.object({
+const revenueSchema = z.object({
   propertyId: z.string().min(1, "Selecione uma propriedade"),
   date: z.string().min(1, "Data é obrigatória"),
   amount: z.string().min(1, "Valor é obrigatório"),
@@ -34,17 +39,14 @@ const transactionSchema = z.object({
   description: z.string().optional(),
 });
 
-type TransactionFormData = z.infer<typeof transactionSchema>;
+type RevenueFormData = z.infer<typeof revenueSchema>;
 
-export default function TransactionNew() {
-  const [location, setLocation] = useLocation();
+export function NewRevenueDialog() {
+  const [open, setOpen] = useState(false);
   const { toast } = useToast();
-  
-  // Get type from query params - always revenue for now
-  const isRevenue = location.includes("type=revenue");
 
-  const form = useForm<TransactionFormData>({
-    resolver: zodResolver(transactionSchema),
+  const form = useForm<RevenueFormData>({
+    resolver: zodResolver(revenueSchema),
     defaultValues: {
       propertyId: "",
       date: new Date().toISOString().split("T")[0],
@@ -54,14 +56,12 @@ export default function TransactionNew() {
     },
   });
 
-  // Load properties
   const { data: properties = [] } = useQuery<any[]>({
     queryKey: ["/api/properties"],
   });
 
-  // Create transaction mutation
   const createMutation = useMutation({
-    mutationFn: async (data: TransactionFormData) => {
+    mutationFn: async (data: RevenueFormData) => {
       return apiRequest("/api/transactions", {
         method: "POST",
         body: JSON.stringify({
@@ -81,7 +81,8 @@ export default function TransactionNew() {
       });
       
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-      setLocation("/revenues");
+      form.reset();
+      setOpen(false);
     },
     onError: (error: Error) => {
       toast({
@@ -92,31 +93,24 @@ export default function TransactionNew() {
     },
   });
 
-  const onSubmit = (data: TransactionFormData) => {
+  const onSubmit = (data: RevenueFormData) => {
     createMutation.mutate(data);
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={() => setLocation("/revenues")}
-          data-testid="button-back"
-        >
-          <ArrowLeft className="h-5 w-5" />
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="icon" data-testid="button-add-revenue">
+          <Plus className="h-5 w-5" />
         </Button>
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-6 w-6 text-green-600" />
-          <h1 className="text-2xl font-bold">Nova Receita</h1>
-        </div>
-      </div>
-
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <Card className="p-4 space-y-4">
-            {/* Property Selection */}
+      </DialogTrigger>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Nova Receita</DialogTitle>
+        </DialogHeader>
+        
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
               name="propertyId"
@@ -125,17 +119,14 @@ export default function TransactionNew() {
                   <FormLabel>Propriedade *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <SelectTrigger data-testid="select-property">
-                        <SelectValue placeholder="Selecione a propriedade" />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {properties.map((property: any) => (
-                        <SelectItem
-                          key={property.id}
-                          value={property.id.toString()}
-                        >
-                          {property.name}
+                      {properties.map((prop: any) => (
+                        <SelectItem key={prop.id} value={prop.id.toString()}>
+                          {prop.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -145,7 +136,6 @@ export default function TransactionNew() {
               )}
             />
 
-            {/* Date */}
             <FormField
               control={form.control}
               name="date"
@@ -153,18 +143,13 @@ export default function TransactionNew() {
                 <FormItem>
                   <FormLabel>Data *</FormLabel>
                   <FormControl>
-                    <Input
-                      type="date"
-                      {...field}
-                      data-testid="input-date"
-                    />
+                    <Input type="date" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* Amount */}
             <FormField
               control={form.control}
               name="amount"
@@ -177,7 +162,6 @@ export default function TransactionNew() {
                       step="0.01"
                       placeholder="0,00"
                       {...field}
-                      data-testid="input-amount"
                     />
                   </FormControl>
                   <FormMessage />
@@ -185,20 +169,16 @@ export default function TransactionNew() {
               )}
             />
 
-            {/* Source */}
             <FormField
               control={form.control}
               name="source"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Fonte</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                  >
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <SelectTrigger data-testid="select-source">
-                        <SelectValue placeholder="Selecione a fonte" />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -213,7 +193,6 @@ export default function TransactionNew() {
               )}
             />
 
-            {/* Description */}
             <FormField
               control={form.control}
               name="description"
@@ -221,24 +200,19 @@ export default function TransactionNew() {
                 <FormItem>
                   <FormLabel>Descrição</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="Ex: Reserva Janeiro 2025"
-                      {...field}
-                      data-testid="input-description"
-                    />
+                    <Input placeholder="Ex: Reserva Janeiro" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <div className="pt-4 flex gap-2">
+            <div className="flex gap-2 pt-4">
               <Button
                 type="button"
                 variant="outline"
                 className="flex-1"
-                onClick={() => setLocation("/revenues")}
-                data-testid="button-cancel"
+                onClick={() => setOpen(false)}
               >
                 Cancelar
               </Button>
@@ -246,14 +220,13 @@ export default function TransactionNew() {
                 type="submit"
                 className="flex-1"
                 disabled={createMutation.isPending}
-                data-testid="button-submit"
               >
                 {createMutation.isPending ? "Salvando..." : "Salvar"}
               </Button>
             </div>
-          </Card>
-        </form>
-      </Form>
-    </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }

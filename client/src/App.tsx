@@ -63,6 +63,8 @@ const TaxSettings = lazy(() => import("@/pages/tax-settings"));
 const MarcoZero = lazy(() => import("@/pages/marco-zero"));
 const CleaningImport = lazy(() => import("@/pages/cleaning-import"));
 const CondominiumOcrTest = lazy(() => import("@/pages/condominium-ocr-test"));
+// Import directly (not lazy) to fix blank page issue
+import TransactionNew from "@/pages/transaction-new";
 
 // Componente de fallback para lazy loading
 function PageLoader() {
@@ -102,6 +104,7 @@ function Router() {
             <Route path="/properties/:id" component={PropertyDetails} />
             <Route path="/properties/:id/edit" component={EditProperty} />
             <Route path="/revenues" component={Revenues} />
+            <Route path="/transactions/new" component={TransactionNew} />
             <Route path="/expenses" component={Expenses} />
             <Route path="/reports" component={Reports} />
             <Route path="/analytics" component={Analytics} />
