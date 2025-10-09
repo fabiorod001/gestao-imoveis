@@ -82,7 +82,7 @@ export default function Settings() {
   });
 
   const handleSave = () => {
-    const totalBalance = Object.values(accountBalances).reduce((sum, val) => sum + val, 0);
+    const totalBalance = Object.values(accountBalances || {}).reduce((sum, val) => sum + val, 0);
 
     saveMutation.mutate({
       marco_date: marcoDate,
@@ -95,7 +95,7 @@ export default function Settings() {
     return <div className="p-8">Carregando...</div>;
   }
 
-  const fluxoCaixa = Object.values(accountBalances).reduce((sum, val) => sum + val, 0);
+  const fluxoCaixa = Object.values(accountBalances || {}).reduce((sum, val) => sum + val, 0);
 
   return (
     <div className="p-8">
