@@ -42,6 +42,9 @@ export default function Settings() {
     }
   }, [marcoZero]);
 
+  // Debug log
+  console.log('Account Balances:', accountBalances, 'Type:', typeof accountBalances);
+
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
       return apiRequest('/api/marco-zero', {
@@ -82,7 +85,9 @@ export default function Settings() {
   });
 
   const handleSave = () => {
-    const totalBalance = Object.values(accountBalances || {}).reduce((sum, val) => sum + val, 0);
+    const totalBalance = accountBalances && typeof accountBalances === 'object'
+      ? Object.values(accountBalances).reduce((sum: number, val) => sum + (parseFloat(String(val)) || 0), 0)
+      : 0;
 
     saveMutation.mutate({
       marco_date: marcoDate,
@@ -95,7 +100,9 @@ export default function Settings() {
     return <div className="p-8">Carregando...</div>;
   }
 
-  const fluxoCaixa = Object.values(accountBalances || {}).reduce((sum, val) => sum + val, 0);
+  const fluxoCaixa = accountBalances && typeof accountBalances === 'object'
+    ? Object.values(accountBalances).reduce((sum: number, val) => sum + (parseFloat(String(val)) || 0), 0)
+    : 0;
 
   return (
     <div className="p-8">
@@ -125,7 +132,7 @@ export default function Settings() {
               <h3 className="font-semibold">Saldos das Contas</h3>
               
               {accounts?.map((account: any) => {
-                const value = accountBalances[account.id] || 0;
+                const value = accountBalances?.[account.id] ?? 0;
                 const formatted = value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 const isNegative = value < 0;
                 
