@@ -100,8 +100,9 @@ export function NewRevenueDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="icon" data-testid="button-add-revenue">
-          <Plus className="h-5 w-5" />
+        <Button className="gap-2" data-testid="button-add-revenue">
+          <Plus className="h-4 w-4" />
+          Nova Receita
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
@@ -123,7 +124,7 @@ export function NewRevenueDialog() {
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent position="popper" sideOffset={5}>
                       {properties.map((prop: any) => (
                         <SelectItem key={prop.id} value={prop.id.toString()}>
                           {prop.name}
@@ -181,7 +182,7 @@ export function NewRevenueDialog() {
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent position="popper" sideOffset={5}>
                       <SelectItem value="Airbnb">Airbnb</SelectItem>
                       <SelectItem value="Booking">Booking.com</SelectItem>
                       <SelectItem value="Aluguel">Aluguel</SelectItem>
