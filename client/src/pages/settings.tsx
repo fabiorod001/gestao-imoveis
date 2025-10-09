@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { getAccounts, getMarcoZero, saveMarcoZero } from "@/lib/api";
+import { apiRequest, queryClient as globalQueryClient } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
 import { Calendar, Save, AlertTriangle, Calculator } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -17,14 +17,12 @@ export default function Settings() {
   const [accountBalances, setAccountBalances] = useState<Record<string, number>>({});
   const [showCleanupDialog, setShowCleanupDialog] = useState(false);
 
-  const { data: accounts, isLoading: loadingAccounts } = useQuery({
-    queryKey: ['accounts'],
-    queryFn: getAccounts,
+  const { data: accounts, isLoading: loadingAccounts } = useQuery<any[]>({
+    queryKey: ['/api/accounts'],
   });
 
-  const { data: marcoZero } = useQuery({
-    queryKey: ['marco-zero'],
-    queryFn: getMarcoZero,
+  const { data: marcoZero } = useQuery<any>({
+    queryKey: ['/api/marco-zero/active'],
   });
 
   useEffect(() => {
@@ -45,25 +43,27 @@ export default function Settings() {
   }, [marcoZero]);
 
   const saveMutation = useMutation({
-    mutationFn: saveMarcoZero,
+    mutationFn: async (data: any) => {
+      return apiRequest('/api/marco-zero', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['marco-zero'] });
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      alert('Marco Zero salvo com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['/api/marco-zero/active'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/accounts'] });
+      toast({ title: 'Marco Zero salvo com sucesso!' });
     }
   });
 
   // Transaction cleanup mutation
   const cleanupMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL || ""}/api/cleanup/transactions`,
-        { method: 'DELETE' }
-      );
-      if (!res.ok) throw new Error('Failed to cleanup transactions');
-      return res.json();
+      return apiRequest('/api/cleanup/transactions', {
+        method: 'DELETE',
+      });
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       toast({
         title: "Limpeza concluída",
         description: `${data.removed || 0} transações duplicadas removidas`,
