@@ -29,7 +29,7 @@ export default function Settings() {
     if (accounts && accounts.length > 0) {
       const balances: Record<string, number> = {};
       accounts.forEach((acc: any) => {
-        balances[acc.id] = acc.current_balance;
+        balances[acc.id] = parseFloat(acc.currentBalance) || 0;
       });
       setAccountBalances(balances);
     }
@@ -82,7 +82,7 @@ export default function Settings() {
   });
 
   const handleSave = () => {
-    const totalBalance = (accountBalances[1] || 0) + (accountBalances[2] || 0);
+    const totalBalance = Object.values(accountBalances).reduce((sum, val) => sum + val, 0);
 
     saveMutation.mutate({
       marco_date: marcoDate,
@@ -95,7 +95,7 @@ export default function Settings() {
     return <div className="p-8">Carregando...</div>;
   }
 
-  const fluxoCaixa = (accountBalances[1] || 0) + (accountBalances[2] || 0);
+  const fluxoCaixa = Object.values(accountBalances).reduce((sum, val) => sum + val, 0);
 
   return (
     <div className="p-8">
@@ -158,7 +158,7 @@ export default function Settings() {
                 </span>
               </div>
               <p className="text-sm text-gray-600 mt-2">
-                (Soma: Conta Principal + Conta Secundária)
+                (Soma de todas as contas)
               </p>
             </div>
 
