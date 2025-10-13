@@ -104,13 +104,14 @@ The application features a monorepo structure separating client and server code.
 - **Impact**: No live HMR in development, but provides stable, production-identical environment
 - **Last Updated**: October 8, 2025
 
-### Critical Fixes Applied (October 8, 2025)
+### Critical Fixes Applied (October 8-10, 2025)
 1. **Missing Storage Methods**: Implemented missing database storage methods for accounts (`getAccounts`, `getAccount`, `createAccount`, `updateAccount`, `deleteAccount`, `getAccountsForCashFlow`) and transactions (`getTransactionsByDateRange`)
 2. **Environment Variable Handling**: Fixed VITE_API_URL undefined handling - Added `|| ""` fallback in all fetch calls to prevent "undefined/api/..." URLs when env var is not set
 3. **Import Missing Schema**: Added `accounts` table import to server/storage.ts to fix ReferenceError
 4. **Development Seed Data**: Created seed scripts (`npm run seed:dev`, `npm run clean:dev`) for local testing with 5 properties, 26 transactions, and 2 accounts
 5. **TransactionService Validation Chain Fix** (50min debug): Fixed Zod validation errors in transaction creation. Root cause: TransactionService.createTransaction was converting `amount` to number (`.toDecimal()`) and `date` to Date object BEFORE Zod validation, but `insertTransactionSchema` (auto-generated from Drizzle) expects strings. Solution: Use `amount.toDecimalString()` to keep as string, pass dates as ISO strings (`yyyy-MM-dd`), and add `userId` AFTER validation (since schema omits it with `.omit({ userId: true })`). This pattern applies to ALL services using Drizzle-generated Zod schemas.
 6. **Code Cleanup - Phase 7** (October 8, 2025): Removed 3 obsolete backup files with `-OLD` suffix (`properties-OLD.tsx`, `dashboard-OLD.tsx`, `cash-flow-OLD.tsx`). All files verified to have no imports/references and working replacements. Build verified successful after cleanup.
+7. **Dialog Rendering Fix** (October 10, 2025): Resolved critical issue where Revenue Dialog (NewRevenueDialog) appeared with darkened/translucent background and non-functional Select dropdowns. Root cause: DialogOverlay component with `bg-black/80` and `pointer-events: none` was creating visual interference. Solution: Removed DialogOverlay entirely from DialogContent component. Dialog now renders with clean white background at `z-[100]`, Select dropdowns functional at `z-[70]`. All animations removed for maximum compatibility. Note: Dialog currently has no background overlay (can be reimplemented if needed).
 
 ### Build Configuration
 - **Frontend Build**: Vite (configured in vite.config.ts)
